@@ -468,8 +468,8 @@ class TCUITool:
 
   #Interpolation version (bad implementation!!!)
   def MoveToCartPosI(self,x_trg,dt=2.0,x_ext=[],inum=10):
-    x_curr= self.CartPos(x_ext)
-    x_diff= (x_trg-x_curr)*(1.0/float(inum))
+    x_curr= np.array(self.CartPos(x_ext))
+    x_diff= (np.array(x_trg)-x_curr)*(1.0/float(inum))
     idt= dt/float(inum)
     for i in range(0,inum):
       x_curr= x_curr+x_diff
