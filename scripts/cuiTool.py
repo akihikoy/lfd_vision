@@ -175,11 +175,9 @@ class TCUITool:
         elif cmd[0] == 'home':
           self.MoveArmsToSide()
         elif cmd[0]=='r':
-          self.whicharm= 0
-          print 'Right arm is selected'
+          self.SwitchArm(0)
         elif cmd[0]=='l':
-          self.whicharm= 1
-          print 'Left arm is selected'
+          self.SwitchArm(1)
         elif cmd[0]=='calc':
           if cmd[1]=='e2q':
             rot= tf.transformations.quaternion_from_euler(float(cmd[2]), float(cmd[3]), float(cmd[4]))
@@ -278,6 +276,11 @@ class TCUITool:
             self.MoveToCartPos(x_trg,dt,self.control_frame[self.whicharm])
           else:
             print 'Invalid arguments: ',' '.join(cmd)
+        elif cmd[0]=='grip':
+          pos= float(cmd[1])
+          max_effort= 20
+          if len(cmd)>=3:  max_effort= float(cmd[2])
+          self.CommandGripper(pos,max_effort)
         elif cmd[0]=='ar':
           id= int(cmd[1])
           self.UpdateAR(id)
@@ -421,6 +424,11 @@ class TCUITool:
         self.l_pub.publish(cmd)
 
 
+  def SwitchArm(self,arm):
+    self.whicharm= arm
+    print self.ArmStr(),'arm is selected'
+
+
   def CartPos(self,x_ext=[]):
     i= self.whicharm
     q= self.mu.arm[i].getCurrentPosition()  #Joint angles
@@ -437,7 +445,7 @@ class TCUITool:
       return xe
 
 
-  def MoveToCartPos(self,x_trg,dt=2.0,x_ext=[]):
+  def MoveToCartPos(self,x_trg,dt=2.0,x_ext=[],blocking=False):
     i = self.whicharm
     x_trg[3:7] = x_trg[3:7] / la.norm(x_trg[3:7])
 
@@ -454,10 +462,14 @@ class TCUITool:
       #cart_pos= PosRotToX(pw_d,Rw_d)
 
     print "Target= ",cart_pos
-    blocking = False
     self.mu.arm[i].moveToCartPos(cart_pos, dt, blocking)
     if self.mu.arm[i].last_error_code != 1:
       print "Error code= "+str(self.mu.arm[i].last_error_code)
+
+
+  #pos: 0.08 (open), 0.0 (close), max_effort: 12~15 (weak), 50 (string), -1 (maximum)
+  def CommandGripper(self,pos,max_effort,blocking=False):
+    self.mu.arm[self.whicharm].commandGripper(pos,max_effort,blocking)
 
 
   def UpdateAR(self,id):
