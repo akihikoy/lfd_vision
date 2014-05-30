@@ -94,6 +94,7 @@ class TCUITool:
     readline.parse_and_bind('tab: complete')
 
     self.motion_path_prefix= 'motions.m_'
+    self.loaded_motions= []
 
     #self.init = True
     #self.reset = True
@@ -506,12 +507,16 @@ class TCUITool:
 
 
   def ExecuteMotion(self, fileid, args):
-    filename= self.motion_path_prefix+fileid
-    sub= __import__(filename,globals(),locals(),filename,-1)
+    modname= self.motion_path_prefix+fileid
+    sub= __import__(modname,globals(),locals(),modname,-1)
     if sub:
+      if modname in self.loaded_motions:
+        reload(sub)
+      else:
+        self.loaded_motions.append(modname)
       sub.Run(self,args)
     else:
-      print 'Cannot import motion file: ',filename
+      print 'Cannot import motion file: ',modname
       return
 
 

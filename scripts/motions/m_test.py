@@ -1,4 +1,5 @@
 #!/usr/bin/python
 def Run(t,args):
   print t
-  t.MoveArmsToSide()
+  print 'hello world'
+  #t.MoveArmsToSide()
