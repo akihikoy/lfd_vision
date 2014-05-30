@@ -12,7 +12,8 @@ import arWorldModel
 #from sensor_msgs.msg import *
 #from joyKind import *
 #import kinematics_msgs.srv
-#import pr2_controllers_msgs.msg
+import pr2_controllers_msgs.msg
+import trajectory_msgs.msg
 import arm_navigation_msgs.srv
 import pr2_mechanism_msgs.srv
 import tf
@@ -119,9 +120,17 @@ class TCUITool:
     #self.w_vec = [0.0, 0.0, 0.0]  # angular velocity
     #self.motion_request = MotionKind.NOTHING  # predefined motion
 
+    joint_thresh=0.001
+    self.joint_bounds = [joint_thresh]*10
+
+    self.is_mannequin= [False,False]
     self.standard_controllers = ['r_arm_controller', 'l_arm_controller']
     self.mannequin_controllers = ['r_arm_controller_loose', 'l_arm_controller_loose']
 
+    self.r_pub = rospy.Publisher("/r_arm_controller_loose/command", trajectory_msgs.msg.JointTrajectory)
+    rospy.Subscriber("/r_arm_controller_loose/state", pr2_controllers_msgs.msg.JointTrajectoryControllerState, self.RightJointStateCallback)
+    self.l_pub = rospy.Publisher("/l_arm_controller_loose/command", trajectory_msgs.msg.JointTrajectory)
+    rospy.Subscriber("/l_arm_controller_loose/state", pr2_controllers_msgs.msg.JointTrajectoryControllerState, self.LeftJointStateCallback)
 
   def __del__(self):
     #self.stopRecord()
@@ -362,17 +371,53 @@ class TCUITool:
 
   def ActivateMannController(self):
     self.SetupSwitchControl()
-    self.switch_req.stop_controllers = [self.standard_controllers[self.whicharm]]
-    self.switch_req.start_controllers = [self.mannequin_controllers[self.whicharm]]
-    resp = self.switch_control(self.switch_req)
-    print self.ArmStr(),'arm uses mannequin controller'
+    if not self.is_mannequin[self.whicharm]:
+      self.switch_req.stop_controllers = [self.standard_controllers[self.whicharm]]
+      self.switch_req.start_controllers = [self.mannequin_controllers[self.whicharm]]
+      resp = self.switch_control(self.switch_req)
+      self.is_mannequin[self.whicharm]= True
+      print self.ArmStr(),'arm uses mannequin controller'
 
   def ActivateStdController(self):
     self.SetupSwitchControl()
-    self.switch_req.stop_controllers = [self.mannequin_controllers[self.whicharm]]
-    self.switch_req.start_controllers = [self.standard_controllers[self.whicharm]]
-    resp = self.switch_control(self.switch_req)
-    print self.ArmStr(),'arm uses standard controller'
+    if self.is_mannequin[self.whicharm]:
+      self.switch_req.stop_controllers = [self.mannequin_controllers[self.whicharm]]
+      self.switch_req.start_controllers = [self.standard_controllers[self.whicharm]]
+      resp = self.switch_control(self.switch_req)
+      self.is_mannequin[self.whicharm]= False
+      print self.ArmStr(),'arm uses standard controller'
+
+  #Borrowed from pr2_lfd_utils/src/recordInteraction.py
+  def RightJointStateCallback(self, msg):
+    if self.is_mannequin[0]:
+      max_error = max([abs(x) for x in msg.error.positions])
+      exceeded = [abs(x) > y for x,y in zip(msg.error.positions, self.joint_bounds)]
+
+      if any(exceeded):
+        # Copy our current state into the commanded state
+        cmd = trajectory_msgs.msg.JointTrajectory()
+        cmd.header.stamp = msg.header.stamp
+        cmd.joint_names = msg.joint_names
+        cmd.points.append( trajectory_msgs.msg.JointTrajectoryPoint())
+        cmd.points[0].time_from_start = rospy.Duration(.125)
+        cmd.points[0].positions = msg.actual.positions
+        self.r_pub.publish(cmd)
+
+  #Borrowed from pr2_lfd_utils/src/recordInteraction.py
+  def LeftJointStateCallback(self, msg):
+    if self.is_mannequin[1]:
+      max_error = max([abs(x) for x in msg.error.positions])
+      exceeded = [abs(x) > y for x,y in zip(msg.error.positions, self.joint_bounds)]
+
+      if any(exceeded):
+        # Copy our current state into the commanded state
+        cmd = trajectory_msgs.msg.JointTrajectory()
+        cmd.header.stamp = msg.header.stamp
+        cmd.joint_names = msg.joint_names
+        cmd.points.append( trajectory_msgs.msg.JointTrajectoryPoint())
+        cmd.points[0].time_from_start = rospy.Duration(.125)
+        cmd.points[0].positions = msg.actual.positions
+        self.l_pub.publish(cmd)
 
 
   def CartPos(self,x_ext=[]):
