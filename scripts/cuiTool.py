@@ -111,6 +111,7 @@ class TCUITool:
 
     self.ar_x= {}
     self.x_marker_to_torso= []
+    self.base_x= {}
 
     ##Current state:
     #self.deadman = False
@@ -177,10 +178,34 @@ class TCUITool:
             e= np.radians(map(float,cmd[2:5]))
             rot= tf.transformations.quaternion_from_euler(e[0], e[1], e[2])
             print 'Quaternion: ',VecToStr(rot)
+          elif cmd[1]=='q2e':
+            e= tf.transformations.euler_from_quaternion([float(cmd[2]), float(cmd[3]), float(cmd[4]), float(cmd[5])])
+            print 'Euler: ',VecToStr(e)
+          elif cmd[1]=='q2ed':
+            e= tf.transformations.euler_from_quaternion([float(cmd[2]), float(cmd[3]), float(cmd[4]), float(cmd[5])])
+            print 'Euler: ',VecToStr(np.degrees(e))
           else:
             print 'Invalid calc-command line: ',' '.join(cmd)
+        elif cmd[0]=='bp':
+          if len(cmd)==1 or cmd[1]=='show':
+            print 'Base points are: ',self.base_x
+          elif cmd[1]=='addx':
+            x= self.CartPos()
+            self.base_x[cmd[2]]= x
+            print 'Added to base points[',cmd[2],']: ',VecToStr(self.base_x[cmd[2]])
+          elif cmd[1]=='addxe':
+            xe= self.CartPos(self.control_frame[self.whicharm])
+            self.base_x[cmd[2]]= xe
+            print 'Added to base points[',cmd[2],']: ',VecToStr(self.base_x[cmd[2]])
+          elif cmd[1]=='add':
+            x=[0.0]*7
+            x[0:7]= map(float,cmd[3:10])
+            self.base_x[cmd[2]]= x
+            print 'Added to base points[',cmd[2],']: ',VecToStr(self.base_x[cmd[2]])
+          else:
+            print 'Invalid bp-command line: ',' '.join(cmd)
         elif cmd[0]=='lastx':
-          if cmd[1]=='show':
+          if len(cmd)==1 or cmd[1]=='show':
             print 'Last x: ',VecToStr(last_x)
           elif cmd[1]=='set':
             if len(cmd)>=5:  last_x[0:3]= map(float,cmd[2:5])
@@ -192,7 +217,14 @@ class TCUITool:
               l_x= TransformLeftInv(self.ARX(id), last_x)
               print 'Local pose of last x on AR ',id,': ',VecToStr(l_x)
             else:
-              print 'Error; AR marker not found: ',id
+              print 'Error: AR marker not found: ',id
+          elif cmd[1]=='bplocal':
+            id= cmd[2]
+            if id in self.base_x:
+              l_x= TransformLeftInv(self.BPX(id), last_x)
+              print 'Local pose of last x on base point ',id,': ',VecToStr(l_x)
+            else:
+              print 'Error: base point not found: ',id
           else:
             print 'Invalid lastx-command line: ',' '.join(cmd)
         elif cmd[0]=='c':
@@ -403,6 +435,9 @@ class TCUITool:
     #if not self.IsARAvailable(id):
       #return -1
     return Transform(self.x_marker_to_torso,self.ar_x[id])
+
+  def BPX(self,id):
+    return self.base_x[id]
 
 
   #Calibration to transform a marker pose to torso-frame
