@@ -466,6 +466,15 @@ class TCUITool:
     if self.mu.arm[i].last_error_code != 1:
       print "Error code= "+str(self.mu.arm[i].last_error_code)
 
+  #Interpolation version (bad implementation!!!)
+  def MoveToCartPosI(self,x_trg,dt=2.0,x_ext=[],inum=10):
+    x_curr= self.CartPos(x_ext)
+    x_diff= (x_trg-x_curr)*(1.0/float(inum))
+    idt= dt/float(inum)
+    for i in range(0,inum):
+      x_curr= x_curr+x_diff
+      self.MoveToCartPos(x_curr,idt,x_ext,True)
+
 
   #pos: 0.08 (open), 0.0 (close), max_effort: 12~15 (weak), 50 (string), -1 (maximum)
   def CommandGripper(self,pos,max_effort,blocking=False):
