@@ -37,4 +37,4 @@ def Run(t,args):
   pourexecx= pourlx
   pourexecx[3:7]= pourq  #Only change the orientation
 
-  t.MoveToCartPos(pourexecx,3.0,l_cf_pe,True)
+  t.MoveToCartPosI(pourexecx,3.0,l_cf_pe)

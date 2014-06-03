@@ -1,6 +1,8 @@
 #!/usr/bin/python
 from cuiTool import *
+import copy
 def Run(t,args):
+
   l_cf_e= t.control_frame[t.whicharm] #Local vector to the current control frame
   b= t.BPX('b') #Bottle base pose on the torso frame
   c= t.BPX('c') #Cup base pose on the torso frame
@@ -11,6 +13,9 @@ def Run(t,args):
   grabx= Transform(b,l_grabx)
   print grabx
   t.CommandGripper(0.03,50,True)
+  grabx0= copy.deepcopy(grabx)
+  grabx0[0]= t.CartPos(l_cf_e)[0]
+  t.MoveToCartPos(grabx0,3.0,l_cf_e,True)
   t.MoveToCartPos(grabx,3.0,l_cf_e,True)
   t.CommandGripper(0.0,50,True)
 
@@ -39,4 +44,4 @@ def Run(t,args):
   pourexecx= pourlx
   pourexecx[3:7]= pourq  #Only change the orientation
 
-  t.MoveToCartPosI(pourexecx,3.0,l_cf_pe,20)
+  t.MoveToCartPosI(pourexecx,4.0,l_cf_pe,20)

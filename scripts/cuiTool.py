@@ -26,6 +26,9 @@ import copy
 import readline
 import threading
 
+def AskYesNo():
+  return ask_yes_no()
+
 #There must be a planning scene or FK / IK crashes
 def SetupPlanningScene():
   print 'Waiting for set planning scene service...'
@@ -104,7 +107,7 @@ class TCUITool:
     #self.linear_speed = [0.01,0.01,0.01]
     #self.angular_speed = [0.05,0.05,0.05]
     #self.time_step = 0.05
-    self.control_time_step= 0.002
+    self.control_time_step= 0.001
     #self.gripper_max_effort = [12.0,15.0]  # gripper's max effort when closing (right,left). -1: do not limit, 50: close gently
     #self.gripper_max_effort_strong = [50.0,50.0]
     self.vel_limits = [0.8, 0.8, 2.0, 2.0, 3.0, 3.0, 10.0]
@@ -262,6 +265,15 @@ class TCUITool:
         elif cmd[0]=='setext':
           if len(cmd)>=4:  self.control_frame[self.whicharm][0:3]= map(float,cmd[1:4])
           if len(cmd)>=8:  self.control_frame[self.whicharm][3:7]= map(float,cmd[4:8])
+        elif cmd[0]=='moveq':
+          if len(cmd)==9:
+            dt= 2.0
+            q_trg= [0.0]*7
+            dt= float(cmd[1])
+            q_trg[0:7]= map(float,cmd[2:9])
+            self.MoveToJointPos(q_trg,dt)
+          else:
+            print 'Invalid moveq-arguments: ',' '.join(cmd)
         elif cmd[0]=='movex' or cmd[0]=='imovex':
           if len(cmd)==5 or len(cmd)==9:
             dt= 2.0
@@ -320,10 +332,10 @@ class TCUITool:
           print 'Invalid command line: ',' '.join(cmd)
       except Exception as e:
         print 'Error'
-        print '  ',e
-        #print '  type: ',type(e)
-        #print '  args: ',type(e.args)
-        #print '  message: ',type(e.message)
+        #print '  ',e
+        print '  type: ',type(e)
+        print '  args: ',e.args
+        print '  message: ',e.message
         print 'Check the command line: ',' '.join(cmd)
 
 
@@ -446,6 +458,11 @@ class TCUITool:
     print self.ArmStr(),'arm is selected'
 
 
+  def MoveToJointPos(self, q_trg, dt=2.0, blocking=False):
+    i= self.whicharm
+    self.mu.arm[i].moveToJointAngle(q_trg, dt, blocking)
+
+
   def CartPos(self,x_ext=[]):
     i= self.whicharm
     q= self.mu.arm[i].getCurrentPosition()  #Joint angles
@@ -501,7 +518,7 @@ class TCUITool:
     if self.mu.arm[i].last_error_code != 1:
       print "Error code= "+str(self.mu.arm[i].last_error_code)
 
-  #Interpolation version (bad implementation!!!)
+  #Interpolation version (FIXME: improve quaternion interpolation)
   def MoveToCartPosI(self,x_trg,dt=2.0,x_ext=[],inum=20):
     i = self.whicharm
     angles_prev= self.mu.arm[i].getCurrentPosition()
@@ -574,7 +591,7 @@ class TCUITool:
   #Calibration to transform a marker pose to torso-frame
   def Calibration(self):
     print 'Do you want to calibrate?'
-    if ask_yes_no():
+    if AskYesNo():
       print 'Let the robot hold a marker tag.  Use',self.ArmStr(),'arm.'
       print 'Make sure to put the marker at the position obtained by "xe" command.'
       print 'Any arm posture is OK.'
