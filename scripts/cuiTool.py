@@ -135,6 +135,10 @@ class TCUITool:
     self.l_pub = rospy.Publisher("/l_arm_controller_loose/command", trajectory_msgs.msg.JointTrajectory)
     rospy.Subscriber("/l_arm_controller_loose/state", pr2_controllers_msgs.msg.JointTrajectoryControllerState, self.LeftJointStateCallback)
 
+    self.head_pub = rospy.Publisher("/head_traj_controller/command", trajectory_msgs.msg.JointTrajectory)
+    self.head_joint_names= ['head_pan_joint', 'head_tilt_joint']
+
+
   def __del__(self):
     #self.stopRecord()
     self.thread_cui.join()
@@ -289,6 +293,11 @@ class TCUITool:
           max_effort= 20
           if len(cmd)>=3:  max_effort= float(cmd[2])
           self.CommandGripper(pos,max_effort)
+        elif cmd[0]=='head':
+          dt= float(cmd[1])
+          pan= float(cmd[2])
+          tilt= float(cmd[3])
+          self.MoveHead(pan,tilt,dt)
         elif cmd[0]=='ar':
           id= int(cmd[1])
           self.UpdateAR(id)
@@ -522,6 +531,18 @@ class TCUITool:
   #pos: 0.08 (open), 0.0 (close), max_effort: 12~15 (weak), 50 (string), -1 (maximum)
   def CommandGripper(self,pos,max_effort,blocking=False):
     self.mu.arm[self.whicharm].commandGripper(pos,max_effort,blocking)
+
+
+  def MoveHead(self,pan,tilt,dt):
+    traj= trajectory_msgs.msg.JointTrajectory()
+    traj.joint_names= self.head_joint_names
+    traj.points.append(trajectory_msgs.msg.JointTrajectoryPoint())
+
+    traj.points[0].time_from_start= rospy.Duration(dt)
+    traj.points[0].positions= [pan,tilt]
+    traj.points[0].velocities= [0.0]*2
+    traj.header.stamp = rospy.Time.now()
+    self.head_pub.publish(traj)
 
 
   def UpdateAR(self,id):
