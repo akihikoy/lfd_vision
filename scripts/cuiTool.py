@@ -84,6 +84,21 @@ def Transform(x2, x1):
   R= np.dot(R2, R1)
   return PosRotToX(p,R)
 
+#Return the interpolation from x1 to x2 with N points
+#p1 is not included
+def CartPosInterpolation(x1,x2,N):
+  p1,R1= XToPosRot(x1)
+  p2,R2= XToPosRot(x2)
+  dp= (p2-p1)/float(N)
+  trans_R= np.dot(R2,R1.T)
+  w= InvRodrigues(trans_R)
+  traj=[]
+  for t in range(N):
+    R= np.dot(Rodrigues(float(t+1)/float(N)*w),R1)
+    p1= p1+dp
+    traj.append(PosRotToX(p1,R))
+  return traj
+
 
 class TCUITool:
 
@@ -518,16 +533,16 @@ class TCUITool:
     if self.mu.arm[i].last_error_code != 1:
       print "Error code= "+str(self.mu.arm[i].last_error_code)
 
-  #Interpolation version (FIXME: improve quaternion interpolation)
+  #Interpolation version
   def MoveToCartPosI(self,x_trg,dt=2.0,x_ext=[],inum=20):
     i = self.whicharm
     angles_prev= self.mu.arm[i].getCurrentPosition()
     x_curr= np.array(self.CartPos(x_ext))
-    x_diff= (np.array(x_trg)-x_curr)*(1.0/float(inum))
+    x_traj= CartPosInterpolation(x_curr,x_trg,inum)
     idt= dt/float(inum)
     for n in range(inum):
-      x_curr= x_curr+x_diff
-      resp= self.MakeIKRequest(x_curr, x_ext)
+      x_curr= x_traj[n]
+      resp= self.MakeIKRequest(x_curr, x_ext, angles_prev)
       if resp.error_code.val == 1:
         angles= np.array(resp.solution.joint_state.position)
         goal= pr2_controllers_msgs.msg.JointTrajectoryGoal()
