@@ -104,12 +104,14 @@ class TCUITool:
     #self.linear_speed = [0.01,0.01,0.01]
     #self.angular_speed = [0.05,0.05,0.05]
     #self.time_step = 0.05
+    self.control_time_step= 0.002
     #self.gripper_max_effort = [12.0,15.0]  # gripper's max effort when closing (right,left). -1: do not limit, 50: close gently
     #self.gripper_max_effort_strong = [50.0,50.0]
+    self.vel_limits = [0.8, 0.8, 2.0, 2.0, 3.0, 3.0, 10.0]
 
     ##Extended IK
     #self.using_extended_ik = True
-    self.control_frame= [[0.12,0.0,0.0, 0.0,0.0,0.0,1.0]]*2
+    self.control_frame= [[0.16,0.0,0.0, 0.0,0.0,0.0,1.0]]*2
 
     self.ar_x= {}
     self.x_marker_to_torso= []
@@ -256,24 +258,30 @@ class TCUITool:
         elif cmd[0]=='setext':
           if len(cmd)>=4:  self.control_frame[self.whicharm][0:3]= map(float,cmd[1:4])
           if len(cmd)>=8:  self.control_frame[self.whicharm][3:7]= map(float,cmd[4:8])
-        elif cmd[0]=='movex':
+        elif cmd[0]=='movex' or cmd[0]=='imovex':
           if len(cmd)==5 or len(cmd)==9:
             dt= 2.0
             x_trg= self.CartPos()
             if len(cmd)>=2:  dt= float(cmd[1])
             if len(cmd)>=5:  x_trg[0:3]= map(float,cmd[2:5])
             if len(cmd)>=9:  x_trg[3:7]= map(float,cmd[5:9])
-            self.MoveToCartPos(x_trg,dt)
+            if cmd[0]=='movex':
+              self.MoveToCartPos(x_trg,dt)
+            else:
+              self.MoveToCartPosI(x_trg,dt)
           else:
             print 'Invalid arguments: ',' '.join(cmd)
-        elif cmd[0]=='movexe':
+        elif cmd[0]=='movexe' or cmd[0]=='imovexe':
           if len(cmd)==5 or len(cmd)==9:
             dt= 2.0
             x_trg= self.CartPos()
             if len(cmd)>=2:  dt= float(cmd[1])
             if len(cmd)>=5:  x_trg[0:3]= map(float,cmd[2:5])
             if len(cmd)>=9:  x_trg[3:7]= map(float,cmd[5:9])
-            self.MoveToCartPos(x_trg,dt,self.control_frame[self.whicharm])
+            if cmd[0]=='movexe':
+              self.MoveToCartPos(x_trg,dt,self.control_frame[self.whicharm])
+            else:
+              self.MoveToCartPosI(x_trg,dt,self.control_frame[self.whicharm])
           else:
             print 'Invalid arguments: ',' '.join(cmd)
         elif cmd[0]=='grip':
@@ -394,7 +402,7 @@ class TCUITool:
   #Borrowed from pr2_lfd_utils/src/recordInteraction.py
   def RightJointStateCallback(self, msg):
     if self.is_mannequin[0]:
-      max_error = max([abs(x) for x in msg.error.positions])
+      #max_error = max([abs(x) for x in msg.error.positions])
       exceeded = [abs(x) > y for x,y in zip(msg.error.positions, self.joint_bounds)]
 
       if any(exceeded):
@@ -410,7 +418,7 @@ class TCUITool:
   #Borrowed from pr2_lfd_utils/src/recordInteraction.py
   def LeftJointStateCallback(self, msg):
     if self.is_mannequin[1]:
-      max_error = max([abs(x) for x in msg.error.positions])
+      #max_error = max([abs(x) for x in msg.error.positions])
       exceeded = [abs(x) > y for x,y in zip(msg.error.positions, self.joint_bounds)]
 
       if any(exceeded):
@@ -445,7 +453,25 @@ class TCUITool:
       return xe
 
 
-  def MoveToCartPos(self,x_trg,dt=2.0,x_ext=[],blocking=False):
+  def MakeIKRequest(self, x_trg, x_ext=[], v_start_angles=[]):
+    i = self.whicharm
+    if len(v_start_angles)==0:
+      start_angles = self.mu.arm[i].getCurrentPosition()
+    else:
+      start_angles = v_start_angles
+
+    x_trg[3:7] = x_trg[3:7] / la.norm(x_trg[3:7])
+
+    if len(x_ext)==0:
+      cart_pos= x_trg
+    else:
+      cart_pos= TransformRightInv(x_trg,x_ext)
+
+    #Get the inverse kinematic solution for joint angles
+    return self.mu.arm[i].cart_exec.makeIKRequest(cart_pos, start_angles)
+
+
+  def MoveToCartPos(self, x_trg, dt=2.0, x_ext=[], blocking=False):
     i = self.whicharm
     x_trg[3:7] = x_trg[3:7] / la.norm(x_trg[3:7])
 
@@ -467,13 +493,30 @@ class TCUITool:
       print "Error code= "+str(self.mu.arm[i].last_error_code)
 
   #Interpolation version (bad implementation!!!)
-  def MoveToCartPosI(self,x_trg,dt=2.0,x_ext=[],inum=10):
+  def MoveToCartPosI(self,x_trg,dt=2.0,x_ext=[],inum=20):
+    i = self.whicharm
+    angles_prev= self.mu.arm[i].getCurrentPosition()
     x_curr= np.array(self.CartPos(x_ext))
     x_diff= (np.array(x_trg)-x_curr)*(1.0/float(inum))
     idt= dt/float(inum)
-    for i in range(0,inum):
+    for n in range(inum):
       x_curr= x_curr+x_diff
-      self.MoveToCartPos(x_curr,idt,x_ext,True)
+      resp= self.MakeIKRequest(x_curr, x_ext)
+      if resp.error_code.val == 1:
+        angles= np.array(resp.solution.joint_state.position)
+        goal= pr2_controllers_msgs.msg.JointTrajectoryGoal()
+        goal.trajectory.joint_names= self.mu.arm[i].goal.trajectory.joint_names
+        traj_duration= InterpolateLinearly2(goal.trajectory.points, angles_prev, angles, idt, self.control_time_step, rot_adjust=True, vel_limits=self.vel_limits)
+        goal.trajectory.header.stamp= rospy.Time.now()
+        self.mu.arm[i].traj_client.send_goal(goal)
+        angles_prev= angles
+
+        start_time= rospy.Time.now()
+        while rospy.Time.now() < start_time + rospy.Duration(traj_duration):
+          time.sleep(traj_duration*0.02)
+      else:
+        print "IK error: ",resp.error_code.val
+        break
 
 
   #pos: 0.08 (open), 0.0 (close), max_effort: 12~15 (weak), 50 (string), -1 (maximum)
