@@ -11,7 +11,7 @@ def Run(t,args):
   l_grabx= [0.0173701175184, 0.132963892485, 0.0746058303632, -0.0496690610081, 0.0729356705803, -0.0512348563445, 0.994780559637]
   #Grab pose on the torso frame
   grabx= Transform(b,l_grabx)
-  print grabx
+  print 'grabx=',VecToStr(grabx)
   t.CommandGripper(0.03,50,True)
   grabx0= copy.deepcopy(grabx)
   grabx0[0]= t.CartPos(l_cf_e)[0]
@@ -25,7 +25,7 @@ def Run(t,args):
 
   x= t.CartPos()
   l_cf_pe= TransformLeftInv(x, Transform(b,l_pourex))
-  print 'l_cf_pe=',l_cf_pe
+  print 'l_cf_pe=',VecToStr(l_cf_pe)
 
   #Move upward
   x= t.CartPos()
@@ -33,9 +33,10 @@ def Run(t,args):
   t.MoveToCartPos(x,2.0,[],True)
 
   #Pouring location on the cup frame (constant):
-  l_pourlx= [0.0164938693088, 0.00293250989281, 0.230512294328, 0.0,0.0,0.0,1.0]
+  l_pourlx= [0.0164938693088, 0.00293250989281, 0.210512294328, 0.0,0.0,0.0,1.0]
   pourlx= Transform(c,l_pourlx)
 
+  print 'pourlx=',VecToStr(pourlx)
   t.MoveToCartPos(pourlx,3.0,l_cf_pe,True)
 
   #Pouring orientation:
@@ -44,4 +45,5 @@ def Run(t,args):
   pourexecx= pourlx
   pourexecx[3:7]= pourq  #Only change the orientation
 
+  print 'pourexecx=',VecToStr(pourexecx)
   t.MoveToCartPosI(pourexecx,4.0,l_cf_pe,30)

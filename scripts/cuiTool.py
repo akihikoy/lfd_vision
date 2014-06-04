@@ -538,27 +538,62 @@ class TCUITool:
     i = self.whicharm
     angles_prev= self.mu.arm[i].getCurrentPosition()
     x_curr= np.array(self.CartPos(x_ext))
-    x_traj= CartPosInterpolation(x_curr,x_trg,inum)
-    idt= dt/float(inum)
-    for n in range(inum):
-      x_curr= x_traj[n]
-      resp= self.MakeIKRequest(x_curr, x_ext, angles_prev)
-      if resp.error_code.val == 1:
-        angles= np.array(resp.solution.joint_state.position)
-        goal= pr2_controllers_msgs.msg.JointTrajectoryGoal()
-        goal.trajectory.joint_names= self.mu.arm[i].goal.trajectory.joint_names
-        traj_duration= InterpolateLinearly2(goal.trajectory.points, angles_prev, angles, idt, self.control_time_step, rot_adjust=True, vel_limits=self.vel_limits)
+
+    interpolation_controller_version= 2
+    if interpolation_controller_version==1:
+      print 'It is not worth to be kept'
+    elif interpolation_controller_version==2:
+      x_traj= CartPosInterpolation(x_curr,x_trg,inum)
+      #print x_traj
+      idt= dt/float(inum)
+      for n in range(inum):
+        x_curr= x_traj[n]
+        resp= self.MakeIKRequest(x_curr, x_ext, angles_prev)
+        if resp.error_code.val == 1:
+          angles= np.array(resp.solution.joint_state.position)
+          goal= pr2_controllers_msgs.msg.JointTrajectoryGoal()
+          goal.trajectory.joint_names= self.mu.arm[i].goal.trajectory.joint_names
+          traj_duration= InterpolateLinearly2(goal.trajectory.points, angles_prev, angles, idt, self.control_time_step, rot_adjust=True, vel_limits=self.vel_limits)
+          goal.trajectory.header.stamp= rospy.Time.now()
+          self.mu.arm[i].traj_client.send_goal(goal)
+          angles_prev= angles
+
+          start_time= rospy.Time.now()
+          while rospy.Time.now() < start_time + rospy.Duration(traj_duration):
+            time.sleep(traj_duration*0.02)
+        else:
+          print "IK error: ",resp.error_code.val
+          break
+    elif interpolation_controller_version==3:
+      x_traj= CartPosInterpolation(x_curr,x_trg,inum)
+      #print x_traj
+      idt= dt/float(inum)
+      T= rospy.Duration(0.0)
+      ik_error= False
+      goal= pr2_controllers_msgs.msg.JointTrajectoryGoal()
+      goal.trajectory.joint_names= self.mu.arm[i].goal.trajectory.joint_names
+      for n in range(inum):
+        x_curr= x_traj[n]
+        resp= self.MakeIKRequest(x_curr, x_ext, angles_prev)
+        if resp.error_code.val == 1:
+          angles= np.array(resp.solution.joint_state.position)
+          subtraj= trajectory_msgs.msg.JointTrajectory()
+          traj_duration= InterpolateLinearly2(subtraj.points, angles_prev, angles, idt, self.control_time_step, rot_adjust=True, vel_limits=self.vel_limits)
+          for jp in subtraj.points:
+            jp.time_from_start= T+jp.time_from_start
+            goal.trajectory.points.append(jp)
+          T= T+rospy.Duration(traj_duration)
+          angles_prev= angles
+        else:
+          print "IK error: ",resp.error_code.val
+          ik_error= True
+          break
+      if not ik_error:
         goal.trajectory.header.stamp= rospy.Time.now()
         self.mu.arm[i].traj_client.send_goal(goal)
-        angles_prev= angles
-
         start_time= rospy.Time.now()
-        while rospy.Time.now() < start_time + rospy.Duration(traj_duration):
-          time.sleep(traj_duration*0.02)
-      else:
-        print "IK error: ",resp.error_code.val
-        break
-
+        while rospy.Time.now() < start_time + T:
+          time.sleep(T.to_sec()*0.02)
 
   #pos: 0.08 (open), 0.0 (close), max_effort: 12~15 (weak), 50 (string), -1 (maximum)
   def CommandGripper(self,pos,max_effort,blocking=False):
