@@ -33,7 +33,7 @@ def Run(t,args):
   t.MoveToCartPos(x,2.0,[],True)
 
   #Pouring location on the cup frame (constant):
-  l_pourlx= [0.0164938693088, 0.00293250989281, 0.210512294328, 0.0,0.0,0.0,1.0]
+  l_pourlx= [0.0164938693088, 0.01293250989281, 0.210512294328, 0.0,0.0,0.0,1.0]
   pourlx= Transform(c,l_pourlx)
 
   print 'pourlx=',VecToStr(pourlx)
@@ -46,4 +46,4 @@ def Run(t,args):
   pourexecx[3:7]= pourq  #Only change the orientation
 
   print 'pourexecx=',VecToStr(pourexecx)
-  t.MoveToCartPosI(pourexecx,4.0,l_cf_pe,30)
+  t.MoveToCartPosI(pourexecx,7.0,l_cf_pe,30,True)

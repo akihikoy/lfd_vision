@@ -539,7 +539,7 @@ class TCUITool:
     angles_prev= self.mu.arm[i].getCurrentPosition()
     x_curr= np.array(self.CartPos(x_ext))
 
-    interpolation_controller_version= 4
+    interpolation_controller_version= 3
     if interpolation_controller_version==1:
       print 'It is not worth to be kept'
     elif interpolation_controller_version==2:
