@@ -534,18 +534,19 @@ class TCUITool:
       print "Error code= "+str(self.mu.arm[i].last_error_code)
 
   #Interpolation version
-  def MoveToCartPosI(self,x_trg,dt=2.0,x_ext=[],inum=20):
+  def MoveToCartPosI(self,x_trg,dt=2.0,x_ext=[],inum=20,blocking=False):
     i = self.whicharm
     angles_prev= self.mu.arm[i].getCurrentPosition()
     x_curr= np.array(self.CartPos(x_ext))
 
-    interpolation_controller_version= 2
+    interpolation_controller_version= 4
     if interpolation_controller_version==1:
       print 'It is not worth to be kept'
     elif interpolation_controller_version==2:
       x_traj= CartPosInterpolation(x_curr,x_trg,inum)
       #print x_traj
       idt= dt/float(inum)
+      #fp=file('/tmp/trajxxx1.dat','w'); T=0.0
       for n in range(inum):
         x_curr= x_traj[n]
         resp= self.MakeIKRequest(x_curr, x_ext, angles_prev)
@@ -558,6 +559,9 @@ class TCUITool:
           self.mu.arm[i].traj_client.send_goal(goal)
           angles_prev= angles
 
+          #for p in goal.trajectory.points: fp.write(str(T+p.time_from_start.to_sec())+' '+VecToStr(p.positions)+'\n')
+          #T+=traj_duration
+
           start_time= rospy.Time.now()
           while rospy.Time.now() < start_time + rospy.Duration(traj_duration):
             time.sleep(traj_duration*0.02)
@@ -565,6 +569,35 @@ class TCUITool:
           print "IK error: ",resp.error_code.val
           break
     elif interpolation_controller_version==3:
+      x_traj= CartPosInterpolation(x_curr,x_trg,inum)
+      #print x_traj
+      idt= dt/float(inum)
+      goal= pr2_controllers_msgs.msg.JointTrajectoryGoal()
+      goal.trajectory.joint_names= self.mu.arm[i].goal.trajectory.joint_names
+      for n in range(inum):
+        x_curr= x_traj[n]
+        resp= self.MakeIKRequest(x_curr, x_ext, angles_prev)
+        if resp.error_code.val == 1:
+          angles= np.array(resp.solution.joint_state.position)
+          jp = trajectory_msgs.msg.JointTrajectoryPoint()
+          jp.positions = angles
+          jp.time_from_start = rospy.Duration(idt*(n+1))
+          goal.trajectory.points.append(jp)
+          angles_prev= angles
+        else:
+          print "IK error: ",resp.error_code.val
+          break
+      if len(goal.trajectory.points)==inum:
+        AngleTrajSmoother(goal.trajectory.points)
+        #fp=file('/tmp/trajxxx1.dat','w')
+        #for p in goal.trajectory.points: fp.write(str(p.time_from_start.to_sec())+' '+VecToStr(p.positions)+'\n')
+        #print goal
+        goal.trajectory.header.stamp= rospy.Time.now()
+        self.mu.arm[i].traj_client.send_goal(goal)
+        start_time= rospy.Time.now()
+        while rospy.Time.now() < start_time + rospy.Duration(dt):
+          time.sleep(dt*0.02)
+    elif interpolation_controller_version==4:
       x_traj= CartPosInterpolation(x_curr,x_trg,inum)
       #print x_traj
       idt= dt/float(inum)
@@ -589,6 +622,10 @@ class TCUITool:
           ik_error= True
           break
       if not ik_error:
+        AngleTrajSmoother(goal.trajectory.points)
+        #fp=file('/tmp/trajxxx1.dat','w')
+        #for p in goal.trajectory.points: fp.write(str(p.time_from_start.to_sec())+' '+VecToStr(p.positions)+'\n')
+        #print goal
         goal.trajectory.header.stamp= rospy.Time.now()
         self.mu.arm[i].traj_client.send_goal(goal)
         start_time= rospy.Time.now()
