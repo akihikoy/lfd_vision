@@ -20,6 +20,8 @@ import tf
 #For rosbag:
 #import subprocess
 import os
+import sys
+import traceback
 #import signal
 import copy
 #For CUI
@@ -346,11 +348,14 @@ class TCUITool:
         else:
           print 'Invalid command line: ',' '.join(cmd)
       except Exception as e:
-        print 'Error'
-        #print '  ',e
-        print '  type: ',type(e)
-        print '  args: ',e.args
-        print '  message: ',e.message
+        print 'Error(',type(e),'):'
+        print '  ',e
+        #print '  type: ',type(e)
+        #print '  args: ',e.args
+        #print '  message: ',e.message
+        #print '  sys.exc_info(): ',sys.exc_info()
+        print '  Traceback: '
+        traceback.print_tb(sys.exc_info()[2])
         print 'Check the command line: ',' '.join(cmd)
 
 
@@ -512,6 +517,7 @@ class TCUITool:
     return self.mu.arm[i].cart_exec.makeIKRequest(cart_pos, start_angles)
 
 
+  #Move to a cart position
   def MoveToCartPos(self, x_trg, dt=2.0, x_ext=[], blocking=False):
     i = self.whicharm
     x_trg[3:7] = x_trg[3:7] / la.norm(x_trg[3:7])
@@ -533,7 +539,8 @@ class TCUITool:
     if self.mu.arm[i].last_error_code != 1:
       print "Error code= "+str(self.mu.arm[i].last_error_code)
 
-  #Interpolation version
+
+  #Move to a cart position with interpolation
   def MoveToCartPosI(self,x_trg,dt=2.0,x_ext=[],inum=20,blocking=False):
     i = self.whicharm
     angles_prev= self.mu.arm[i].getCurrentPosition()
@@ -541,8 +548,19 @@ class TCUITool:
 
     interpolation_controller_version= 3
     if interpolation_controller_version==1:
-      print 'It is not worth to be kept'
+      print '###Error in MoveToCartPosI: Version 1 is not worth to be kept'
     elif interpolation_controller_version==2:
+      '''
+      Version 2:
+      IK -> q-interpolation -> control --> IK -> q-interpolation -> control --> ... --> IK -> q-interpolation -> control
+        1. Generate a linear interpolation from x_curr to x_trg
+        2. angles_prev <-- Current joint position (angles)
+        3. For each interpolated point x:
+          a. angles <-- ExtendedIK(x, x_ext, angles_prev)
+          b. Generate a linear interpolation from angles_prev to angles
+          c. Send the angles trajectory to controller
+          d. angles_prev <-- angles
+      '''
       x_traj= CartPosInterpolation(x_curr,x_trg,inum)
       #print x_traj
       idt= dt/float(inum)
@@ -569,6 +587,18 @@ class TCUITool:
           print "IK error: ",resp.error_code.val
           break
     elif interpolation_controller_version==3:
+      '''
+      Version 3:
+      IK --> IK --> ... --> IK --> control
+        1. Generate a linear interpolation from x_curr to x_trg
+        2. angles_prev <-- Current joint position (angles)
+        3. angles_traj <-- []
+        4. For each interpolated point x:
+          a. angles <-- ExtendedIK(x, x_ext, angles_prev)
+          b. angles_traj <-- angles_traj + [angles]
+          c. angles_prev <-- angles
+        5. Send angles_traj to controller
+      '''
       x_traj= CartPosInterpolation(x_curr,x_trg,inum)
       #print x_traj
       idt= dt/float(inum)
@@ -598,6 +628,19 @@ class TCUITool:
         while rospy.Time.now() < start_time + rospy.Duration(dt):
           time.sleep(dt*0.02)
     elif interpolation_controller_version==4:
+      '''
+      Version 4:
+      IK -> q-interpolation --> IK -> q-interpolation --> ... --> IK -> q-interpolation --> control
+        1. Generate a linear interpolation from x_curr to x_trg
+        2. angles_prev <-- Current joint position (angles)
+        3. angles_traj <-- []
+        4. For each interpolated point x:
+          a. angles <-- ExtendedIK(x, x_ext, angles_prev)
+          b. Generate a linear interpolation from angles_prev to angles --> subtraj
+          b. angles_traj <-- angles_traj + subtraj
+          c. angles_prev <-- angles
+        5. Send angles_traj to controller
+      '''
       x_traj= CartPosInterpolation(x_curr,x_trg,inum)
       #print x_traj
       idt= dt/float(inum)
