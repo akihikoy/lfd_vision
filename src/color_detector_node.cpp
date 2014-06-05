@@ -10,6 +10,7 @@
 //-------------------------------------------------------------------------------------------
 #include <opencv2/highgui/highgui.hpp>
 #include <ros/ros.h>
+#include <std_msgs/Float64.h>
 #include <iostream>
 //-------------------------------------------------------------------------------------------
 namespace trick
@@ -52,7 +53,9 @@ void OnMouse(int event, int x, int y, int, void *vpimg)
 int main(int argc, char**argv)
 {
   ros::init(argc, argv, "minimum_node");
-  ros::NodeHandle n;
+  ros::NodeHandle node;
+
+  ros::Publisher ratio_pub= node.advertise<std_msgs::Float64>("color_occupied_ratio", 10);
 
   cv::VideoCapture cap(0); // open the default camera
   if(argc==2)
@@ -68,7 +71,7 @@ int main(int argc, char**argv)
   std::cerr<<"camera opened"<<std::endl;
 
   cv::namedWindow("camera",1);
-  cv::namedWindow("detected",1);
+  // cv::namedWindow("detected",1);
   cv::namedWindow("mask_img",1);
   cv::Mat frame, mask_img, detected;
 
@@ -76,25 +79,34 @@ int main(int argc, char**argv)
   // detect_colors.push_back(cv::Vec3b(200,100,200));
   cv::setMouseCallback("camera", OnMouse, &frame);
 
-  for(;;)
+  // ros::Rate loop_rate(10);  // 10 Hz
+  while(ros::ok())
   {
     cap >> frame; // get a new frame from camera
     cv::imshow("camera", frame);
     mask_img= col_detector.Detect(frame);
 
     int nonzero= cv::countNonZero(mask_img);
-    std::cout<<"nonzero: "<<nonzero<<" / "<<mask_img.total()<<std::endl;
+    double nonzero_ratio= double(nonzero)/double(mask_img.total());
+    std::cout<<"nonzero: \t"<<nonzero<<" / \t"<<mask_img.total()
+        <<"  \t"<<nonzero_ratio<<std::endl;
     cv::imshow("mask_img", mask_img);
 
-    // Apply the mask image
-    detected.create(frame.rows, frame.cols, CV_8UC3);
-    detected= cv::Scalar(0,0,0);
-    frame.copyTo(detected, mask_img);
+    std_msgs::Float64  ratio_msg;
+    ratio_msg.data= nonzero_ratio;
+    ratio_pub.publish(ratio_msg);
 
-    cv::imshow("detected", detected);
-    int c(cv::waitKey(10));
+    // Apply the mask image
+    // detected.create(frame.rows, frame.cols, CV_8UC3);
+    // detected= cv::Scalar(0,0,0);
+    // frame.copyTo(detected, mask_img);
+    // cv::imshow("detected", detected);
+
+    int c(cv::waitKey(1));
     if(c=='\x1b'||c=='q') break;
-    // usleep(10000);
+
+    ros::spinOnce();
+    // loop_rate.sleep();
   }
 
   return 0;
