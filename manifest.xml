@@ -10,7 +10,8 @@
   <url>http://ros.org/wiki/pr2_lfd_trick</url>
   <depend package="rospy"/>
   <depend package="roscpp"/>
-  <depend package="pr2_lfd_utils"/>
+  <depend package="opencv2"/>
+  <!--<depend package="pr2_lfd_utils"/>-->
 
 </package>
 
