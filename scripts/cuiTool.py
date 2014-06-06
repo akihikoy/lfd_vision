@@ -16,6 +16,7 @@ import pr2_controllers_msgs.msg
 import trajectory_msgs.msg
 import arm_navigation_msgs.srv
 import pr2_mechanism_msgs.srv
+import std_msgs.msg
 import tf
 #For rosbag:
 #import subprocess
@@ -24,6 +25,7 @@ import sys
 import traceback
 #import signal
 import copy
+import math
 #For CUI
 import readline
 import threading
@@ -133,6 +135,16 @@ class TCUITool:
     #self.using_extended_ik = True
     self.control_frame= [[0.16,0.0,0.0, 0.0,0.0,0.0,1.0]]*2
 
+
+    self.flow_control_theta_max= math.pi*0.8
+    self.flow_control_dtheta_max= math.pi*0.1
+    self.flow_control_dtheta_min= -math.pi*0.1
+    self.flow_control_time_step= 0.01
+    self.flow_control_gain_p= 50.0
+    self.flow_control_gain_d= 1.0
+    self.flow_move_back_duration= 3.0
+
+
     self.ar_x= {}
     self.x_marker_to_torso= []
     self.base_x= {}
@@ -157,6 +169,10 @@ class TCUITool:
 
     self.head_pub = rospy.Publisher("/head_traj_controller/command", trajectory_msgs.msg.JointTrajectory)
     self.head_joint_names= ['head_pan_joint', 'head_tilt_joint']
+
+    self.material_amount= 0
+    self.material_amount_observed= False
+    rospy.Subscriber("/color_occupied_ratio", std_msgs.msg.Float64, self.AmountObserver)
 
 
   def __del__(self):
@@ -473,6 +489,12 @@ class TCUITool:
         self.l_pub.publish(cmd)
 
 
+  #Observes amount of the material in the cup... just observing the color occupied ration
+  def AmountObserver(self, msg):
+    self.material_amount_observed= True
+    self.material_amount= msg.data
+
+
   def SwitchArm(self,arm):
     self.whicharm= arm
     print self.ArmStr(),'arm is selected'
@@ -736,6 +758,75 @@ class TCUITool:
         else:
           print 'Marker ',id,' is not observed.  Make sure the camera position, then try again.'
     print 'Done'
+
+
+  def FlowAmountControl(self, amount_trg, rot_axis, x_ext=[], max_duration=10.0):
+    if not self.material_amount_observed:
+      print "Error: /color_occupied_ratio is not observed"
+      return
+
+    i = self.whicharm
+    angles_init= self.mu.arm[i].getCurrentPosition()
+    x_init= np.array(self.CartPos(x_ext))
+
+    goal= pr2_controllers_msgs.msg.JointTrajectoryGoal()
+    goal.trajectory.joint_names= self.mu.arm[i].goal.trajectory.joint_names
+    goal.trajectory.points.append(trajectory_msgs.msg.JointTrajectoryPoint())
+
+    theta= 0.0
+    elapsed_time= 0.0
+    damount= 0.0
+    amount= self.material_amount
+    while elapsed_time<max_duration:
+      amount_prev= amount
+      amount= self.material_amount
+      if amount >= amount_trg:
+        print 'Poured! (',amount,' / ',amount_trg,')'
+        break
+      damount= (amount-amount_prev)/self.flow_control_time_step
+      dtheta= self.flow_control_gain_p * (amount_trg - amount) - self.flow_control_gain_d * damount
+      if dtheta > self.flow_control_dtheta_max:  dtheta= self.flow_control_dtheta_max
+      elif dtheta < self.flow_control_dtheta_min:  dtheta= self.flow_control_dtheta_min
+      theta= theta+dtheta * self.flow_control_time_step
+      if theta > self.flow_control_theta_max:  theta= self.flow_control_theta_max
+
+      print elapsed_time,': ',amount,' (',damount,') / ',amount_trg,' : ',theta,', ',dtheta
+
+      x_rot= [0.0]*7
+      x_rot[3:7] = tf.transformations.quaternion_about_axis(theta, rot_axis)
+      x_trg= Transform(x_rot, x_init)
+
+      angles_curr= self.mu.arm[i].getCurrentPosition()
+      resp= self.MakeIKRequest(x_trg, x_ext, angles_curr)
+
+      if resp.error_code.val == 1:
+        angles= np.array(resp.solution.joint_state.position)
+        goal.trajectory.points[0].positions = angles
+        goal.trajectory.points[0].time_from_start = rospy.Duration(self.flow_control_time_step)
+        #angles_curr= angles
+
+        goal.trajectory.header.stamp= rospy.Time.now()
+        self.mu.arm[i].traj_client.send_goal(goal)
+        start_time= rospy.Time.now()
+        while rospy.Time.now() < start_time + rospy.Duration(self.flow_control_time_step):
+          time.sleep(self.flow_control_time_step*0.02)
+
+      else:
+        print "IK error: ",resp.error_code.val
+        break
+
+      elapsed_time+= self.flow_control_time_step
+
+    #Move back to the initial angles
+    goal.trajectory.points[0].positions = angles_init
+    goal.trajectory.points[0].time_from_start = rospy.Duration(self.flow_move_back_duration)
+
+    goal.trajectory.header.stamp= rospy.Time.now()
+    self.mu.arm[i].traj_client.send_goal(goal)
+    start_time= rospy.Time.now()
+    while rospy.Time.now() < start_time + rospy.Duration(self.flow_move_back_duration):
+      time.sleep(self.flow_move_back_duration*0.02)
+
 
 
   def ExecuteMotion(self, fileid, args):
