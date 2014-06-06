@@ -46,6 +46,16 @@ def SetupPlanningScene():
 def VecToStr(vec,delim=' '):
   return delim.join(map(str,vec))
 
+#Quaternion to 3x3 rotation matrix
+def QToRot(q):
+  return tf.transformations.quaternion_matrix(q)[:3,:3]
+
+#Quaternion to 3x3 rotation matrix
+def RotToQ(R):
+  M = tf.transformations.identity_matrix()
+  M[:3,:3] = R
+  return tf.transformations.quaternion_from_matrix(M)
+
 #Convert a pose, x,y,z,quaternion(qx,qy,qz,qw) to pos (x,y,z) and 3x3 rotation matrix
 def XToPosRot(x):
   p = np.array(x[0:3])
@@ -563,7 +573,7 @@ class TCUITool:
 
 
   #Move to a cart position with interpolation
-  def MoveToCartPosI(self,x_trg,dt=2.0,x_ext=[],inum=20,blocking=False):
+  def MoveToCartPosI(self,x_trg,dt=2.0,x_ext=[],inum=30,blocking=False):
     i = self.whicharm
     angles_prev= self.mu.arm[i].getCurrentPosition()
     x_curr= np.array(self.CartPos(x_ext))
@@ -792,9 +802,11 @@ class TCUITool:
 
       print elapsed_time,': ',amount,' (',damount,') / ',amount_trg,' : ',theta,', ',dtheta
 
-      x_rot= [0.0]*7
-      x_rot[3:7] = tf.transformations.quaternion_about_axis(theta, rot_axis)
-      x_trg= Transform(x_rot, x_init)
+      p_init,R_init= XToPosRot(x_init)
+      dR= QToRot(tf.transformations.quaternion_about_axis(theta, rot_axis))
+      R_trg= np.dot(dR,R_init)
+      x_trg= PosRotToX(p_init,R_trg)
+      print '##',VecToStr(x_trg)
 
       angles_curr= self.mu.arm[i].getCurrentPosition()
       resp= self.MakeIKRequest(x_trg, x_ext, angles_curr)
@@ -817,15 +829,17 @@ class TCUITool:
 
       elapsed_time+= self.flow_control_time_step
 
-    #Move back to the initial angles
-    goal.trajectory.points[0].positions = angles_init
-    goal.trajectory.points[0].time_from_start = rospy.Duration(self.flow_move_back_duration)
+    #Move back to the initial pose
+    self.MoveToCartPosI(x_init,self.flow_move_back_duration,x_ext,inum=30,blocking=True)
 
-    goal.trajectory.header.stamp= rospy.Time.now()
-    self.mu.arm[i].traj_client.send_goal(goal)
-    start_time= rospy.Time.now()
-    while rospy.Time.now() < start_time + rospy.Duration(self.flow_move_back_duration):
-      time.sleep(self.flow_move_back_duration*0.02)
+    #goal.trajectory.points[0].positions = angles_init
+    #goal.trajectory.points[0].time_from_start = rospy.Duration(self.flow_move_back_duration)
+
+    #goal.trajectory.header.stamp= rospy.Time.now()
+    #self.mu.arm[i].traj_client.send_goal(goal)
+    #start_time= rospy.Time.now()
+    #while rospy.Time.now() < start_time + rospy.Duration(self.flow_move_back_duration):
+      #time.sleep(self.flow_move_back_duration*0.02)
 
 
 

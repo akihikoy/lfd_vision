@@ -8,7 +8,7 @@ def Run(t,args):
   l_grabx= [0.0143257412366, -0.00243017410404, 0.00332284373253, -0.0386798980774, 0.0474739514813, 0.0058252014884, 0.998106285144]
   #Grab pose on the torso frame
   grabx= Transform(b,l_grabx)
-  print grabx
+  print 'grabx=',VecToStr(grabx)
   t.CommandGripper(0.08,50,True)
   t.MoveToCartPos(grabx,3.0,l_cf_e,True)
   t.CommandGripper(0.0,15,True)
@@ -18,7 +18,7 @@ def Run(t,args):
 
   x= t.CartPos()
   l_cf_pe= TransformLeftInv(x, Transform(b,l_pourex))
-  print 'l_cf_pe=',l_cf_pe
+  print 'l_cf_pe=',VecToStr(l_cf_pe)
 
   #Move upward
   x= t.CartPos()
@@ -29,6 +29,7 @@ def Run(t,args):
   l_pourlx= [0.0164938693088, 0.00293250989281, 0.230512294328, 0.0,0.0,0.0,1.0]
   pourlx= Transform(c,l_pourlx)
 
+  print 'pourlx=',VecToStr(pourlx)
   t.MoveToCartPos(pourlx,3.0,l_cf_pe,True)
 
   #Pouring orientation:
@@ -37,4 +38,4 @@ def Run(t,args):
   pourexecx= pourlx
   pourexecx[3:7]= pourq  #Only change the orientation
 
-  t.MoveToCartPosI(pourexecx,3.0,l_cf_pe)
+  t.MoveToCartPosI(pourexecx,4.0,l_cf_pe,30,True)

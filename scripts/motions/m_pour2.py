@@ -2,7 +2,6 @@
 from cuiTool import *
 import copy
 def Run(t,args):
-
   l_cf_e= t.control_frame[t.whicharm] #Local vector to the current control frame
   b= t.BPX('b') #Bottle base pose on the torso frame
   c= t.BPX('c') #Cup base pose on the torso frame
