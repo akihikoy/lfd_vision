@@ -838,7 +838,7 @@ class TCUITool:
 
     #Use FlowAmountControl to rotate the bottle
     #FIXME: this part should be separated
-    self.FlowAmountControl(amount_trg, [1,0,0], x_ext, max_duration=5.0, only_pour=True)
+    self.FlowAmountControl(amount_trg, [1,0,0], x_ext, max_duration=10.0, only_pour=True)
 
     #Then, keep pouring with shaking
 
@@ -847,6 +847,7 @@ class TCUITool:
     damount= 0.0
     amount= self.material_amount
     dt= 1.0
+    x_init2= np.array(self.CartPos(x_ext))
     while elapsed_time<max_duration:
       amount_prev= amount
       amount= self.material_amount
@@ -862,7 +863,16 @@ class TCUITool:
       print elapsed_time,': ',amount,' (',damount,') / ',amount_trg,' : ',shake_freq
 
       dt= 1.0/shake_freq
-      self.ShakeGripper(shake_freq,self.flow_shake_width,x_ext,self.flow_shake_axis)
+      #self.ShakeGripper(shake_freq,self.flow_shake_width,x_ext,self.flow_shake_axis)
+
+      #>>>Shaking motion
+      x_trg= copy.deepcopy(x_init2)
+      shake_axis= copy.deepcopy(self.flow_shake_axis)  #FIXME: this code should be outside the loop
+      shake_axis= np.array(shake_axis) / la.norm(shake_axis)  #FIXME: ditto
+      x_trg[0:3]+= np.array(shake_axis)*self.flow_shake_width
+      self.MoveToCartPosI(x_trg,dt/2.0,x_ext,inum=5,blocking=True)
+      self.MoveToCartPosI(x_init2,dt/2.0,x_ext,inum=5,blocking=True)
+      #<<<Shaking motion
 
       elapsed_time+= dt
 
