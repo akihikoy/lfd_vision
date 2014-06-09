@@ -154,6 +154,12 @@ class TCUITool:
     self.flow_control_gain_d= 1.0
     self.flow_move_back_duration= 3.0
 
+    self.flow_shake_freq_max= 2.0
+    self.flow_shake_freq_min= 0.1
+    self.flow_shake_gain_p= 500.0
+    self.flow_shake_gain_d= 10.0
+    self.flow_shake_width= 0.04
+    self.flow_shake_axis= [0.0,0.0,1.0]
 
     self.ar_x= {}
     self.x_marker_to_torso= []
@@ -386,8 +392,8 @@ class TCUITool:
 
 
   def MoveArmsToSide(self):
-    self.init = True
-    self.reset = True
+    #self.init = True
+    #self.reset = True
     #time.sleep(0.1)
     self.mu.arm[0].traj_client.wait_for_result()
     self.mu.arm[0].cart_exec.traj_client.wait_for_result()
@@ -415,27 +421,6 @@ class TCUITool:
     else:
       print "Right arm is already at the goal ({diff})".format(diff=diff)
     print "Done"
-
-
-  def ShakeGripper(self,shake_Hz=2.0,shake_width=0.04):
-    self.deadman = False
-    self.init = True
-    self.reset = True
-    i = self.whicharm
-    self.mu.arm[i].traj_client.wait_for_result()
-    self.mu.arm[i].cart_exec.traj_client.wait_for_result()
-    q = self.mu.arm[i].getCurrentPosition()
-    p = self.mu.arm[i].cart_exec.makeFKRequest(q)
-    g = self.mu.arm[i].getGripPoseInfo()[0]
-    p2 = copy.deepcopy(p)
-    p2[2] += shake_width
-    cart_pos=[p2,p,p2,p]
-    grip_traj=[g,g,g,g]
-    print cart_pos
-    dt = 2.0/shake_Hz/5.0
-    splice_time = rospy.Time.now()
-    blocking = True
-    self.mu.arm[i].followCartTraj(cart_pos, grip_traj, dt, splice_time, blocking)
 
 
   def SetupSwitchControl(self):
@@ -770,13 +755,13 @@ class TCUITool:
     print 'Done'
 
 
-  def FlowAmountControl(self, amount_trg, rot_axis, x_ext=[], max_duration=10.0):
+  def FlowAmountControl(self, amount_trg, rot_axis, x_ext=[], max_duration=10.0, only_pour=False):
     if not self.material_amount_observed:
       print "Error: /color_occupied_ratio is not observed"
       return
 
-    i = self.whicharm
-    angles_init= self.mu.arm[i].getCurrentPosition()
+    i= self.whicharm
+    #angles_init= self.mu.arm[i].getCurrentPosition()
     x_init= np.array(self.CartPos(x_ext))
 
     goal= pr2_controllers_msgs.msg.JointTrajectoryGoal()
@@ -829,20 +814,106 @@ class TCUITool:
 
       elapsed_time+= self.flow_control_time_step
 
+    if not only_pour:
+      #Move back to the initial pose
+      self.MoveToCartPosI(x_init,self.flow_move_back_duration,x_ext,inum=30,blocking=True)
+
+      #goal.trajectory.points[0].positions = angles_init
+      #goal.trajectory.points[0].time_from_start = rospy.Duration(self.flow_move_back_duration)
+
+      #goal.trajectory.header.stamp= rospy.Time.now()
+      #self.mu.arm[i].traj_client.send_goal(goal)
+      #start_time= rospy.Time.now()
+      #while rospy.Time.now() < start_time + rospy.Duration(self.flow_move_back_duration):
+        #time.sleep(self.flow_move_back_duration*0.02)
+
+
+  def FlowAmountControlWithShaking(self, amount_trg, x_ext=[], max_duration=10.0):
+    if not self.material_amount_observed:
+      print "Error: /color_occupied_ratio is not observed"
+      return
+
+    i= self.whicharm
+    x_init= np.array(self.CartPos(x_ext))
+
+    #Use FlowAmountControl to rotate the bottle
+    #FIXME: this part should be separated
+    self.FlowAmountControl(amount_trg, [1,0,0], x_ext, max_duration=5.0, only_pour=True)
+
+    #Then, keep pouring with shaking
+
+    theta= 0.0
+    elapsed_time= 0.0
+    damount= 0.0
+    amount= self.material_amount
+    dt= 1.0
+    while elapsed_time<max_duration:
+      amount_prev= amount
+      amount= self.material_amount
+      if amount >= amount_trg:
+        print 'Poured! (',amount,' / ',amount_trg,')'
+        break
+      damount= (amount-amount_prev)/dt
+      shake_freq= self.flow_shake_gain_p * (amount_trg - amount) - self.flow_shake_gain_d * damount
+
+      if shake_freq > self.flow_shake_freq_max:  shake_freq= self.flow_shake_freq_max
+      elif shake_freq < self.flow_shake_freq_min:  shake_freq= self.flow_shake_freq_min
+
+      print elapsed_time,': ',amount,' (',damount,') / ',amount_trg,' : ',shake_freq
+
+      dt= 1.0/shake_freq
+      self.ShakeGripper(shake_freq,self.flow_shake_width,x_ext,self.flow_shake_axis)
+
+      elapsed_time+= dt
+
     #Move back to the initial pose
     self.MoveToCartPosI(x_init,self.flow_move_back_duration,x_ext,inum=30,blocking=True)
 
-    #goal.trajectory.points[0].positions = angles_init
-    #goal.trajectory.points[0].time_from_start = rospy.Duration(self.flow_move_back_duration)
 
-    #goal.trajectory.header.stamp= rospy.Time.now()
-    #self.mu.arm[i].traj_client.send_goal(goal)
-    #start_time= rospy.Time.now()
-    #while rospy.Time.now() < start_time + rospy.Duration(self.flow_move_back_duration):
-      #time.sleep(self.flow_move_back_duration*0.02)
+  def ShakeGripper(self,shake_Hz=2.0,shake_width=0.04,x_ext=[],shake_axis=[0.0,0.0,1.0]):
+    #self.deadman = False
+    #self.init = True
+    #self.reset = True
+    i= self.whicharm
+    angles_init= self.mu.arm[i].getCurrentPosition()
+    x_init= np.array(self.CartPos(x_ext))
+
+    x_trg= copy.deepcopy(x_init)
+    shake_axis= np.array(shake_axis) / la.norm(shake_axis)
+    x_trg[0:3]+= np.array(shake_axis)*shake_width
+
+    dt= 1.0/shake_Hz/2.0
+    self.MoveToCartPosI(x_trg,dt,x_ext,inum=5,blocking=True)
+    self.MoveToCartPosI(x_init,dt,x_ext,inum=5,blocking=True)
+
+    #resp= self.MakeIKRequest(x_trg, x_ext, angles_init)
+
+    #if resp.error_code.val == 1:
+      #dt= 1.0/shake_Hz/2.0
+
+      #goal= pr2_controllers_msgs.msg.JointTrajectoryGoal()
+      #goal.trajectory.joint_names= self.mu.arm[i].goal.trajectory.joint_names
+      #goal.trajectory.points.append(trajectory_msgs.msg.JointTrajectoryPoint())
+      #goal.trajectory.points.append(trajectory_msgs.msg.JointTrajectoryPoint())
+
+      #angles= np.array(resp.solution.joint_state.position)
+      #goal.trajectory.points[0].positions = angles
+      #goal.trajectory.points[0].time_from_start = rospy.Duration(dt)
+      #goal.trajectory.points[1].positions = angles_init
+      #goal.trajectory.points[1].time_from_start = rospy.Duration(dt*2.0)
+
+      #goal.trajectory.header.stamp= rospy.Time.now()
+      #self.mu.arm[i].traj_client.send_goal(goal)
+      #start_time= rospy.Time.now()
+      #while rospy.Time.now() < start_time + rospy.Duration(dt*2.0):
+        #time.sleep(dt*2.0*0.02)
+
+    #else:
+      #print "IK error: ",resp.error_code.val
 
 
-
+  #Execute external motion script written in python,
+  #which is imported as a module to this script, so we can share the memory
   def ExecuteMotion(self, fileid, args):
     modname= self.motion_path_prefix+fileid
     sub= __import__(modname,globals(),locals(),modname,-1)
