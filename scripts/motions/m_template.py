@@ -1,5 +1,8 @@
 #!/usr/bin/python
-from cuiTool import *
-def Run(t,args):
+from core_tool import *
+def Help():
+  return '''Template of script.
+  Usage: template'''
+def Run(t,args=[]):
   print t
   #t.MoveArmsToSide()

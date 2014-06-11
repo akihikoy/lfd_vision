@@ -1,23 +1,32 @@
 #!/usr/bin/python
-from cuiTool import *
-def Run(t,args):
+from core_tool import *
+import copy
+def Help():
+  return '''Script to pour.
+  Usage: pour'''
+def Run(t,args=[]):
+  bottle='b1'
+  cup='c1'
   l_cf_e= t.control_frame[t.whicharm] #Local vector to the current control frame
   b= t.BPX('b') #Bottle base pose on the torso frame
   c= t.BPX('c') #Cup base pose on the torso frame
   #Grab pose on the bottle frame (constant):
-  l_grabx= [0.0143257412366, -0.00243017410404, 0.00332284373253, -0.0386798980774, 0.0474739514813, 0.0058252014884, 0.998106285144]
+  lx_grab= t.attributes[bottle]['lx_grab']
   #Grab pose on the torso frame
-  grabx= Transform(b,l_grabx)
+  grabx= Transform(b,lx_grab)
   print 'grabx=',VecToStr(grabx)
-  t.CommandGripper(0.08,50,True)
+  t.CommandGripper(t.attributes[bottle]['g_pre'],50,True)
+  grabx0= copy.deepcopy(grabx)
+  grabx0[0]= t.CartPos(l_cf_e)[0]
+  t.MoveToCartPos(grabx0,3.0,l_cf_e,True)
   t.MoveToCartPos(grabx,3.0,l_cf_e,True)
-  t.CommandGripper(0.0,15,True)
+  t.CommandGripper(0.0,t.attributes[bottle]['f_grab'],True)
 
   #Pouring edge point on the bottle frame (constant):
-  l_pourex= [0.0385446328044, -0.043639339547, 0.102811025179, 0.0,0.0,0.0,1.0]
+  lx_pour_e= t.attributes[bottle]['lx_pour_e']
 
   x= t.CartPos()
-  l_cf_pe= TransformLeftInv(x, Transform(b,l_pourex))
+  l_cf_pe= TransformLeftInv(x, Transform(b,lx_pour_e))
   print 'l_cf_pe=',VecToStr(l_cf_pe)
 
   #Move upward
@@ -26,8 +35,8 @@ def Run(t,args):
   t.MoveToCartPos(x,2.0,[],True)
 
   #Pouring location on the cup frame (constant):
-  l_pourlx= [0.0164938693088, 0.00293250989281, 0.230512294328, 0.0,0.0,0.0,1.0]
-  pourlx= Transform(c,l_pourlx)
+  lx_pour_l= t.attributes[cup]['lx_pour_l']
+  pourlx= Transform(c,lx_pour_l)
 
   print 'pourlx=',VecToStr(pourlx)
   t.MoveToCartPos(pourlx,3.0,l_cf_pe,True)
@@ -38,4 +47,5 @@ def Run(t,args):
   pourexecx= pourlx
   pourexecx[3:7]= pourq  #Only change the orientation
 
+  print 'pourexecx=',VecToStr(pourexecx)
   t.MoveToCartPosI(pourexecx,4.0,l_cf_pe,30,True)

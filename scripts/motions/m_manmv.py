@@ -1,6 +1,9 @@
 #!/usr/bin/python
-from cuiTool import *
-def Run(t,args):
+from core_tool import *
+def Help():
+  return '''Move arm manually.
+  Usage: manmv'''
+def Run(t,args=[]):
   print '###CAUTION:',t.ArmStr(),'arm is relaxed'
   t.ActivateMannController()
   while True:

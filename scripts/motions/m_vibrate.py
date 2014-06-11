@@ -1,7 +1,10 @@
 #!/usr/bin/python
-from cuiTool import *
+from core_tool import *
 import copy
-def Run(t,args):
+def Help():
+  return '''Script to vibrate.
+  Usage: vibrate'''
+def Run(t,args=[]):
   whicharm= t.whicharm
   t.SwitchArm(0)
   l_cf_e= t.control_frame[0] #Local vector to the current control frame

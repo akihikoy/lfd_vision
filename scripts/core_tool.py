@@ -1,5 +1,4 @@
 #! /usr/bin/env python
-
 import time
 import numpy as np
 import numpy.linalg as la
@@ -26,25 +25,18 @@ import traceback
 #import signal
 import copy
 import math
-#For CUI
-import readline
-import threading
+
 
 def AskYesNo():
   return ask_yes_no()
 
-#There must be a planning scene or FK / IK crashes
-def SetupPlanningScene():
-  print 'Waiting for set planning scene service...'
-  rospy.wait_for_service('/environment_server/set_planning_scene_diff')
-  set_plan = rospy.ServiceProxy('/environment_server/set_planning_scene_diff', arm_navigation_msgs.srv.SetPlanningSceneDiff)
-  req = arm_navigation_msgs.srv.SetPlanningSceneDiffRequest()
-  set_plan(req)
-  print 'OK'
-
 #Convert a vector to string
 def VecToStr(vec,delim=' '):
   return delim.join(map(str,vec))
+
+def QFromAxisAngle(axis,angle):
+  axis= axis / la.norm(axis)
+  return tf.transformations.quaternion_about_axis(angle,axis)
 
 #Quaternion to 3x3 rotation matrix
 def QToRot(q):
@@ -114,16 +106,21 @@ def CartPosInterpolation(x1,x2,N):
   return traj
 
 
-class TCUITool:
+
+#There must be a planning scene or FK / IK crashes
+def SetupPlanningScene():
+  print 'Waiting for set planning scene service...'
+  rospy.wait_for_service('/environment_server/set_planning_scene_diff')
+  set_plan = rospy.ServiceProxy('/environment_server/set_planning_scene_diff', arm_navigation_msgs.srv.SetPlanningSceneDiff)
+  req = arm_navigation_msgs.srv.SetPlanningSceneDiffRequest()
+  set_plan(req)
+  print 'OK'
+
+
+
+class TCoreTool:
 
   def __init__(self):
-
-    self.hist_file= '.trick_hist'
-    try:
-      readline.read_history_file(self.hist_file)
-    except IOError:
-      pass
-    readline.parse_and_bind('tab: complete')
 
     self.motion_path_prefix= 'motions.m_'
     self.loaded_motions= []
@@ -146,13 +143,14 @@ class TCUITool:
     self.control_frame= [[0.16,0.0,0.0, 0.0,0.0,0.0,1.0]]*2
 
 
-    self.flow_control_theta_max= math.pi*0.8
     self.flow_control_dtheta_max= math.pi*0.1
     self.flow_control_dtheta_min= -math.pi*0.1
     self.flow_control_time_step= 0.01
     self.flow_control_gain_p= 50.0
     self.flow_control_gain_d= 1.0
-    self.flow_move_back_duration= 3.0
+    self.flow_control_gain_p2= 100.0  #Not tuned!!!
+    self.flow_control_gain_d2= 20.0  #Not tuned!!!
+    #self.flow_move_back_duration= 3.0
 
     self.flow_shake_freq_max= 2.0
     self.flow_shake_freq_min= 0.1
@@ -164,6 +162,9 @@ class TCUITool:
     self.ar_x= {}
     self.x_marker_to_torso= []
     self.base_x= {}
+
+    #Attributes of objects
+    self.attributes= {}
 
     ##Current state:
     #self.deadman = False
@@ -193,202 +194,19 @@ class TCUITool:
 
   def __del__(self):
     #self.stopRecord()
-    self.thread_cui.join()
-    readline.write_history_file(self.hist_file)
+    print 'TCoreTool: done'
 
 
-  def _setup(self):
+  def Setup(self):
     SetupPlanningScene()
     self.mu= moveUtils.MoveUtils()
     self.wm= arWorldModel.ARWorldModel()
-
-
-  def Start(self):
-    print 'Setup...'
-    #self._setup()
-    thread_setup= threading.Thread(name='_setup', target=self._setup)
-    thread_setup.start()
-
-    self.thread_cui= threading.Thread(name='thread_cui', target=self.Interface)
-    self.thread_cui.start()
-
-    thread_setup.join()
-    print 'Done: setup'
 
 
   def ArmStr(self):
     return 'Right' if self.whicharm==0 else 'Left'
   def ArmStrS(self):
     return 'R' if self.whicharm==0 else 'L'
-
-
-  def Interface(self):
-    last_x= [0.,0.,0., 0.,0.,0.,1.]
-    while not rospy.is_shutdown():
-      cmd= raw_input('Ctrl+C & ENTER to quit | '+self.ArmStrS()+' > ').split()
-
-      try:
-        if len(cmd)==0:
-          continue
-        elif cmd[0] == 'home':
-          self.MoveArmsToSide()
-        elif cmd[0]=='r':
-          self.SwitchArm(0)
-        elif cmd[0]=='l':
-          self.SwitchArm(1)
-        elif cmd[0]=='calc':
-          if cmd[1]=='e2q':
-            rot= tf.transformations.quaternion_from_euler(float(cmd[2]), float(cmd[3]), float(cmd[4]))
-            print 'Quaternion: ',VecToStr(rot)
-          elif cmd[1]=='e2qd':
-            e= np.radians(map(float,cmd[2:5]))
-            rot= tf.transformations.quaternion_from_euler(e[0], e[1], e[2])
-            print 'Quaternion: ',VecToStr(rot)
-          elif cmd[1]=='q2e':
-            e= tf.transformations.euler_from_quaternion([float(cmd[2]), float(cmd[3]), float(cmd[4]), float(cmd[5])])
-            print 'Euler: ',VecToStr(e)
-          elif cmd[1]=='q2ed':
-            e= tf.transformations.euler_from_quaternion([float(cmd[2]), float(cmd[3]), float(cmd[4]), float(cmd[5])])
-            print 'Euler: ',VecToStr(np.degrees(e))
-          else:
-            print 'Invalid calc-command line: ',' '.join(cmd)
-        elif cmd[0]=='bp':
-          if len(cmd)==1 or cmd[1]=='show':
-            print 'Base points are: ',self.base_x
-          elif cmd[1]=='addx':
-            x= self.CartPos()
-            self.base_x[cmd[2]]= x
-            print 'Added to base points[',cmd[2],']: ',VecToStr(self.base_x[cmd[2]])
-          elif cmd[1]=='addxe':
-            xe= self.CartPos(self.control_frame[self.whicharm])
-            self.base_x[cmd[2]]= xe
-            print 'Added to base points[',cmd[2],']: ',VecToStr(self.base_x[cmd[2]])
-          elif cmd[1]=='add':
-            x=[0.0]*7
-            x[0:7]= map(float,cmd[3:10])
-            self.base_x[cmd[2]]= x
-            print 'Added to base points[',cmd[2],']: ',VecToStr(self.base_x[cmd[2]])
-          else:
-            print 'Invalid bp-command line: ',' '.join(cmd)
-        elif cmd[0]=='lastx':
-          if len(cmd)==1 or cmd[1]=='show':
-            print 'Last x: ',VecToStr(last_x)
-          elif cmd[1]=='set':
-            if len(cmd)>=5:  last_x[0:3]= map(float,cmd[2:5])
-            if len(cmd)>=9:  last_x[3:7]= map(float,cmd[5:9])
-          elif cmd[1]=='arlocal':
-            id= int(cmd[2])
-            self.UpdateAR(id)
-            if self.IsARAvailable(id):
-              l_x= TransformLeftInv(self.ARX(id), last_x)
-              print 'Local pose of last x on AR ',id,': ',VecToStr(l_x)
-            else:
-              print 'Error: AR marker not found: ',id
-          elif cmd[1]=='bplocal':
-            id= cmd[2]
-            if id in self.base_x:
-              l_x= TransformLeftInv(self.BPX(id), last_x)
-              print 'Local pose of last x on base point ',id,': ',VecToStr(l_x)
-            else:
-              print 'Error: base point not found: ',id
-          else:
-            print 'Invalid lastx-command line: ',' '.join(cmd)
-        elif cmd[0]=='c':
-          if cmd[1]=='mann':
-            self.ActivateMannController()
-          elif cmd[1]=='std':
-            self.ActivateStdController()
-          else:
-            print 'Invalid c-command line: ',' '.join(cmd)
-        elif cmd[0]=='q':
-          q= self.mu.arm[self.whicharm].getCurrentPosition()  #Joint angles
-          print self.ArmStr(),'arm joint angles: ',VecToStr(q)
-        elif cmd[0]=='x':
-          last_x= self.CartPos()
-          print self.ArmStr(),'arm endeffector position: ',VecToStr(last_x)
-        elif cmd[0]=='xe':
-          last_x= self.CartPos(self.control_frame[self.whicharm])
-          print self.ArmStr(),'arm extended-endeffector position: ',VecToStr(last_x)
-        elif cmd[0]=='ext':
-          print self.ArmStr(),'arm extension: ',VecToStr(self.control_frame[self.whicharm])
-        elif cmd[0]=='setext':
-          if len(cmd)>=4:  self.control_frame[self.whicharm][0:3]= map(float,cmd[1:4])
-          if len(cmd)>=8:  self.control_frame[self.whicharm][3:7]= map(float,cmd[4:8])
-        elif cmd[0]=='moveq':
-          if len(cmd)==9:
-            dt= 2.0
-            q_trg= [0.0]*7
-            dt= float(cmd[1])
-            q_trg[0:7]= map(float,cmd[2:9])
-            self.MoveToJointPos(q_trg,dt)
-          else:
-            print 'Invalid moveq-arguments: ',' '.join(cmd)
-        elif cmd[0]=='movex' or cmd[0]=='imovex':
-          if len(cmd)==5 or len(cmd)==9:
-            dt= 2.0
-            x_trg= self.CartPos()
-            if len(cmd)>=2:  dt= float(cmd[1])
-            if len(cmd)>=5:  x_trg[0:3]= map(float,cmd[2:5])
-            if len(cmd)>=9:  x_trg[3:7]= map(float,cmd[5:9])
-            if cmd[0]=='movex':
-              self.MoveToCartPos(x_trg,dt)
-            else:
-              self.MoveToCartPosI(x_trg,dt)
-          else:
-            print 'Invalid arguments: ',' '.join(cmd)
-        elif cmd[0]=='movexe' or cmd[0]=='imovexe':
-          if len(cmd)==5 or len(cmd)==9:
-            dt= 2.0
-            x_trg= self.CartPos()
-            if len(cmd)>=2:  dt= float(cmd[1])
-            if len(cmd)>=5:  x_trg[0:3]= map(float,cmd[2:5])
-            if len(cmd)>=9:  x_trg[3:7]= map(float,cmd[5:9])
-            if cmd[0]=='movexe':
-              self.MoveToCartPos(x_trg,dt,self.control_frame[self.whicharm])
-            else:
-              self.MoveToCartPosI(x_trg,dt,self.control_frame[self.whicharm])
-          else:
-            print 'Invalid arguments: ',' '.join(cmd)
-        elif cmd[0]=='grip':
-          pos= float(cmd[1])
-          max_effort= 20
-          if len(cmd)>=3:  max_effort= float(cmd[2])
-          self.CommandGripper(pos,max_effort)
-        elif cmd[0]=='head':
-          dt= float(cmd[1])
-          pan= float(cmd[2])
-          tilt= float(cmd[3])
-          self.MoveHead(pan,tilt,dt)
-        elif cmd[0]=='ar':
-          id= int(cmd[1])
-          self.UpdateAR(id)
-          if self.IsARAvailable(id):
-            print 'AR ',id,' pose in torso-frame: ',VecToStr(self.ARX(id))
-        elif cmd[0]=='arraw':
-          id= int(cmd[1])
-          self.UpdateAR(id)
-          if self.IsARObserved(id):
-            print 'AR ',id,' pose in raw: ',VecToStr(self.ar_x[id])
-        elif cmd[0]=='calib':
-          self.Calibration()
-        elif cmd[0]=='m':
-          self.ExecuteMotion(cmd[1], cmd[2:])
-        elif cmd[0]=='shake':
-          if len(cmd)>=3:    self.ShakeGripper(shake_Hz=float(cmd[1]),shake_width=float(cmd[2]))
-          elif len(cmd)==2:  self.ShakeGripper(shake_Hz=float(cmd[1]))
-          else:              self.ShakeGripper()
-        else:
-          print 'Invalid command line: ',' '.join(cmd)
-      except Exception as e:
-        print 'Error(',type(e),'):'
-        print '  ',e
-        #print '  type: ',type(e)
-        #print '  args: ',e.args
-        #print '  message: ',e.message
-        #print '  sys.exc_info(): ',sys.exc_info()
-        print '  Traceback: '
-        traceback.print_tb(sys.exc_info()[2])
-        print 'Check the command line: ',' '.join(cmd)
 
 
   def MoveArmsToSide(self):
@@ -755,7 +573,7 @@ class TCUITool:
     print 'Done'
 
 
-  def FlowAmountControl(self, amount_trg, rot_axis, x_ext=[], max_duration=10.0, only_pour=False):
+  def FlowAmountControl(self, amount_trg, rot_axis, max_theta, x_ext=[], trg_duration=8.0, max_duration=10.0):
     if not self.material_amount_observed:
       print "Error: /color_occupied_ratio is not observed"
       return
@@ -790,31 +608,31 @@ class TCUITool:
         if dtheta > self.flow_control_dtheta_max:  dtheta= self.flow_control_dtheta_max
         elif dtheta < self.flow_control_dtheta_min:  dtheta= self.flow_control_dtheta_min
         theta= theta+dtheta * self.flow_control_time_step
-        if theta > self.flow_control_theta_max:  theta= self.flow_control_theta_max
+        if theta > max_theta:  theta= max_theta
+        elif theta < 0.0:  theta= 0.0
         print elapsed_time,': ',amount,' (',damount,') / ',amount_trg,' : ',theta,', ',dtheta
         tmpfp.write('%f %f %f %f %f %f\n' % (elapsed_time,amount,damount,amount_trg,theta,dtheta))
       elif self.flow_control_kind==2:
-        self.flow_control_gain_p2= 100.0
-        self.flow_control_gain_d2= 20.0
         dtheta= (theta-theta_prev)/self.flow_control_time_step
         theta= self.flow_control_gain_p2 * (amount_trg - amount) - self.flow_control_gain_d2 * dtheta
-        if theta > self.flow_control_theta_max:  theta= self.flow_control_theta_max
+        if theta > max_theta:  theta= max_theta
+        elif theta < 0.0:  theta= 0.0
         print elapsed_time,': ',amount,' (',damount,') / ',amount_trg,' : ',theta,', ',dtheta
       elif self.flow_control_kind==3:
         #damount= (amount-amount_prev)/self.flow_control_time_step
-        amount_trg_t= amount_trg/8.0 * elapsed_time
+        amount_trg_t= amount_trg/trg_duration * elapsed_time
         if amount_trg_t>amount_trg: amount_trg_t= amount_trg
         dtheta= self.flow_control_gain_p * (amount_trg_t - amount)
         if dtheta > self.flow_control_dtheta_max:  dtheta= self.flow_control_dtheta_max
         elif dtheta < self.flow_control_dtheta_min:  dtheta= self.flow_control_dtheta_min
         theta= theta+dtheta * self.flow_control_time_step
-        if theta > self.flow_control_theta_max:  theta= self.flow_control_theta_max
+        if theta > max_theta:  theta= max_theta
         elif theta < 0.0:  theta= 0.0
         print elapsed_time,': ',amount,' / ',amount_trg_t,' : ',theta,', ',dtheta
         tmpfp.write('%f %f %f %f %f\n' % (elapsed_time,amount,amount_trg_t,theta,dtheta))
 
       p_init,R_init= XToPosRot(x_init)
-      dR= QToRot(tf.transformations.quaternion_about_axis(theta, rot_axis))
+      dR= QToRot(QFromAxisAngle(rot_axis,theta))
       R_trg= np.dot(dR,R_init)
       x_trg= PosRotToX(p_init,R_trg)
       #print '##',VecToStr(x_trg)
@@ -840,18 +658,18 @@ class TCUITool:
 
       elapsed_time+= self.flow_control_time_step
 
-    if not only_pour:
-      #Move back to the initial pose
-      self.MoveToCartPosI(x_init,self.flow_move_back_duration,x_ext,inum=30,blocking=True)
+    #if not only_pour:
+      ##Move back to the initial pose
+      #self.MoveToCartPosI(x_init,self.flow_move_back_duration,x_ext,inum=30,blocking=True)
 
-      #goal.trajectory.points[0].positions = angles_init
-      #goal.trajectory.points[0].time_from_start = rospy.Duration(self.flow_move_back_duration)
+      ##goal.trajectory.points[0].positions = angles_init
+      ##goal.trajectory.points[0].time_from_start = rospy.Duration(self.flow_move_back_duration)
 
-      #goal.trajectory.header.stamp= rospy.Time.now()
-      #self.mu.arm[i].traj_client.send_goal(goal)
-      #start_time= rospy.Time.now()
-      #while rospy.Time.now() < start_time + rospy.Duration(self.flow_move_back_duration):
-        #time.sleep(self.flow_move_back_duration*0.02)
+      ##goal.trajectory.header.stamp= rospy.Time.now()
+      ##self.mu.arm[i].traj_client.send_goal(goal)
+      ##start_time= rospy.Time.now()
+      ##while rospy.Time.now() < start_time + rospy.Duration(self.flow_move_back_duration):
+        ##time.sleep(self.flow_move_back_duration*0.02)
 
 
   def FlowAmountControlWithShaking(self, amount_trg, x_ext=[], max_duration=10.0):
@@ -864,6 +682,7 @@ class TCUITool:
 
     #Use FlowAmountControl to rotate the bottle
     #FIXME: this part should be separated
+    FIXME
     self.FlowAmountControl(amount_trg, [1,0,0], x_ext, max_duration=10.0, only_pour=True)
 
     #Then, keep pouring with shaking
@@ -948,9 +767,9 @@ class TCUITool:
       #print "IK error: ",resp.error_code.val
 
 
-  #Execute external motion script written in python,
+  #Load external motion script written in python,
   #which is imported as a module to this script, so we can share the memory
-  def ExecuteMotion(self, fileid, args):
+  def LoadMotion(self, fileid):
     modname= self.motion_path_prefix+fileid
     sub= __import__(modname,globals(),locals(),modname,-1)
     if sub:
@@ -958,23 +777,20 @@ class TCUITool:
         reload(sub)
       else:
         self.loaded_motions.append(modname)
-      sub.Run(self,args)
     else:
       print 'Cannot import motion file: ',modname
-      return
+    return sub
 
+  #Execute external motion script written in python,
+  #which is imported as a module to this script, so we can share the memory
+  def ExecuteMotion(self, fileid, args=[]):
+    sub= self.LoadMotion(fileid)
+    if sub:
+      sub.Run(self,args)
 
 
 if __name__ == '__main__':
-  rospy.init_node('cuiToolNode')
-  #joy_kind = rospy.get_param('~joy_kind', 'default')
-  #base_path = rospy.get_param('~base_path', 'data/bagfiles')
-  ct = TCUITool()
-  ct.Start()
-  #r = rospy.Rate(150)
-  #while not rospy.is_shutdown():
-    #ct.controlCart()
-    #print '.',
-    #r.sleep()
-  rospy.spin()
+  print 'Note: run cui_tool.py'
+
+
 
