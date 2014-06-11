@@ -769,29 +769,55 @@ class TCUITool:
     goal.trajectory.points.append(trajectory_msgs.msg.JointTrajectoryPoint())
 
     theta= 0.0
+    theta_prev= 0.0
     elapsed_time= 0.0
     damount= 0.0
     amount= self.material_amount
+    tmpfp= file(os.environ['HOME']+'/tmp/flowc01','w')
     while elapsed_time<max_duration:
       amount_prev= amount
       amount= self.material_amount
       if amount >= amount_trg:
         print 'Poured! (',amount,' / ',amount_trg,')'
         break
-      damount= (amount-amount_prev)/self.flow_control_time_step
-      dtheta= self.flow_control_gain_p * (amount_trg - amount) - self.flow_control_gain_d * damount
-      if dtheta > self.flow_control_dtheta_max:  dtheta= self.flow_control_dtheta_max
-      elif dtheta < self.flow_control_dtheta_min:  dtheta= self.flow_control_dtheta_min
-      theta= theta+dtheta * self.flow_control_time_step
-      if theta > self.flow_control_theta_max:  theta= self.flow_control_theta_max
 
-      print elapsed_time,': ',amount,' (',damount,') / ',amount_trg,' : ',theta,', ',dtheta
+      theta_prev= theta
+
+      self.flow_control_kind= 3
+      if self.flow_control_kind==1:
+        damount= (amount-amount_prev)/self.flow_control_time_step
+        dtheta= self.flow_control_gain_p * (amount_trg - amount) - self.flow_control_gain_d * damount
+        if dtheta > self.flow_control_dtheta_max:  dtheta= self.flow_control_dtheta_max
+        elif dtheta < self.flow_control_dtheta_min:  dtheta= self.flow_control_dtheta_min
+        theta= theta+dtheta * self.flow_control_time_step
+        if theta > self.flow_control_theta_max:  theta= self.flow_control_theta_max
+        print elapsed_time,': ',amount,' (',damount,') / ',amount_trg,' : ',theta,', ',dtheta
+        tmpfp.write('%f %f %f %f %f %f\n' % (elapsed_time,amount,damount,amount_trg,theta,dtheta))
+      elif self.flow_control_kind==2:
+        self.flow_control_gain_p2= 100.0
+        self.flow_control_gain_d2= 20.0
+        dtheta= (theta-theta_prev)/self.flow_control_time_step
+        theta= self.flow_control_gain_p2 * (amount_trg - amount) - self.flow_control_gain_d2 * dtheta
+        if theta > self.flow_control_theta_max:  theta= self.flow_control_theta_max
+        print elapsed_time,': ',amount,' (',damount,') / ',amount_trg,' : ',theta,', ',dtheta
+      elif self.flow_control_kind==3:
+        #damount= (amount-amount_prev)/self.flow_control_time_step
+        amount_trg_t= amount_trg/8.0 * elapsed_time
+        if amount_trg_t>amount_trg: amount_trg_t= amount_trg
+        dtheta= self.flow_control_gain_p * (amount_trg_t - amount)
+        if dtheta > self.flow_control_dtheta_max:  dtheta= self.flow_control_dtheta_max
+        elif dtheta < self.flow_control_dtheta_min:  dtheta= self.flow_control_dtheta_min
+        theta= theta+dtheta * self.flow_control_time_step
+        if theta > self.flow_control_theta_max:  theta= self.flow_control_theta_max
+        elif theta < 0.0:  theta= 0.0
+        print elapsed_time,': ',amount,' / ',amount_trg_t,' : ',theta,', ',dtheta
+        tmpfp.write('%f %f %f %f %f\n' % (elapsed_time,amount,amount_trg_t,theta,dtheta))
 
       p_init,R_init= XToPosRot(x_init)
       dR= QToRot(tf.transformations.quaternion_about_axis(theta, rot_axis))
       R_trg= np.dot(dR,R_init)
       x_trg= PosRotToX(p_init,R_trg)
-      print '##',VecToStr(x_trg)
+      #print '##',VecToStr(x_trg)
 
       angles_curr= self.mu.arm[i].getCurrentPosition()
       resp= self.MakeIKRequest(x_trg, x_ext, angles_curr)
