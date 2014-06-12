@@ -64,20 +64,21 @@ class TCUITool:
 
   def Start(self):
     print 'Setup...'
-    self._setup()
-    #thread_setup= threading.Thread(name='_setup', target=self._setup)
-    #thread_setup.start()
-    #thread_setup.join()
-    print 'Done: setup'
+    #self._setup()
+    thread_setup= threading.Thread(name='_setup', target=self._setup)
+    thread_setup.start()
 
     self.thread_cui= threading.Thread(name='thread_cui', target=self.Interface)
     self.thread_cui.start()
+
+    thread_setup.join()
+    print 'Done: setup'
 
 
   def Interface(self):
     last_x= [0.,0.,0., 0.,0.,0.,1.]
     while not rospy.is_shutdown():
-      cmd= raw_input('Ctrl+C & ENTER to quit | '+self.t.ArmStrS()+' > ').split()
+      cmd= raw_input('trick or exit | '+self.t.ArmStrS()+' > ').split()
 
       try:
         if len(cmd)==0:

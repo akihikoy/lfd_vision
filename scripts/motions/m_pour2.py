@@ -2,16 +2,19 @@
 from core_tool import *
 import copy
 def Help():
-  return '''Script to pour (DUPLICATED).
+  return '''Script to pour (DUPLICATED).  Use 'pour'
   Usage: pour2'''
 def Run(t,args=[]):
+  print Help()
+  return
+
   bottle='b2'
   cup='c1'
   l_cf_e= t.control_frame[t.whicharm] #Local vector to the current control frame
   b= t.BPX('b') #Bottle base pose on the torso frame
   c= t.BPX('c') #Cup base pose on the torso frame
   #Grab pose on the bottle frame (constant):
-  lx_grab= t.attributes[bottle]['lx_grab']
+  lx_grab= t.attributes[bottle]['l_x_grab']
   #Grab pose on the torso frame
   grabx= Transform(b,lx_grab)
   print 'grabx=',VecToStr(grabx)
@@ -23,7 +26,7 @@ def Run(t,args=[]):
   t.CommandGripper(0.0,t.attributes[bottle]['f_grab'],True)
 
   #Pouring edge point on the bottle frame (constant):
-  lx_pour_e= t.attributes[bottle]['lx_pour_e']
+  lx_pour_e= t.attributes[bottle]['l_x_pour_e']
 
   x= t.CartPos()
   l_cf_pe= TransformLeftInv(x, Transform(b,lx_pour_e))
@@ -35,7 +38,7 @@ def Run(t,args=[]):
   t.MoveToCartPos(x,2.0,[],True)
 
   #Pouring location on the cup frame (constant):
-  lx_pour_l= t.attributes[cup]['lx_pour_l']
+  lx_pour_l= t.attributes[cup]['l_x_pour_l']
   pourlx= Transform(c,lx_pour_l)
 
   print 'pourlx=',VecToStr(pourlx)

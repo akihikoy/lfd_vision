@@ -34,6 +34,41 @@ def AskYesNo():
 def VecToStr(vec,delim=' '):
   return delim.join(map(str,vec))
 
+#Automatically estimate the type of input and convert to it
+def EstStrConvert(v_str):
+  try:
+    return int(v_str)
+  except ValueError:
+    pass
+  try:
+    return float(v_str)
+  except ValueError:
+    pass
+  if v_str=='True' or v_str=='true' :  return True
+  if v_str=='False' or v_str=='false':  return False
+  try:
+    x=[]
+    for v in v_str.split(' '):
+      x.append(float(v))
+    return x
+  except ValueError:
+    pass
+  try:
+    x=[]
+    for v in v_str.split(','):
+      x.append(float(v))
+    return x
+  except ValueError:
+    pass
+  try:
+    x=[]
+    for v in v_str.split('\t'):
+      x.append(float(v))
+    return x
+  except ValueError:
+    pass
+  return v_str
+
 def QFromAxisAngle(axis,angle):
   axis= axis / la.norm(axis)
   return tf.transformations.quaternion_about_axis(angle,axis)
@@ -147,9 +182,9 @@ class TCoreTool:
     self.flow_control_dtheta_min= -math.pi*0.1
     self.flow_control_time_step= 0.01
     self.flow_control_gain_p= 50.0
-    self.flow_control_gain_d= 1.0
+    self.flow_control_gain_d= 1.0  #DEPRECATED
     self.flow_control_gain_p2= 100.0  #Not tuned!!!
-    self.flow_control_gain_d2= 20.0  #Not tuned!!!
+    self.flow_control_gain_d2= 20.0  #NOT USED
     #self.flow_move_back_duration= 3.0
 
     self.flow_shake_freq_max= 2.0
@@ -591,7 +626,8 @@ class TCoreTool:
     elapsed_time= 0.0
     damount= 0.0
     amount= self.material_amount
-    tmpfp= file(os.environ['HOME']+'/tmp/flowc01','w')
+    t= time.localtime()
+    tmpfp= file('%s/tmp/flowc%02i%02i%02i%02i%02i%02i.dat' % (os.environ['HOME'],t.tm_year%100,t.tm_mon,t.tm_mday,t.tm_hour,t.tm_min,t.tm_sec),'w')
     while elapsed_time<max_duration:
       amount_prev= amount
       amount= self.material_amount
@@ -603,21 +639,28 @@ class TCoreTool:
 
       self.flow_control_kind= 3
       if self.flow_control_kind==1:
-        damount= (amount-amount_prev)/self.flow_control_time_step
-        dtheta= self.flow_control_gain_p * (amount_trg - amount) - self.flow_control_gain_d * damount
+        #damount= (amount-amount_prev)/self.flow_control_time_step
+        #dtheta= self.flow_control_gain_p * (amount_trg - amount) - self.flow_control_gain_d * damount
+        dtheta= self.flow_control_gain_p * (amount_trg - amount)
         if dtheta > self.flow_control_dtheta_max:  dtheta= self.flow_control_dtheta_max
         elif dtheta < self.flow_control_dtheta_min:  dtheta= self.flow_control_dtheta_min
         theta= theta+dtheta * self.flow_control_time_step
         if theta > max_theta:  theta= max_theta
         elif theta < 0.0:  theta= 0.0
-        print elapsed_time,': ',amount,' (',damount,') / ',amount_trg,' : ',theta,', ',dtheta
-        tmpfp.write('%f %f %f %f %f %f\n' % (elapsed_time,amount,damount,amount_trg,theta,dtheta))
+        print elapsed_time,': ',amount,' / ',amount_trg,' : ',theta,', ',dtheta
+        tmpfp.write('%f %f %f %f %f %f\n' % (rospy.Time.now().to_nsec(),amount,amount_trg,amount_trg,theta,dtheta))
       elif self.flow_control_kind==2:
+        #dtheta= (theta-theta_prev)/self.flow_control_time_step  #fix if use
+        #theta= self.flow_control_gain_p2 * (amount_trg - amount) - self.flow_control_gain_d2 * dtheta
+        theta= self.flow_control_gain_p2 * (amount_trg - amount)
         dtheta= (theta-theta_prev)/self.flow_control_time_step
-        theta= self.flow_control_gain_p2 * (amount_trg - amount) - self.flow_control_gain_d2 * dtheta
+        if dtheta > self.flow_control_dtheta_max:  dtheta= self.flow_control_dtheta_max
+        elif dtheta < self.flow_control_dtheta_min:  dtheta= self.flow_control_dtheta_min
+        theta= theta_prev+dtheta * self.flow_control_time_step
         if theta > max_theta:  theta= max_theta
         elif theta < 0.0:  theta= 0.0
-        print elapsed_time,': ',amount,' (',damount,') / ',amount_trg,' : ',theta,', ',dtheta
+        print elapsed_time,': ',amount,' / ',amount_trg,' : ',theta,', ',dtheta
+        tmpfp.write('%f %f %f %f %f %f\n' % (rospy.Time.now().to_nsec(),amount,amount_trg,amount_trg,theta,dtheta))
       elif self.flow_control_kind==3:
         #damount= (amount-amount_prev)/self.flow_control_time_step
         amount_trg_t= amount_trg/trg_duration * elapsed_time
@@ -629,7 +672,7 @@ class TCoreTool:
         if theta > max_theta:  theta= max_theta
         elif theta < 0.0:  theta= 0.0
         print elapsed_time,': ',amount,' / ',amount_trg_t,' : ',theta,', ',dtheta
-        tmpfp.write('%f %f %f %f %f\n' % (elapsed_time,amount,amount_trg_t,theta,dtheta))
+        tmpfp.write('%f %f %f %f %f %f\n' % (rospy.Time.now().to_nsec(),amount,amount_trg,amount_trg_t,theta,dtheta))
 
       p_init,R_init= XToPosRot(x_init)
       dR= QToRot(QFromAxisAngle(rot_axis,theta))
@@ -678,12 +721,11 @@ class TCoreTool:
       return
 
     i= self.whicharm
-    x_init= np.array(self.CartPos(x_ext))
+    #x_init= np.array(self.CartPos(x_ext))
 
-    #Use FlowAmountControl to rotate the bottle
-    #FIXME: this part should be separated
-    FIXME
-    self.FlowAmountControl(amount_trg, [1,0,0], x_ext, max_duration=10.0, only_pour=True)
+    ##Use FlowAmountControl to rotate the bottle
+    ##this part should be separated
+    #self.FlowAmountControl(amount_trg, [1,0,0], x_ext, max_duration=10.0, only_pour=True)
 
     #Then, keep pouring with shaking
 
@@ -722,7 +764,7 @@ class TCoreTool:
       elapsed_time+= dt
 
     #Move back to the initial pose
-    self.MoveToCartPosI(x_init,self.flow_move_back_duration,x_ext,inum=30,blocking=True)
+    #self.MoveToCartPosI(x_init,self.flow_move_back_duration,x_ext,inum=30,blocking=True)
 
 
   def ShakeGripper(self,shake_Hz=2.0,shake_width=0.04,x_ext=[],shake_axis=[0.0,0.0,1.0]):

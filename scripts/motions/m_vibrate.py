@@ -5,9 +5,11 @@ def Help():
   return '''Script to vibrate.
   Usage: vibrate'''
 def Run(t,args=[]):
+  #Use right hand
   whicharm= t.whicharm
   t.SwitchArm(0)
-  l_cf_e= t.control_frame[0] #Local vector to the current control frame
+
+  l_cf_e= t.control_frame[t.whicharm] #Local vector to the current control frame
   xe= t.CartPos(l_cf_e)
   dt= 0.3
 

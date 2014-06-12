@@ -3,49 +3,90 @@ from core_tool import *
 import copy
 def Help():
   return '''Script to pour.
-  Usage: pour'''
+  Usage: pour BOTTLE_ID CUP_ID
+    BOTTLE_ID: identifier of bottle. e.g. b1
+    CUP_ID: identifier of cup. e.g. c1'''
 def Run(t,args=[]):
-  bottle='b1'
-  cup='c1'
-  l_cf_e= t.control_frame[t.whicharm] #Local vector to the current control frame
-  b= t.BPX('b') #Bottle base pose on the torso frame
-  c= t.BPX('c') #Cup base pose on the torso frame
-  #Grab pose on the bottle frame (constant):
-  lx_grab= t.attributes[bottle]['lx_grab']
+  bottle= args[0]
+  cup= args[1]
+
+  #Use left hand
+  whicharm= t.whicharm
+  t.SwitchArm(1)
+
+  #Current control point in the wrist frame
+  #lw_xe= t.control_frame[t.whicharm]
+  #x_b= t.attributes[bottle]['x'] #Bottle base pose on the torso frame
+  #if len(x_b)!=7:
+    #print 'Bottle ',bottle,' pose is not observed'
+    #t.SwitchArm(whicharm)
+    #return
+
+  x_c= t.attributes[cup]['x'] #Cup base pose on the torso frame
+  if len(x_c)!=7:
+    print 'Cup',cup,' pose is not observed'
+    t.SwitchArm(whicharm)
+    return
+
+  #Grab pose on the bottle frame:
+  #lb_x_grab= t.attributes[bottle]['l_x_grab']
   #Grab pose on the torso frame
-  grabx= Transform(b,lx_grab)
-  print 'grabx=',VecToStr(grabx)
-  t.CommandGripper(t.attributes[bottle]['g_pre'],50,True)
-  grabx0= copy.deepcopy(grabx)
-  grabx0[0]= t.CartPos(l_cf_e)[0]
-  t.MoveToCartPos(grabx0,3.0,l_cf_e,True)
-  t.MoveToCartPos(grabx,3.0,l_cf_e,True)
-  t.CommandGripper(0.0,t.attributes[bottle]['f_grab'],True)
+  #x_grab= Transform(x_b,lb_x_grab)
+  #print 'x_grab=',VecToStr(x_grab)
+  #t.CommandGripper(t.attributes[bottle]['g_pre'],50,True)
+  #x_grab0= copy.deepcopy(x_grab)
+  #x_grab0[0]= t.CartPos(lw_xe)[0]
+  #t.MoveToCartPos(x_grab0,3.0,lw_xe,True)
+  #t.MoveToCartPos(x_grab,3.0,lw_xe,True)
 
-  #Pouring edge point on the bottle frame (constant):
-  lx_pour_e= t.attributes[bottle]['lx_pour_e']
+  t.ExecuteMotion('pregrab',[bottle,'l'])
 
-  x= t.CartPos()
-  l_cf_pe= TransformLeftInv(x, Transform(b,lx_pour_e))
-  print 'l_cf_pe=',VecToStr(l_cf_pe)
+  #t.CommandGripper(0.0,t.attributes[bottle]['f_grab'],True)
+
+  t.ExecuteMotion('grab',[bottle,'l'])
+
+
+  #Infere bottle pose
+  t.ExecuteMotion('infer',[bottle,'x'])
+  x_b= t.attributes[bottle]['x']
+  if len(x_b)!=7:
+    print 'Bottle ',bottle,' pose is not observed'
+    t.SwitchArm(whicharm)
+    return
+
+  #Pouring edge point on the bottle frame:
+  lb_x_pour_e= t.attributes[bottle]['l_x_pour_e']
+
+  x_w= t.CartPos()
+  #Pouring edge point in the wrist frame
+  lw_x_pour_e= TransformLeftInv(x_w, Transform(x_b,lb_x_pour_e))
+  print 'lw_x_pour_e=',VecToStr(lw_x_pour_e)
+
 
   #Move upward
-  x= t.CartPos()
-  x[2]+= 0.15
-  t.MoveToCartPos(x,2.0,[],True)
+  x_w= t.CartPos()
+  x_w[2]+= 0.10
+  t.MoveToCartPos(x_w,2.0,[],True)
 
-  #Pouring location on the cup frame (constant):
-  lx_pour_l= t.attributes[cup]['lx_pour_l']
-  pourlx= Transform(c,lx_pour_l)
-
-  print 'pourlx=',VecToStr(pourlx)
-  t.MoveToCartPos(pourlx,3.0,l_cf_pe,True)
+  #Pouring location on the cup frame:
+  lc_x_pour_l= t.attributes[cup]['l_x_pour_l']
+  x_pour_l= Transform(x_c,lc_x_pour_l)
 
   #Pouring orientation:
-  pourq= [0.789370121064, 0.0178832059046, -0.0679767323576, 0.609880452856]
+  x_pour_l[3:7]= t.attributes[bottle]['q_pour_start']
 
-  pourexecx= pourlx
-  pourexecx[3:7]= pourq  #Only change the orientation
+  #Move pouring edge to pouring location
+  print 'x_pour_l=',VecToStr(x_pour_l)
+  t.MoveToCartPos(x_pour_l,3.0,lw_x_pour_e,True)
 
-  print 'pourexecx=',VecToStr(pourexecx)
-  t.MoveToCartPosI(pourexecx,4.0,l_cf_pe,30,True)
+  #Pouring orientation:
+  #pourq= [0.789370121064, 0.0178832059046, -0.0679767323576, 0.609880452856]
+
+  #pourexecx= x_pour_l
+  #pourexecx[3:7]= pourq  #Only change the orientation
+
+  #print 'pourexecx=',VecToStr(pourexecx)
+  #t.MoveToCartPosI(pourexecx,4.0,lw_x_pour_e,30,True)
+
+  t.SwitchArm(whicharm)
+
