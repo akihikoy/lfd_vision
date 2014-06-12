@@ -59,6 +59,25 @@ def Run(t,args=[]):
   t.attributes['b2']['q_pour_max']= QFromAxisAngle([1,0,0],math.pi)
 
 
+  #Bottle No.3
+  if not 'b3' in t.attributes:  t.attributes['b3']={}
+  t.attributes['b3']['help']= 'A green beer (Heineken) bottle.'
+  #Pose [x,y,z, qx,qy,qz,qw] in robot's frame
+  if not 'x' in t.attributes['b3']: t.attributes['b3']['x']= []
+  #Gripper width before grab
+  t.attributes['b3']['g_pre']= 0.06
+  #Grab power (max effort):
+  t.attributes['b3']['f_grab']= 80.0
+  #Grab pose:
+  t.attributes['b3']['l_x_grab']= [0.00830453390238, 0.00361607117282, 0.0827408487728, -0.0127897898305, 0.0400529652898, -0.0388682992739, 0.99835937245]
+  #Pouring edge point:
+  t.attributes['b3']['l_x_pour_e']= [0.00290016130429, 0.00562692930508, 0.222366269117, 0.0,0.0,0.0,1.0]
+  #Orientation to start pouring
+  t.attributes['b3']['q_pour_start']= QFromAxisAngle([1,0,0],30.0/180.0*math.pi)
+  #Orientation where the flow is max
+  t.attributes['b3']['q_pour_max']= QFromAxisAngle([1,0,0],math.pi)
+
+
   #Cup No.1
   if not 'c1' in t.attributes:  t.attributes['c1']={}
   t.attributes['c1']['help']= 'A transparent soft plastic cup.'

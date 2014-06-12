@@ -6,7 +6,7 @@ def Help():
 def Run(t,args=[]):
   if len(args)==0:
     print 'Invalid arguments.'
-    print Usage()
+    print Help()
   for m in args:
     sub= t.LoadMotion(str(m))
     print '#Help of',m

@@ -178,6 +178,7 @@ class TCoreTool:
     self.control_frame= [[0.16,0.0,0.0, 0.0,0.0,0.0,1.0]]*2
 
 
+    self.flow_control_kind= 4
     self.flow_control_dtheta_max= math.pi*0.1
     self.flow_control_dtheta_min= -math.pi*0.1
     self.flow_control_time_step= 0.01
@@ -185,6 +186,12 @@ class TCoreTool:
     self.flow_control_gain_d= 1.0  #DEPRECATED
     self.flow_control_gain_p2= 100.0  #Not tuned!!!
     self.flow_control_gain_d2= 20.0  #NOT USED
+    self.flow_control_gain_p3= 1.0
+    self.flow_control_gain_d3= 1.0
+    self.flow_control_gain_p41= 1.0
+    self.flow_control_gain_d41= 1.0
+    self.flow_control_gain_p42= 0.1
+    self.flow_control_gain_d42= 0.1
     #self.flow_move_back_duration= 3.0
 
     self.flow_shake_freq_max= 2.0
@@ -622,6 +629,7 @@ class TCoreTool:
     goal.trajectory.points.append(trajectory_msgs.msg.JointTrajectoryPoint())
 
     theta= 0.0
+    dtheta= 0.0
     theta_prev= 0.0
     elapsed_time= 0.0
     damount= 0.0
@@ -637,7 +645,7 @@ class TCoreTool:
 
       theta_prev= theta
 
-      self.flow_control_kind= 3
+      #self.flow_control_kind= 3
       if self.flow_control_kind==1:
         #damount= (amount-amount_prev)/self.flow_control_time_step
         #dtheta= self.flow_control_gain_p * (amount_trg - amount) - self.flow_control_gain_d * damount
@@ -665,14 +673,29 @@ class TCoreTool:
         #damount= (amount-amount_prev)/self.flow_control_time_step
         amount_trg_t= amount_trg/trg_duration * elapsed_time
         if amount_trg_t>amount_trg: amount_trg_t= amount_trg
-        dtheta= self.flow_control_gain_p * (amount_trg_t - amount)
+        dtheta= self.flow_control_gain_p3 * (amount_trg_t - amount) - self.flow_control_gain_d3 * dtheta
         if dtheta > self.flow_control_dtheta_max:  dtheta= self.flow_control_dtheta_max
         elif dtheta < self.flow_control_dtheta_min:  dtheta= self.flow_control_dtheta_min
         theta= theta+dtheta * self.flow_control_time_step
         if theta > max_theta:  theta= max_theta
         elif theta < 0.0:  theta= 0.0
         print elapsed_time,': ',amount,' / ',amount_trg_t,' : ',theta,', ',dtheta
-        tmpfp.write('%f %f %f %f %f %f\n' % (rospy.Time.now().to_nsec(),amount,amount_trg,amount_trg_t,theta,dtheta))
+        tmpfp.write('%f %f %f %f %f %f\n' % (rospy.Time.now().to_nsec(),amount,amount_trg_t,amount_trg,theta,dtheta))
+      elif self.flow_control_kind==4:
+        #damount= (amount-amount_prev)/self.flow_control_time_step
+        amount_trg_t= amount_trg/trg_duration * elapsed_time
+        if amount_trg_t>amount_trg: amount_trg_t= amount_trg
+        if amount_trg_t - amount>=0:
+          dtheta= self.flow_control_gain_p41 * (amount_trg_t - amount) - self.flow_control_gain_d41 * dtheta
+        else:
+          dtheta= self.flow_control_gain_p42 * (amount_trg_t - amount) - self.flow_control_gain_d42 * dtheta
+        if dtheta > self.flow_control_dtheta_max:  dtheta= self.flow_control_dtheta_max
+        elif dtheta < self.flow_control_dtheta_min:  dtheta= self.flow_control_dtheta_min
+        theta= theta+dtheta * self.flow_control_time_step
+        if theta > max_theta:  theta= max_theta
+        elif theta < 0.0:  theta= 0.0
+        print elapsed_time,': ',amount,' / ',amount_trg_t,' : ',theta,', ',dtheta
+        tmpfp.write('%f %f %f %f %f %f\n' % (rospy.Time.now().to_nsec(),amount,amount_trg_t,amount_trg,theta,dtheta))
 
       p_init,R_init= XToPosRot(x_init)
       dR= QToRot(QFromAxisAngle(rot_axis,theta))

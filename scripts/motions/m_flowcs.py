@@ -49,8 +49,25 @@ def Run(t,args=[]):
   max_theta= la.norm(axis_angle)
   axis= axis_angle / max_theta
 
+
+  t.flow_control_kind= 4
+  t.flow_control_time_step= 0.01
+  t.flow_control_gain_p= 50.0
+  t.flow_control_gain_p2= 100.0
+  t.flow_control_gain_p3= 30.0
+  t.flow_control_gain_d3= 0.0
+  t.flow_control_gain_p41= 50.0
+  t.flow_control_gain_d41= 0.0
+  t.flow_control_gain_p42= 5.0
+  t.flow_control_gain_d42= 0.0
+
+  t.flow_shake_gain_p= 500.0
+  t.flow_shake_gain_d= 0.0
+
   #First, execute standard flow amount control
+  #amount_trg= 0.05
   amount_trg= 0.03
+  #amount_trg= 0.01
   #axis= [1,0,0]
   #max_theta= math.pi*0.8
   t.FlowAmountControl(amount_trg, axis, max_theta, x_ext=lw_x_pour_e, trg_duration=8.0, max_duration=10.0)

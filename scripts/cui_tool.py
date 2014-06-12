@@ -146,14 +146,14 @@ class TCUITool:
             id= int(cmd[2])
             self.t.UpdateAR(id)
             if self.t.IsARAvailable(id):
-              l_x= TransformLeftInv(self.t.ARX(id), last_x)
+              l_x= core_tool.TransformLeftInv(self.t.ARX(id), last_x)
               print 'Local pose of last x on AR ',id,': ',VecToStr(l_x)
             else:
               print 'Error: AR marker not found: ',id
           elif cmd[1]=='bplocal':
             id= cmd[2]
             if id in self.t.base_x:
-              l_x= TransformLeftInv(self.t.BPX(id), last_x)
+              l_x= core_tool.TransformLeftInv(self.t.BPX(id), last_x)
               print 'Local pose of last x on base point ',id,': ',VecToStr(l_x)
             else:
               print 'Error: base point not found: ',id
