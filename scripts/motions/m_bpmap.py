@@ -2,8 +2,8 @@
 from core_tool import *
 def Help():
   return '''Assign a base point (bp) pose to an object's pose (x).
-  Usage: bpmap BP_ID1 OBJ_ID1 [BP_ID2 OBJ_ID2 [BP_ID3 OBJ_ID3 ...]]'''
-def Run(t,args=[]):
+  Usage: bpmap BP_ID1, OBJ_ID1 [, BP_ID2, OBJ_ID2 [, BP_ID3, OBJ_ID3 ...]]'''
+def Run(t,args=()):
   if len(args)<2 or len(args)%2!=0:
     print Help()
     return

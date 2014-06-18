@@ -3,7 +3,7 @@ from core_tool import *
 def Help():
   return '''Move left arm/gripper to init posture.
   Usage: init0'''
-def Run(t,args=[]):
+def Run(t,args=()):
   whicharm= t.whicharm
   t.SwitchArm(1) #Left arm
 

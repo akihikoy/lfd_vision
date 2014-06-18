@@ -2,10 +2,10 @@
 from core_tool import *
 def Help():
   return '''Grab an object.
-  Usage: grab OBJ_ID [HAND]
-    OBJ_ID: identifier of object. e.g. b1
-    HAND: l: left hand, r: right hand (default: l)'''
-def Run(t,args=[]):
+  Usage: grab OBJ_ID [, HAND]
+    OBJ_ID: identifier of object. e.g. 'b1'
+    HAND: 'l': left hand, 'r': right hand (default: 'l')'''
+def Run(t,args=()):
   obj= args[0]
   hand= 'l'
   if len(args)>=2:  hand= args[1]

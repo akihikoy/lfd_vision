@@ -6,8 +6,8 @@ def Help():
     Gripper holds a bottle
     Bottle is close to the cup
   Usage: flowc BOTTLE_ID
-    BOTTLE_ID: identifier of bottle. e.g. b1'''
-def Run(t,args=[]):
+    BOTTLE_ID: identifier of bottle. e.g. 'b1' '''
+def Run(t,args=()):
   bottle= args[0]
   print t.material_amount
   #lw_x_pour_e= t.control_frame[t.whicharm] #Local vector to the current control frame
@@ -22,7 +22,7 @@ def Run(t,args=[]):
 
   #>>>FIXME: The same computation of lw_x_pour_e is used in m_pour.py
   #Infere bottle pose
-  t.ExecuteMotion('infer',[bottle,'x'])
+  t.ExecuteMotion('infer',(bottle,'x'))
   x_b= t.attributes[bottle]['x']
   if len(x_b)!=7:
     print 'Bottle ',bottle,' pose is not observed'
@@ -50,7 +50,8 @@ def Run(t,args=[]):
   axis= axis_angle / max_theta
 
 
-  t.flow_control_kind= 4
+  #t.flow_control_kind= 4
+  t.flow_control_kind= 5
   t.flow_control_time_step= 0.01
   t.flow_control_gain_p= 50.0
   t.flow_control_gain_p2= 100.0
@@ -67,10 +68,18 @@ def Run(t,args=[]):
   #amount_trg= 0.01
   #axis= [1,0,0]
   #max_theta= math.pi*0.8
-  t.FlowAmountControl(amount_trg, axis, max_theta, x_ext=lw_x_pour_e, trg_duration=8.0, max_duration=10.0)
+  if t.flow_control_kind<=4:
+    t.FlowAmountControl(amount_trg, axis, max_theta, x_ext=lw_x_pour_e, trg_duration=8.0, max_duration=10.0)
 
-  print 'Moving back to the initial pose...'
-  t.MoveToCartPosI(xe_init,3.0,x_ext=lw_x_pour_e,inum=30,blocking=True)
+    print 'Moving back to the initial pose...'
+    t.MoveToCartPosI(xe_init,3.0,x_ext=lw_x_pour_e,inum=30,blocking=True)
+  else:
+    print 'Error: execute flowc_sm directly to use ver 5 controller'
+    print '  flowc_sm \'%s\', %r' % (bottle,amount_trg)
+    #trg_duration=8.0
+    #max_duration=10.0
+    #t.ExecuteMotion('flowc_test',(amount_trg, axis, max_theta, lw_x_pour_e, trg_duration, max_duration))
+    #t.ExecuteMotion('flowc_sm',(amount_trg, axis, max_theta, lw_x_pour_e, max_duration))
 
   t.SwitchArm(whicharm)
 

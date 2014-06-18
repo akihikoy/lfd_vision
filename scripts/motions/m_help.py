@@ -2,8 +2,8 @@
 from core_tool import *
 def Help():
   return '''Print help of motion sctipts
-  Usage: help SCRIPT1 [SCRIPT2  [SCRIPT3 ...]]'''
-def Run(t,args=[]):
+  Usage: help SCRIPT1 [, SCRIPT2  [, SCRIPT3 ...]]'''
+def Run(t,args=()):
   if len(args)==0:
     print 'Invalid arguments.'
     print Help()

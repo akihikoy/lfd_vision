@@ -4,7 +4,7 @@ import time
 def Help():
   return '''Register a base point (bp) by moving gripper.
   Usage: setbp BP_ID'''
-def Run(t,args=[]):
+def Run(t,args=()):
   bpid= args[0]
   t.CommandGripper(0.0,50,True)
   print '###CAUTION:',t.ArmStr(),'arm is relaxed'

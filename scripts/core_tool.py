@@ -2,7 +2,7 @@
 import time
 import numpy as np
 import numpy.linalg as la
-import roslib; roslib.load_manifest('pr2_lfd_utils')
+import roslib; roslib.load_manifest('pr2_lfd_trick')
 import rospy
 #import actionlib as al
 from cmnUtils import *
@@ -645,7 +645,7 @@ class TCoreTool:
 
       theta_prev= theta
 
-      #self.flow_control_kind= 3
+      #self.flow_control_kind= 4
       if self.flow_control_kind==1:
         #damount= (amount-amount_prev)/self.flow_control_time_step
         #dtheta= self.flow_control_gain_p * (amount_trg - amount) - self.flow_control_gain_d * damount

@@ -4,8 +4,10 @@ def Help():
   return '''List up the attributes or assign value to an element.
   Usage: attr
     List up the attributes
-  Usage: attr OBJ_ID ELEM_ID VALUE
-    Assign VALUE to [OBJ_ID][ELEM_ID]'''
+  Usage: attr OBJ_ID, ELEM_ID, VALUE
+    Assign VALUE to [OBJ_ID][ELEM_ID]
+  Example:
+    attr 'c1', 'x', [0,0,0, 0,0,0,1]  '''
 def PrintDict(d,indent=0):
   for k,v in d.items():
     if type(v)==dict:
@@ -13,13 +15,16 @@ def PrintDict(d,indent=0):
       PrintDict(v,indent+1)
     else:
       print '  '*indent,'[',k,']=',v
-def Run(t,args=[]):
+def Run(t,args=()):
   if len(args)==0:
     PrintDict(t.attributes)
   else:
     obj= args[0]
     elem= args[1]
-    value= VecToStr(args[2:])
+    if len(args)>2:
+      value= VecToStr(args[2:])
+    else:
+      value= args[2]
     if not obj in t.attributes:
       print 'No object named: ',obj
       return

@@ -3,10 +3,10 @@ from core_tool import *
 import copy
 def Help():
   return '''Script to pour.
-  Usage: pour BOTTLE_ID CUP_ID
-    BOTTLE_ID: identifier of bottle. e.g. b1
-    CUP_ID: identifier of cup. e.g. c1'''
-def Run(t,args=[]):
+  Usage: pour BOTTLE_ID, CUP_ID
+    BOTTLE_ID: identifier of bottle. e.g. 'b1'
+    CUP_ID: identifier of cup. e.g. 'c1' '''
+def Run(t,args=()):
   bottle= args[0]
   cup= args[1]
 
@@ -39,15 +39,15 @@ def Run(t,args=[]):
   #t.MoveToCartPos(x_grab0,3.0,lw_xe,True)
   #t.MoveToCartPos(x_grab,3.0,lw_xe,True)
 
-  t.ExecuteMotion('pregrab',[bottle,'l'])
+  t.ExecuteMotion('pregrab',(bottle,'l'))
 
   #t.CommandGripper(0.0,t.attributes[bottle]['f_grab'],True)
 
-  t.ExecuteMotion('grab',[bottle,'l'])
+  t.ExecuteMotion('grab',(bottle,'l'))
 
 
   #Infere bottle pose
-  t.ExecuteMotion('infer',[bottle,'x'])
+  t.ExecuteMotion('infer',(bottle,'x'))
   x_b= t.attributes[bottle]['x']
   if len(x_b)!=7:
     print 'Bottle ',bottle,' pose is not observed'

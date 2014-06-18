@@ -3,8 +3,8 @@ from core_tool import *
 def Help():
   return '''Release an object from gripper.
   Usage: release OBJ_ID
-    OBJ_ID: identifier of object. e.g. b1'''
-def Run(t,args=[]):
+    OBJ_ID: identifier of object. e.g. 'b1' '''
+def Run(t,args=()):
   obj= args[0]
 
   if not 'grabbed' in t.attributes[obj]:

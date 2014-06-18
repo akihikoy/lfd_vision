@@ -4,7 +4,7 @@ import copy
 def Help():
   return '''Script to vibrate.
   Usage: vibrate'''
-def Run(t,args=[]):
+def Run(t,args=()):
   #Use right hand
   whicharm= t.whicharm
   t.SwitchArm(0)

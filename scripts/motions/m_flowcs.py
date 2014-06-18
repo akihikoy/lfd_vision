@@ -6,8 +6,8 @@ def Help():
     Gripper holds a bottle
     Bottle is close to the cup
   Usage: flowcs BOTTLE_ID
-    BOTTLE_ID: identifier of bottle. e.g. b1'''
-def Run(t,args=[]):
+    BOTTLE_ID: identifier of bottle. e.g. 'b1' '''
+def Run(t,args=()):
   bottle= args[0]
   print t.material_amount
   #lw_x_pour_e= t.control_frame[t.whicharm] #Local vector to the current control frame
@@ -22,7 +22,7 @@ def Run(t,args=[]):
 
   #>>>FIXME: The same computation of lw_x_pour_e is used in m_pour.py
   #Infere bottle pose
-  t.ExecuteMotion('infer',[bottle,'x'])
+  t.ExecuteMotion('infer',(bottle,'x'))
   x_b= t.attributes[bottle]['x']
   if len(x_b)!=7:
     print 'Bottle ',bottle,' pose is not observed'

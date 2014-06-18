@@ -3,7 +3,7 @@ from core_tool import *
 def Help():
   return '''Define object properties and store them into attributes.
   Usage: objs'''
-def Run(t,args=[]):
+def Run(t,args=()):
   #NOTE: an attribute named 'l_*' denotes a vector defined on the local frame
 
   #Left gripper
@@ -38,6 +38,7 @@ def Run(t,args=[]):
   t.attributes['b1']['q_pour_start']= QFromAxisAngle([1,0,0],30.0/180.0*math.pi)
   #Orientation where the flow is max
   t.attributes['b1']['q_pour_max']= QFromAxisAngle([1,0,0],math.pi)
+  t.attributes['b1']['l_axis_shake']= [0,0,-1]
 
 
   #Bottle No.2
@@ -88,6 +89,5 @@ def Run(t,args=[]):
   t.attributes['c1']['l_x_pour_l']= [0.0164938693088, 0.01293250989281, 0.210512294328, 0.0,0.0,0.0,1.0]
 
 
-  m_attr= t.LoadMotion('attr')
-  m_attr.Run(t)
+  t.ExecuteMotion('attr')
 

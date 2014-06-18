@@ -3,7 +3,7 @@ from core_tool import *
 def Help():
   return '''Test.
   Usage: test [FLOAT_VALUE]'''
-def Run(t,args=[]):
+def Run(t,args=()):
   print t
   print 'Hello world!'
   #t.MoveArmsToSide()

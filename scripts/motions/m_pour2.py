@@ -2,9 +2,9 @@
 from core_tool import *
 import copy
 def Help():
-  return '''Script to pour (DUPLICATED).  Use 'pour'
+  return '''Script to pour (DUPLICATED).  Use `pour'
   Usage: pour2'''
-def Run(t,args=[]):
+def Run(t,args=()):
   print Help()
   return
 
