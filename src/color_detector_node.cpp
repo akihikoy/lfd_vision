@@ -12,9 +12,12 @@
 #include <ros/ros.h>
 #include <std_msgs/Float64.h>
 #include <iostream>
+#include <fstream>
 //-------------------------------------------------------------------------------------------
 namespace trick
 {
+int NonzeroBase(0);
+const char *DefaultFileName("default_colors.dat");
 }
 //-------------------------------------------------------------------------------------------
 using namespace std;
@@ -34,6 +37,7 @@ void OnMouse(int event, int x, int y, int, void *vpimg)
   {
     detect_colors.clear();
     col_detector.SetupColors(detect_colors, col_radius);
+    NonzeroBase= 0;
     return;
   }
 
@@ -47,25 +51,53 @@ void OnMouse(int event, int x, int y, int, void *vpimg)
   std::cout<< "BGR: "<<original.at<cv::Vec3b>(0,0)<<"  HSV: "<<converted.at<cv::Vec3b>(0,0)<<std::endl;
   detect_colors.push_back(converted.at<cv::Vec3b>(0,0));
   col_detector.SetupColors(detect_colors, col_radius);
+  NonzeroBase= 0;
 }
 
+void SaveColors(const char *file_name)
+{
+  std::cerr<<"Save colors into "<<file_name<<std::endl;
+  std::ofstream ofs(file_name);
+  for(std::vector<cv::Vec3b>::const_iterator itr(detect_colors.begin()),last(detect_colors.end()); itr!=last; ++itr)
+    ofs<<int((*itr)[0])<<" "<<int((*itr)[1])<<" "<<int((*itr)[2])<<std::endl;
+}
+
+void LoadColors(const char *file_name)
+{
+  detect_colors.clear();
+  std::ifstream ifs(file_name);
+  if(!ifs)  return;
+  std::cerr<<"Load colors from "<<file_name<<std::endl;
+  std::string line;
+  while(std::getline(ifs,line,'\n'))
+  {
+    std::stringstream ss(line);
+    int ci[3];
+    cv::Vec3b c;
+    ss>>ci[0]>>ci[1]>>ci[2];
+    c[0]=ci[0]; c[1]=ci[1]; c[2]=ci[2];
+    detect_colors.push_back(c);
+  }
+  col_detector.SetupColors(detect_colors, col_radius);
+}
 
 int main(int argc, char**argv)
 {
-  ros::init(argc, argv, "minimum_node");
-  ros::NodeHandle node;
+  LoadColors(DefaultFileName);
 
-  ros::Publisher ratio_pub= node.advertise<std_msgs::Float64>("color_occupied_ratio", 10);
+  ros::init(argc, argv, "color_detector_node");
+  ros::NodeHandle node("~");
+  int camera(0);
+  int mode(1);
+  node.param("camera",camera,0);
+  node.param("mode",mode,1);
 
-  cv::VideoCapture cap(0); // open the default camera
-  if(argc==2)
-  {
-    cap.release();
-    cap.open(atoi(argv[1]));
-  }
+  ros::Publisher ratio_pub= node.advertise<std_msgs::Float64>("/color_occupied_ratio", 1);
+
+  cv::VideoCapture cap(camera); // open the default camera
   if(!cap.isOpened())  // check if we succeeded
   {
-    std::cerr<<"no camera!"<<std::endl;
+    std::cerr<<"cannot open: "<<camera<<std::endl;
     return -1;
   }
   std::cerr<<"camera opened"<<std::endl;
@@ -79,34 +111,80 @@ int main(int argc, char**argv)
   // detect_colors.push_back(cv::Vec3b(200,100,200));
   cv::setMouseCallback("camera", OnMouse, &frame);
 
-  // ros::Rate loop_rate(10);  // 10 Hz
+  bool running(true);
+  // ros::Rate loop_rate(5);  // 5 Hz
   while(ros::ok())
   {
-    cap >> frame; // get a new frame from camera
-    cv::imshow("camera", frame);
-    mask_img= col_detector.Detect(frame);
+    if(running)
+    {
+      cap >> frame; // get a new frame from camera
+      cv::imshow("camera", frame);
+      mask_img= col_detector.Detect(frame);
+      cv::imshow("mask_img", mask_img);
 
-    int nonzero= cv::countNonZero(mask_img);
-    double nonzero_ratio= double(nonzero)/double(mask_img.total());
-    std::cout<<"nonzero: \t"<<nonzero<<" / \t"<<mask_img.total()
-        <<"  \t"<<nonzero_ratio<<std::endl;
-    cv::imshow("mask_img", mask_img);
+      int nonzero= cv::countNonZero(mask_img), diff(0);
+      double ratio(0.0);
+      switch(mode)
+      {
+      case 1:
+        ratio= double(nonzero)/double(mask_img.total());
+        std::cout<<"nonzero: \t"<<nonzero<<" / \t"<<mask_img.total()
+            <<"  \t"<<ratio<<std::endl;
+        break;
+      case 2:
+        if(NonzeroBase==0)  NonzeroBase= (nonzero>0 ? nonzero : 1);
+        diff= NonzeroBase-nonzero;
+        if(diff<0)  diff= 0;
+        ratio= double(diff)/double(NonzeroBase);
+        std::cout<<"diff: \t"<<diff<<"  \t"<<ratio<<std::endl;
+        break;
+      default:
+        std::cout<<"invalid mode:"<<mode<<std::endl;
+      }
 
-    std_msgs::Float64  ratio_msg;
-    ratio_msg.data= nonzero_ratio;
-    ratio_pub.publish(ratio_msg);
+      std_msgs::Float64  ratio_msg;
+      ratio_msg.data= ratio;
+      ratio_pub.publish(ratio_msg);
 
-    // Apply the mask image
-    // detected.create(frame.rows, frame.cols, CV_8UC3);
-    // detected= cv::Scalar(0,0,0);
-    // frame.copyTo(detected, mask_img);
-    // cv::imshow("detected", detected);
-
+      // Apply the mask image
+      // detected.create(frame.rows, frame.cols, CV_8UC3);
+      // detected= cv::Scalar(0,0,0);
+      // frame.copyTo(detected, mask_img);
+      // cv::imshow("detected", detected);
+    }
+    else
+    {
+      usleep(200*1000);
+    }
     int c(cv::waitKey(1));
     if(c=='\x1b'||c=='q') break;
+    else if(c=='r')
+    {
+      cap >> frame;
+      mask_img= col_detector.Detect(frame);
+      int nonzero= cv::countNonZero(mask_img);
+      NonzeroBase= (nonzero>0 ? nonzero : 1);
+    }
+    else if(c=='l')
+    {
+      LoadColors(DefaultFileName);
+
+      cap >> frame;
+      mask_img= col_detector.Detect(frame);
+      int nonzero= cv::countNonZero(mask_img);
+      NonzeroBase= (nonzero>0 ? nonzero : 1);
+    }
+    else if(c=='s')
+    {
+      SaveColors(DefaultFileName);
+    }
+    else if(c==' ')
+    {
+      running=!running;
+      std::cerr<<(running?"Resume":"Pause (Hit space to resume)")<<std::endl;
+    }
 
     ros::spinOnce();
-    // loop_rate.sleep();
   }
 
   return 0;
