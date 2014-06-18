@@ -77,6 +77,7 @@ def Run(t,args=()):
   t.attributes['b3']['q_pour_start']= QFromAxisAngle([1,0,0],30.0/180.0*math.pi)
   #Orientation where the flow is max
   t.attributes['b3']['q_pour_max']= QFromAxisAngle([1,0,0],math.pi)
+  t.attributes['b3']['l_axis_shake']= [0,0,-1]
 
 
   #Cup No.1

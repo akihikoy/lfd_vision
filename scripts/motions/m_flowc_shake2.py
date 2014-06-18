@@ -130,7 +130,7 @@ def Run(t,args=()):
     elif l.theta < 0.0:  l.theta= 0.0
 
     print l.elapsed_time,': ',l.amount,' / ',l.amount_trg,' : ',l.theta,', ',dtheta
-    l.tmpfp.write('%f %f %f %f %f %f\n' % (rospy.Time.now().to_nsec(),l.amount,l.amount_trg,l.amount_trg,l.theta,dtheta))
+    l.tmpfp.write('%f %f %f %f %f %f c\n' % (rospy.Time.now().to_nsec(),l.amount,l.amount_trg,l.amount_trg,l.theta,dtheta))
 
     p_init,R_init= XToPosRot(l.x_init)
     dR= QToRot(QFromAxisAngle(l.rot_axis,l.theta))
@@ -167,13 +167,16 @@ def Run(t,args=()):
 
   def MoveBackToInit():
     print 'Moving back to the initial pose...'
+    l.tmpfp.write('%f %f %f %f %f %f mbi\n' % (rospy.Time.now().to_nsec(),t.material_amount,l.amount_trg,l.amount_trg,-999,-999))
     t.MoveToCartPosI(l.x_init,3.0,l.x_ext,inum=30,blocking=True)
+    l.tmpfp.write('%f %f %f %f %f %f mbi\n' % (rospy.Time.now().to_nsec(),t.material_amount,l.amount_trg,l.amount_trg,-999,-999))
 
   def Shake(count,shake_freq):
     l.amount_prev= l.amount
     l.amount= t.material_amount
 
     print 'shake:',l.elapsed_time,': ',l.amount,' / ',l.amount_trg,' : ',shake_freq
+    l.tmpfp.write('%f %f %f %f %f %f s2\n' % (rospy.Time.now().to_nsec(),l.amount,l.amount_trg,l.amount_trg,shake_freq,-999))
 
     dt= 1.0/shake_freq
 
@@ -187,7 +190,9 @@ def Run(t,args=()):
     x_trg[0:3]+= np.array(axis_shake)*t.flow_shake_width
     for n in range(count):
       t.MoveToCartPosI(x_trg,dt/2.0,l.x_ext,inum=5,blocking=True)
+      l.tmpfp.write('%f %f %f %f %f %f s2\n' % (rospy.Time.now().to_nsec(),l.amount,l.amount_trg,l.amount_trg,shake_freq,-999))
       t.MoveToCartPosI(l.x_init2,dt/2.0,l.x_ext,inum=5,blocking=True)
+      l.tmpfp.write('%f %f %f %f %f %f s2\n' % (rospy.Time.now().to_nsec(),l.amount,l.amount_trg,l.amount_trg,shake_freq,-999))
       l.elapsed_time+= dt
     #<<<Shaking motion
 
@@ -210,8 +215,11 @@ def Run(t,args=()):
   sm['start'].NewAction()
   sm['start'].Actions[-1]= timeout_action
   sm['start'].NewAction()
-  sm['start'].Actions[-1].Condition= lambda: IsFlowObserved(0.05)
+  sm['start'].Actions[-1].Condition= lambda: IsFlowObserved(0.05)  #FIXME
   sm['start'].Actions[-1].NextState= 'shake'
+  sm['start'].NewAction()
+  sm['start'].Actions[-1].Condition= lambda: not IsFlowObserved() and IsThetaEqTo(l.max_theta)
+  sm['start'].Actions[-1].NextState= 'to_initial'
   sm['start'].ElseAction.Condition= lambda: True
   sm['start'].ElseAction.Action= lambda: ControlStep(t.flow_control_dtheta_max)
   sm['start'].ElseAction.NextState= 'start'
@@ -223,7 +231,7 @@ def Run(t,args=()):
   sm['shake'].Actions[-1]= timeout_action
   sm['shake'].NewAction()
   sm['shake'].Actions[-1].Condition= IsFlowObserved
-  sm['shake'].Actions[-1].Action= lambda: Shake(5,t.flow_shake_freq_max)
+  sm['shake'].Actions[-1].Action= lambda: Shake(4,t.flow_shake_freq_max)
   sm['shake'].Actions[-1].NextState= 'shake'
   #sm['shake'].NewAction()
   #sm['shake'].Actions[-1].Condition= lambda: not IsFlowObserved() and IsThetaEqTo(l.max_theta)
