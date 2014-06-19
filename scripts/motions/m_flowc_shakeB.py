@@ -2,15 +2,15 @@
 from core_tool import *
 from state_machine import *
 def Help():
-  return '''Flow amount controller with shaking type 2.
+  return '''Flow amount controller with shaking type B.
   Assumptions:
     Gripper holds a bottle
     Bottle is close to the cup
-  Usage: flowc_shake2 BOTTLE_ID [, AMOUNT_TRG [, MAX_DURATION]]
+  Usage: flowc_shakeB BOTTLE_ID [, AMOUNT_TRG [, MAX_DURATION]]
     BOTTLE_ID: identifier of bottle. e.g. 'b1'
     AMOUNT_TRG: Target amount (default=0.03)
     MAX_DURATION: Maximum duration (default=25.0)'''
-  #Usage: flowc_shake2 AMOUNT_TRG, ROT_AXIS, MAX_THETA, X_EXT, MAX_DURATION
+  #Usage: flowc_shakeB AMOUNT_TRG, ROT_AXIS, MAX_THETA, X_EXT, MAX_DURATION
     #AMOUNT_TRG: Target amount
     #ROT_AXIS: Rotation axis
     #MAX_THETA: Maximum theta
