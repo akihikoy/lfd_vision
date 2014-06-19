@@ -27,6 +27,7 @@ import traceback
 #import copy
 #import math
 import core_tool
+import state_machine
 #For CUI
 import readline
 import threading
@@ -92,6 +93,7 @@ class TCUITool:
         elif cmd[0] == 'reload' or cmd[0] == 'reloadf':
           old_dict= self.t.__dict__
           reload(core_tool)
+          reload(state_machine)
           self.t= core_tool.TCoreTool()
           if cmd[0] == 'reload':
             for k,v in old_dict.items():
