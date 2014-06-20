@@ -9,6 +9,23 @@ def Print(*s):
     print ss,
   print ''
 
+class TAsciiColors:
+  Header  = '\033[95m'
+  OKBlue  = '\033[94m'
+  OKGreen = '\033[92m'
+  Warning = '\033[93m'
+  Fail    = '\033[91m'
+  EndC    = '\033[0m'
+
+def DPrint(*s):
+  first=True
+  for ss in s:
+    if not first:
+      print ss,
+    else:
+      print TAsciiColors.OKGreen+str(ss),
+  print TAsciiColors.EndC+''
+
 class TFSMConditionedAction:
   def __init__(self):
     #Pointer to a function that returns if a condition is satisfied.
@@ -74,10 +91,10 @@ class TStateMachine:
     count= 0
     while self.curr_state!='':
       count+=1
-      if self.Debug: print '@',count,self.curr_state
+      if self.Debug: DPrint('@',count,self.curr_state)
       st= self.States[self.curr_state]
       if st.EntryAction and self.prev_state!=self.curr_state:
-        if self.Debug: print '@',count,self.curr_state,'EntryAction'
+        if self.Debug: DPrint('@',count,self.curr_state,'EntryAction')
         st.EntryAction()
 
       a_id= 0
@@ -97,25 +114,25 @@ class TStateMachine:
 
       #Execute action
       if a_id_satisfied>=0:
-        if self.Debug: print '@',count,self.curr_state,'Condition satisfied:',a_id_satisfied
+        if self.Debug: DPrint('@',count,self.curr_state,'Condition satisfied:',a_id_satisfied)
         if st.Actions[a_id_satisfied].Action:
-          if self.Debug: print '@',count,self.curr_state,'Action',a_id_satisfied
+          if self.Debug: DPrint('@',count,self.curr_state,'Action',a_id_satisfied)
           st.Actions[a_id_satisfied].Action()
       else:
         if st.ElseAction.Condition():
           if st.ElseAction.Action:
-            if self.Debug: print '@',count,self.curr_state,'ElseAction'
+            if self.Debug: DPrint('@',count,self.curr_state,'ElseAction')
             st.ElseAction.Action()
           next_state= st.ElseAction.NextState
 
-      if self.Debug: print '@',count,self.curr_state,'Next state:',next_state
+      if self.Debug: DPrint('@',count,self.curr_state,'Next state:',next_state)
 
       if next_state==ORIGIN_STATE or  next_state==self.curr_state:
         self.prev_state= self.curr_state
         #self.curr_state= self.curr_state
       else:
         if st.ExitAction:
-          if self.Debug: print '@',count,self.curr_state,'ExitAction'
+          if self.Debug: DPrint('@',count,self.curr_state,'ExitAction')
           st.ExitAction()
         if next_state=='':
           print 'Next state is not defined at %s. Hint: use ElseAction to specify the case where no conditions are satisfied.' % (self.curr_state)
@@ -125,7 +142,7 @@ class TStateMachine:
         else:
           self.curr_state= next_state
 
-    if self.Debug: print '@ Finished'
+    if self.Debug: DPrint('@ Finished')
 
 
 if __name__=='__main__':

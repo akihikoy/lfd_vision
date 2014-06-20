@@ -39,6 +39,7 @@ def Run(t,args=()):
   #Orientation where the flow is max
   t.attributes['b1']['q_pour_max']= QFromAxisAngle([1,0,0],math.pi)
   t.attributes['b1']['l_axis_shake']= [0,0,-1]
+  #t.attributes['b1']['l_x_tap']= [0.049385651219847684, -0.006305425787401662, 0.18542440461407342, -0.31525958492965084, 0.3674524448293558, 0.58621018893342669, 0.64957502206407958]
 
 
   #Bottle No.2
