@@ -58,7 +58,7 @@ def Run(t,args=()):
     l.tmpfp.write('%f %f %f %f %f %f mri\n' % (rospy.Time.now().to_nsec(),t.material_amount,l.amount_trg,l.amount_trg,-999,-999))
     t.SwitchArm(1) #Left arm
 
-  def Vibrate(count,dt=0.3):
+  def Vibrate(count,dt=0.4):
     l.amount_prev= l.amount
     l.amount= t.material_amount
 
