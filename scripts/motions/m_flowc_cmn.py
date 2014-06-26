@@ -168,3 +168,29 @@ class TLocal:
     t.MoveToCartPosI(l.x_init,3.0,l.x_ext,inum=30,blocking=True)
     l.tmpfp.write('%f %f %f %f %f %f mbi\n' % (rospy.Time.now().to_nsec(),t.material_amount,l.amount_trg,l.amount_trg,-999,-999))
 
+
+  def Shake(self,count,lb_axis_shake,shake_width,shake_freq):
+    l= self; t= self.t
+    l.amount_prev= l.amount
+    l.amount= t.material_amount
+
+    print 'shake:',l.elapsed_time,': ',l.amount,' / ',l.amount_trg,' : ',shake_freq
+    l.tmpfp.write('%f %f %f %f %f %f s2\n' % (rospy.Time.now().to_nsec(),l.amount,l.amount_trg,l.amount_trg,shake_freq,-999))
+
+    dt= 1.0/shake_freq
+
+    #>>>Shaking motion
+    x_trg= copy.deepcopy(l.x_init2)
+    l.m_infer.Run(t,(l.bottle,'x'))
+    x_b= t.attributes[l.bottle]['x']  #Bottle pose in robot frame
+    p_b,R_b= XToPosRot(x_b)
+    axis_shake= np.dot(R_b,lb_axis_shake)  #Shaking axis in robot frame
+    axis_shake= np.array(axis_shake) / la.norm(axis_shake)
+    x_trg[0:3]+= np.array(axis_shake)*shake_width
+    for n in range(count):
+      t.MoveToCartPosI(x_trg,dt/2.0,l.x_ext,inum=5,blocking=True)
+      l.tmpfp.write('%f %f %f %f %f %f s2\n' % (rospy.Time.now().to_nsec(),t.material_amount,l.amount_trg,l.amount_trg,shake_freq,-999))
+      t.MoveToCartPosI(l.x_init2,dt/2.0,l.x_ext,inum=5,blocking=True)
+      l.tmpfp.write('%f %f %f %f %f %f s2\n' % (rospy.Time.now().to_nsec(),t.material_amount,l.amount_trg,l.amount_trg,shake_freq,-999))
+      l.elapsed_time+= dt
+    #<<<Shaking motion

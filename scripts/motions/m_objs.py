@@ -38,7 +38,12 @@ def Run(t,args=()):
   t.attributes['b1']['q_pour_start']= QFromAxisAngle([1,0,0],30.0/180.0*math.pi)
   #Orientation where the flow is max
   t.attributes['b1']['q_pour_max']= QFromAxisAngle([1,0,0],math.pi)
-  t.attributes['b1']['l_axis_shake']= [0,0,-1]
+  t.attributes['b1']['l_axis_shake1']= [0,0,-1]
+  t.attributes['b1']['shake_width1']= 0.04
+  t.attributes['b1']['l_axis_shake2']= [0,1,0]
+  t.attributes['b1']['shake_width2']= 0.02
+  t.attributes['b1']['l_axis_shake3']= [1,0,0]
+  t.attributes['b1']['shake_width3']= 0.02
   t.attributes['b1']['l_x_tap']= [-0.011706553252399636, 0.066821805995982878, 0.085212694401439817, 0.78612053767768464, -0.45186131636266486, -0.30451820262824753, -0.29172678191144796]
 
 
@@ -78,7 +83,13 @@ def Run(t,args=()):
   t.attributes['b3']['q_pour_start']= QFromAxisAngle([1,0,0],30.0/180.0*math.pi)
   #Orientation where the flow is max
   t.attributes['b3']['q_pour_max']= QFromAxisAngle([1,0,0],math.pi)
-  t.attributes['b3']['l_axis_shake']= [0,0,-1]
+  #t.attributes['b3']['l_axis_shake']= [0,0,-1]
+  t.attributes['b3']['l_axis_shake1']= [0,0,-1]
+  t.attributes['b3']['shake_width1']= 0.04
+  t.attributes['b3']['l_axis_shake2']= [0,1,0]
+  t.attributes['b3']['shake_width2']= 0.02
+  t.attributes['b3']['l_axis_shake3']= [1,0,0]
+  t.attributes['b3']['shake_width3']= 0.02
 
 
   #Cup No.1

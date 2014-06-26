@@ -1,4 +1,5 @@
 #!/usr/bin/python
+#Simple state machine
 
 EXIT_STATE= '__exit__'
 ORIGIN_STATE= '__origin__'
@@ -147,9 +148,6 @@ class TStateMachine:
 
 if __name__=='__main__':
   import time,sys
-
-  def Print(s):
-    print s
 
   def AskYesNo():
     while 1:

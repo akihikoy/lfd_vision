@@ -2,11 +2,11 @@
 from core_tool import *
 from state_machine_paa import *
 def Help():
-  return '''Flow amount controller with shaking type B.
+  return '''Flow amount controller with shaking type C.
   Assumptions:
     Gripper holds a bottle
     Bottle is close to the cup
-  Usage: flowc_shakeB BOTTLE_ID [, AMOUNT_TRG [, MAX_DURATION]]
+  Usage: flowc_shakeC BOTTLE_ID [, AMOUNT_TRG [, MAX_DURATION]]
     BOTTLE_ID: identifier of bottle. e.g. 'b1'
     AMOUNT_TRG: Target amount (default=0.03)
     MAX_DURATION: Maximum duration (default=25.0)'''
@@ -29,8 +29,14 @@ def Run(t,args=()):
 
   l.m_infer= t.LoadMotion('infer')
   #Shaking axis in bottle frame
-  l.lb_axis_shake= t.attributes[l.bottle]['l_axis_shake1']
-  l.shake_width= t.attributes[l.bottle]['shake_width1']
+  l.lb_axis_shake1= t.attributes[l.bottle]['l_axis_shake1']
+  l.shake_width1= t.attributes[l.bottle]['shake_width1']
+  l.lb_axis_shake2= t.attributes[l.bottle]['l_axis_shake2']
+  l.shake_width2= t.attributes[l.bottle]['shake_width2']
+  l.lb_axis_shake3= t.attributes[l.bottle]['l_axis_shake3']
+  l.shake_width3= t.attributes[l.bottle]['shake_width3']
+
+
 
 
   sm= TStateMachine()
@@ -76,9 +82,11 @@ def Run(t,args=()):
   sm['shake'].Actions[-1]= timeout_action
   sm['shake'].NewAction()
   sm['shake'].Actions[-1].Condition= l.IsFlowObserved
-  #sm['shake'].Actions[-1].Action= lambda: l.Shake(4, l.lb_axis_shake, l.shake_width, t.flow_shake_freq_max)
-  sm['shake'].Actions[-1].Action= lambda: ( shake_ctrl.Select(), l.Shake(4, l.lb_axis_shake, shake_ctrl.Param()[0], shake_ctrl.Param()[1]), shake_ctrl.Update((t.material_amount-l.amount_prev)*shake_ctrl.Param()[1]) )
+  #sm['shake'].Actions[-1].Action= lambda: l.Shake(4, l.lb_axis_shake1, l.shake_width1, t.flow_shake_freq_max)
+  sm['shake'].Actions[-1].Action= lambda: ( shake_ctrl.Select(), l.Shake(4, l.lb_axis_shake1, shake_ctrl.Param()[0], shake_ctrl.Param()[1]), shake_ctrl.Update((t.material_amount-l.amount_prev)*shake_ctrl.Param()[1]) )
   #(t.material_amount-l.amount_prev)*shake_ctrl.Param()[1]: average changing of amount (Param()[1] is freq)
+
+
   sm['shake'].Actions[-1].NextState= 'shake'
   #sm['shake'].NewAction()
   #sm['shake'].Actions[-1].Condition= lambda: not l.IsFlowObserved() and l.IsThetaEqTo(l.max_theta)
