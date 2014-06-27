@@ -3,6 +3,7 @@
 import math,random
 #CMA-ES (Covariance Matrix Adaptation Evolution Strategy)
 import cma
+import os,time
 
 EXIT_STATE= '__exit__'
 ORIGIN_STATE= '__origin__'
@@ -133,6 +134,8 @@ class TContParamNoGrad:
     self.Min= []
     self.Max= []
     self.CMAESOptions= {}
+    t= time.localtime()
+    self.tmpfp= file('%s/tmp/cmaes%02i%02i%02i%02i%02i%02i.dat' % (os.environ['HOME'],t.tm_year%100,t.tm_mon,t.tm_mday,t.tm_hour,t.tm_min,t.tm_sec),'w')
   def Init(self):
     if len(self.Min)>0 or len(self.Max)>0:
       self.CMAESOptions['bounds']= [self.Min,self.Max]
@@ -155,6 +158,10 @@ class TContParamNoGrad:
       self.scores.append(-score)
     if len(self.solutions)==self.es.popsize:
       self.es.tell(self.solutions, self.scores)
+      self.es.disp()
+      for i in range(len(self.solutions)):
+        self.tmpfp.write('%i %s %f\n'%(self.es.countiter,' '.join(map(str,self.solutions[i])),self.scores[i]))
+      self.tmpfp.write('\n\n')
       self.solutions= []
       self.scores= []
       self.es.disp()

@@ -45,7 +45,7 @@ def Run(t,args=()):
   sm['start'].NewAction()
   sm['start'].Actions[-1]= timeout_action
   sm['start'].NewAction()
-  sm['start'].Actions[-1].Condition= lambda: l.IsFlowObserved(0.05)  #FIXME:magic number
+  sm['start'].Actions[-1].Condition= lambda: l.IsFlowObserved(0.02)  #FIXME:magic number
   sm['start'].Actions[-1].NextState= 'pour'
   sm['start'].ElseAction.Condition= lambda: True
   sm['start'].ElseAction.Action= lambda: l.ControlStep(t.flow_control_dtheta_max)

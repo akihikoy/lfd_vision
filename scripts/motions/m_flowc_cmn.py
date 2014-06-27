@@ -91,9 +91,9 @@ class TLocal:
 
     return True
 
-  def IsFlowObserved(self, sensitivity=0.02):  #FIXME: using magic number
+  def IsFlowObserved(self, sensitivity=0.01):  #FIXME: using magic number
     l= self; t= self.t
-    threshold= l.amount_trg * sensitivity
+    threshold= sensitivity
     return t.material_amount-l.amount_prev > threshold
 
   def IsPoured(self):
@@ -180,17 +180,29 @@ class TLocal:
     dt= 1.0/shake_freq
 
     #>>>Shaking motion
-    x_trg= copy.deepcopy(l.x_init2)
+    x_trg1= copy.deepcopy(l.x_init2)
+    x_trg2= copy.deepcopy(l.x_init2)
     l.m_infer.Run(t,(l.bottle,'x'))
     x_b= t.attributes[l.bottle]['x']  #Bottle pose in robot frame
     p_b,R_b= XToPosRot(x_b)
     axis_shake= np.dot(R_b,lb_axis_shake)  #Shaking axis in robot frame
     axis_shake= np.array(axis_shake) / la.norm(axis_shake)
-    x_trg[0:3]+= np.array(axis_shake)*shake_width
-    for n in range(count):
-      t.MoveToCartPosI(x_trg,dt/2.0,l.x_ext,inum=5,blocking=True)
+    x_trg1[0:3]+= np.array(axis_shake)*(0.5*shake_width)
+    x_trg2[0:3]-= np.array(axis_shake)*(0.5*shake_width)
+
+    t.MoveToCartPosI(x_trg1,dt/2.0,l.x_ext,inum=5,blocking=True)
+    l.tmpfp.write('%f %f %f %f %f %f s2\n' % (rospy.Time.now().to_nsec(),t.material_amount,l.amount_trg,l.amount_trg,shake_freq,-999))
+    l.elapsed_time+= dt/2.0
+    for n in range(count-1):
+      t.MoveToCartPosI(x_trg2,dt/2.0,l.x_ext,inum=5,blocking=True)
       l.tmpfp.write('%f %f %f %f %f %f s2\n' % (rospy.Time.now().to_nsec(),t.material_amount,l.amount_trg,l.amount_trg,shake_freq,-999))
-      t.MoveToCartPosI(l.x_init2,dt/2.0,l.x_ext,inum=5,blocking=True)
+      t.MoveToCartPosI(x_trg1,dt/2.0,l.x_ext,inum=5,blocking=True)
       l.tmpfp.write('%f %f %f %f %f %f s2\n' % (rospy.Time.now().to_nsec(),t.material_amount,l.amount_trg,l.amount_trg,shake_freq,-999))
       l.elapsed_time+= dt
+    t.MoveToCartPosI(x_trg2,dt/2.0,l.x_ext,inum=5,blocking=True)
+    l.tmpfp.write('%f %f %f %f %f %f s2\n' % (rospy.Time.now().to_nsec(),t.material_amount,l.amount_trg,l.amount_trg,shake_freq,-999))
+    l.elapsed_time+= dt/2.0
+    t.MoveToCartPosI(l.x_init2,dt/2.0,l.x_ext,inum=5,blocking=True)
+    l.tmpfp.write('%f %f %f %f %f %f s2\n' % (rospy.Time.now().to_nsec(),t.material_amount,l.amount_trg,l.amount_trg,shake_freq,-999))
+    l.elapsed_time+= dt/2.0
     #<<<Shaking motion
