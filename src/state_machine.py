@@ -68,6 +68,12 @@ class TStateMachine:
   def __setitem__(self,key,value):
     self.States[key]= value
 
+  def NewState(self,st):
+    if st in self.States:
+      print 'Error: state ',st,' already exists'
+      raise
+    self.States[st]= TFSMState()
+
   def Show(self):
     for id,st in self.States.items():
       print '[%s].EntryAction= %r' % (id,st.EntryAction)

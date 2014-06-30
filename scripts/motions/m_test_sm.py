@@ -21,17 +21,17 @@ def Run(t,args=()):
   #sm.Debug= True
 
   sm.StartState= 'start'
-  sm['start']= TFSMState()
+  sm.NewState('start')
   sm['start'].EntryAction= lambda: Print('Hello state machine!',var1)
   sm['start'].NewAction()
   sm['start'].Actions[-1].Condition= lambda: Print("Want to move?") or AskYesNo()
   sm['start'].Actions[-1].NextState= 'count'
   sm['start'].ElseAction.Condition= lambda: True
   sm['start'].ElseAction.Action= lambda: Print('Keep to stay in start\n')
-  sm['start'].ElseAction.NextState= 'start'
+  sm['start'].ElseAction.NextState= ORIGIN_STATE
   sm['start'].ExitAction= lambda: (Print('-->'), GetStartTime())
 
-  sm['count']= TFSMState()
+  sm.NewState('count')
   sm['count'].EntryAction= lambda: Print('Counting...')
   sm['count'].NewAction()
   sm['count'].Actions[-1].Condition= lambda: (int(time.time())-local.start_time)>=3
@@ -39,9 +39,9 @@ def Run(t,args=()):
   sm['count'].Actions[-1].NextState= 'stop'
   sm['count'].ElseAction.Condition= lambda: True
   sm['count'].ElseAction.Action= lambda: (Print(str(int(time.time())-local.start_time)), time.sleep(0.2))
-  sm['count'].ElseAction.NextState= 'count'
+  sm['count'].ElseAction.NextState= ORIGIN_STATE
 
-  sm['stop']= TFSMState()
+  sm.NewState('stop')
   sm['stop'].EntryAction= lambda: Print('Finishing state machine',var1)
   sm['stop'].ElseAction.Condition= lambda: True
   sm['stop'].ElseAction.NextState= EXIT_STATE

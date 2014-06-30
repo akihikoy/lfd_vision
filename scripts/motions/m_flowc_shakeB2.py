@@ -10,7 +10,7 @@ def Help():
     BOTTLE_ID: identifier of bottle. e.g. 'b1'
     AMOUNT_TRG: Target amount (default=0.03)
     MAX_DURATION: Maximum duration (default=25.0)'''
-  #Usage: flowc_shakeB AMOUNT_TRG, ROT_AXIS, MAX_THETA, X_EXT, MAX_DURATION
+  #Usage: flowc_shakeB2 AMOUNT_TRG, ROT_AXIS, MAX_THETA, X_EXT, MAX_DURATION
     #AMOUNT_TRG: Target amount
     #ROT_AXIS: Rotation axis
     #MAX_THETA: Maximum theta
@@ -27,7 +27,6 @@ def Run(t,args=()):
   if not l.Setup(t, bottle,amount_trg,max_duration):
     return
 
-  l.m_infer= t.LoadMotion('infer')
   #Shaking axis in bottle frame
   l.lb_axis_shake= t.attributes[l.bottle]['l_axis_shake1']
   #l.shake_width= t.attributes[l.bottle]['shake_width1']

@@ -27,7 +27,6 @@ def Run(t,args=()):
   if not l.Setup(t, bottle,amount_trg,max_duration):
     return
 
-  l.m_infer= t.LoadMotion('infer')
   #Shaking axis in bottle frame
   l.lb_axis_shake= t.attributes[l.bottle]['l_axis_shake1']
   l.shake_width= t.attributes[l.bottle]['shake_width1']

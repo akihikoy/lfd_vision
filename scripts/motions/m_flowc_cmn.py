@@ -82,9 +82,12 @@ class TLocal:
     #l.dtheta= 0.0
     #l.theta_prev= 0.0
     l.elapsed_time= 0.0
+    l.timer_time= 0.0
     l.damount= 0.0
     l.amount= t.material_amount
     l.amount_prev= t.material_amount
+
+    l.m_infer= t.LoadMotion('infer')
 
     now= time.localtime()
     l.tmpfp= file('%s/tmp/flowc%02i%02i%02i%02i%02i%02i.dat' % (os.environ['HOME'],now.tm_year%100,now.tm_mon,now.tm_mday,now.tm_hour,now.tm_min,now.tm_sec),'w')
@@ -106,6 +109,14 @@ class TLocal:
   def IsTimeout(self):
     l= self; t= self.t
     return l.elapsed_time > l.max_duration
+
+  def ChargeTimer(self,dt):
+    l= self; t= self.t
+    l.timer_time= l.elapsed_time+dt
+
+  def IsTimerTimeout(self):
+    l= self; t= self.t
+    return l.timer_time<=l.elapsed_time
 
   def IsThetaEqTo(self,th,threshold_rate=0.001):
     l= self; t= self.t
