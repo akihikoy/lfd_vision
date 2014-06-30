@@ -62,6 +62,7 @@ def Run(t,args=()):
     trick_id.Select()
   def get_trick_id():
     return trick_id.Param()
+    #return 'std_pour'
   def update_trick_id():
     if trick_id.Param():
       score= (t.material_amount - l.trick_id_amount_begin) / (l.elapsed_time - l.trick_id_time_begin)

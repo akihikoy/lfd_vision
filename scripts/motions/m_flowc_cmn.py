@@ -163,7 +163,7 @@ class TLocal:
 
     else:
       print "IK error: ",resp.error_code.val
-      return  #FIXME: error proc
+      raise
 
     l.elapsed_time+= t.flow_control_time_step
 
