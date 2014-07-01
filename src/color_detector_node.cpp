@@ -31,12 +31,18 @@ using namespace trick;
 static std::vector<cv::Vec3b>  detect_colors;
 static cv::Vec3s  col_radius(-3,5,5);
 static TColorDetector  col_detector;
-void OnMouse(int event, int x, int y, int, void *vpimg)
+bool running(true);
+void OnMouseCamera(int event, int x, int y, int, void *vpimg)
 {
   if(event == cv::EVENT_RBUTTONDOWN)
   {
     detect_colors.clear();
     col_detector.SetupColors(detect_colors, col_radius);
+    NonzeroBase= 0;
+    return;
+  }
+  if(event == cv::EVENT_LBUTTONDBLCLK)
+  {
     NonzeroBase= 0;
     return;
   }
@@ -52,6 +58,19 @@ void OnMouse(int event, int x, int y, int, void *vpimg)
   detect_colors.push_back(converted.at<cv::Vec3b>(0,0));
   col_detector.SetupColors(detect_colors, col_radius);
   NonzeroBase= 0;
+}
+void OnMouseMask(int event, int x, int y, int, void*)
+{
+  if(event == cv::EVENT_LBUTTONDBLCLK)
+  {
+    NonzeroBase= 0;
+    return;
+  }
+  if(event == cv::EVENT_RBUTTONDOWN)
+  {
+    running=!running;
+    std::cerr<<(running?"Resume":"Pause (Hit space/R-click to resume)")<<std::endl;
+  }
 }
 
 void SaveColors(const char *file_name)
@@ -97,10 +116,10 @@ int main(int argc, char**argv)
   cv::VideoCapture cap(camera); // open the default camera
   if(!cap.isOpened())  // check if we succeeded
   {
-    std::cerr<<"cannot open: "<<camera<<std::endl;
+    std::cerr<<"Cannot open: "<<camera<<std::endl;
     return -1;
   }
-  std::cerr<<"camera opened"<<std::endl;
+  std::cerr<<"Camera opened"<<std::endl;
 
   cv::namedWindow("camera",1);
   // cv::namedWindow("detected",1);
@@ -109,9 +128,9 @@ int main(int argc, char**argv)
 
   // std::vector<cv::Vec3b>  detect_colors;
   // detect_colors.push_back(cv::Vec3b(200,100,200));
-  cv::setMouseCallback("camera", OnMouse, &frame);
+  cv::setMouseCallback("camera", OnMouseCamera, &frame);
+  cv::setMouseCallback("mask_img", OnMouseMask);
 
-  bool running(true);
   // ros::Rate loop_rate(5);  // 5 Hz
   while(ros::ok())
   {
@@ -132,14 +151,18 @@ int main(int argc, char**argv)
             <<"  \t"<<ratio<<std::endl;
         break;
       case 2:
-        if(NonzeroBase==0)  NonzeroBase= (nonzero>0 ? nonzero : 1);
+        if(NonzeroBase==0)
+        {
+          NonzeroBase= (nonzero>0 ? nonzero : 1);
+          std::cerr<<"Reset NonzeroBase: "<<NonzeroBase<<std::endl;
+        }
         diff= NonzeroBase-nonzero;
         if(diff<0)  diff= 0;
         ratio= double(diff)/double(NonzeroBase);
         std::cout<<"diff: \t"<<diff<<"  \t"<<ratio<<std::endl;
         break;
       default:
-        std::cout<<"invalid mode:"<<mode<<std::endl;
+        std::cout<<"Invalid mode:"<<mode<<std::endl;
       }
 
       std_msgs::Float64  ratio_msg;
@@ -160,19 +183,21 @@ int main(int argc, char**argv)
     if(c=='\x1b'||c=='q') break;
     else if(c=='r')
     {
-      cap >> frame;
-      mask_img= col_detector.Detect(frame);
-      int nonzero= cv::countNonZero(mask_img);
-      NonzeroBase= (nonzero>0 ? nonzero : 1);
+      NonzeroBase= 0;
+      // cap >> frame;
+      // mask_img= col_detector.Detect(frame);
+      // int nonzero= cv::countNonZero(mask_img);
+      // NonzeroBase= (nonzero>0 ? nonzero : 1);
     }
     else if(c=='l')
     {
       LoadColors(DefaultFileName);
+      NonzeroBase= 0;
 
-      cap >> frame;
-      mask_img= col_detector.Detect(frame);
-      int nonzero= cv::countNonZero(mask_img);
-      NonzeroBase= (nonzero>0 ? nonzero : 1);
+      // cap >> frame;
+      // mask_img= col_detector.Detect(frame);
+      // int nonzero= cv::countNonZero(mask_img);
+      // NonzeroBase= (nonzero>0 ? nonzero : 1);
     }
     else if(c=='s')
     {
@@ -181,7 +206,7 @@ int main(int argc, char**argv)
     else if(c==' ')
     {
       running=!running;
-      std::cerr<<(running?"Resume":"Pause (Hit space to resume)")<<std::endl;
+      std::cerr<<(running?"Resume":"Pause (Hit space/R-click to resume)")<<std::endl;
     }
 
     ros::spinOnce();
