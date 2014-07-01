@@ -22,6 +22,11 @@ def Run(t,args=()):
     lo_x_grab= t.attributes[obj]['l_x_grab']
     t.attributes[obj][elem]= TransformRightInv( Transform(x_w, lw_xe), lo_x_grab )
     print 'Inferred: [',obj,'][',elem,']= ',t.attributes[obj][elem]
+    print '###lo_x_grab:',lo_x_grab
+    print '###x_grab:',Transform(t.attributes[obj][elem],lo_x_grab)
+    print '###x_e:',Transform(x_w, lw_xe)
+    print '###lw_xe:',lw_xe
+    print '###x_w:',x_w
 
     if whicharm!=-1:
       t.SwitchArm(whicharm)

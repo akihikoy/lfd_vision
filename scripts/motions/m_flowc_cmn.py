@@ -63,6 +63,9 @@ class TLocal:
 
     #<<<FIXME: the above code is copied from m_flowc.py; a part of code is overwrapping with the below code!!!
 
+    print 'axis:',axis
+    print 'max_theta:',max_theta
+
 
     l.rot_axis= axis
     l.max_theta= max_theta
@@ -108,7 +111,10 @@ class TLocal:
 
   def IsTimeout(self):
     l= self; t= self.t
-    return l.elapsed_time > l.max_duration
+    if l.elapsed_time > l.max_duration:
+      print '###TIMEOUT!### (',t.material_amount,' / ',l.amount_trg,')'
+      return True
+    return False
 
   def ChargeTimer(self,dt):
     l= self; t= self.t
@@ -201,19 +207,21 @@ class TLocal:
     x_trg1[0:3]+= np.array(axis_shake)*(0.5*shake_width)
     x_trg2[0:3]-= np.array(axis_shake)*(0.5*shake_width)
 
-    t.MoveToCartPosI(x_trg1,dt/2.0,l.x_ext,inum=5,blocking=True)
+    #inum= 5
+    inum= 10
+    t.MoveToCartPosI(x_trg1,dt/2.0,l.x_ext,inum,blocking=True)
     l.tmpfp.write('%f %f %f %f %f %f s2\n' % (rospy.Time.now().to_nsec(),t.material_amount,l.amount_trg,l.amount_trg,shake_freq,-999))
     l.elapsed_time+= dt/2.0
     for n in range(count-1):
-      t.MoveToCartPosI(x_trg2,dt/2.0,l.x_ext,inum=5,blocking=True)
+      t.MoveToCartPosI(x_trg2,dt/2.0,l.x_ext,inum,blocking=True)
       l.tmpfp.write('%f %f %f %f %f %f s2\n' % (rospy.Time.now().to_nsec(),t.material_amount,l.amount_trg,l.amount_trg,shake_freq,-999))
-      t.MoveToCartPosI(x_trg1,dt/2.0,l.x_ext,inum=5,blocking=True)
+      t.MoveToCartPosI(x_trg1,dt/2.0,l.x_ext,inum,blocking=True)
       l.tmpfp.write('%f %f %f %f %f %f s2\n' % (rospy.Time.now().to_nsec(),t.material_amount,l.amount_trg,l.amount_trg,shake_freq,-999))
       l.elapsed_time+= dt
-    t.MoveToCartPosI(x_trg2,dt/2.0,l.x_ext,inum=5,blocking=True)
+    t.MoveToCartPosI(x_trg2,dt/2.0,l.x_ext,inum,blocking=True)
     l.tmpfp.write('%f %f %f %f %f %f s2\n' % (rospy.Time.now().to_nsec(),t.material_amount,l.amount_trg,l.amount_trg,shake_freq,-999))
     l.elapsed_time+= dt/2.0
-    t.MoveToCartPosI(l.x_init2,dt/2.0,l.x_ext,inum=5,blocking=True)
+    t.MoveToCartPosI(l.x_init2,dt/2.0,l.x_ext,inum,blocking=True)
     l.tmpfp.write('%f %f %f %f %f %f s2\n' % (rospy.Time.now().to_nsec(),t.material_amount,l.amount_trg,l.amount_trg,shake_freq,-999))
     l.elapsed_time+= dt/2.0
     #<<<Shaking motion

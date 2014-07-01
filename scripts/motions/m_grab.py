@@ -18,6 +18,8 @@ def Run(t,args=()):
     t.SwitchArm(whicharm)
     return
 
+  print 'Grabbing',obj,', which is ',t.attributes[obj]['help']
+
   t.CommandGripper(0.0,t.attributes[obj]['f_grab'],True)
   t.attributes[obj]['grabbed']= {}
   t.attributes[obj]['grabbed']['grabber']= 'gripper_'+hand

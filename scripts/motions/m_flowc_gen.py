@@ -39,6 +39,7 @@ def Run(t,args=()):
   l.shake_width= 0.025
   l.shake_freq= 2.5
   #l.shake_freq= 3.0
+  l.shake_widthA= 0.06
 
   l.flow_obs_sensitivity= 0.003
 
@@ -62,7 +63,7 @@ def Run(t,args=()):
     trick_id.Select()
   def get_trick_id():
     return trick_id.Param()
-    #return 'std_pour'
+    #return 'shake_B'
   def update_trick_id():
     if trick_id.Param():
       score= (t.material_amount - l.trick_id_amount_begin) / (l.elapsed_time - l.trick_id_time_begin)
@@ -93,13 +94,15 @@ def Run(t,args=()):
 
   poured_action= TFSMConditionedAction()
   poured_action.Condition= l.IsPoured
-  poured_action.NextState= 'stop'
+  poured_action.NextState= 'start'
+  #poured_action.NextState= 'stop'
 
   sm.StartState= 'start'
   sm.NewState('start')
   sm['start'].EntryAction= lambda: ( update_trick_id(), select_trick_id() )
   sm['start'].NewAction()
-  sm['start'].Actions[-1]= poured_action
+  sm['start'].Actions[-1].Condition= l.IsPoured
+  sm['start'].Actions[-1].NextState= 'stop'
   sm['start'].NewAction()
   sm['start'].Actions[-1]= timeout_action
   sm['start'].NewAction()
@@ -186,11 +189,11 @@ def Run(t,args=()):
   sm['shake'].Actions[-1]= timeout_action
   sm['shake'].NewAction()
   sm['shake'].Actions[-1].Condition= lambda: l.IsFlowObserved(l.flow_obs_sensitivity)
-  sm['shake'].Actions[-1].Action= lambda: ( l.ChargeTimer(2.0), l.Shake(1, l.lb_axis_shake, l.shake_width, l.shake_freq) )
+  sm['shake'].Actions[-1].Action= lambda: ( l.ChargeTimer(2.0), l.Shake(2, l.lb_axis_shake, l.shake_widthA, l.shake_freq) )
   sm['shake'].Actions[-1].NextState= ORIGIN_STATE
   sm['shake'].NewAction()
   sm['shake'].Actions[-1].Condition= lambda: not l.IsTimerTimeout()
-  sm['shake'].Actions[-1].Action= lambda: ( l.Shake(1, l.lb_axis_shake, l.shake_width, l.shake_freq) )
+  sm['shake'].Actions[-1].Action= lambda: ( l.Shake(2, l.lb_axis_shake, l.shake_widthA, l.shake_freq) )
   sm['shake'].Actions[-1].NextState= ORIGIN_STATE
   sm['shake'].ElseAction.Condition= lambda: True
   sm['shake'].ElseAction.NextState= 'start'
@@ -238,11 +241,11 @@ def Run(t,args=()):
   sm['shake2'].Actions[-1]= timeout_action
   sm['shake2'].NewAction()
   sm['shake2'].Actions[-1].Condition= lambda: l.IsFlowObserved(l.flow_obs_sensitivity)
-  sm['shake2'].Actions[-1].Action= lambda: ( l.ChargeTimer(2.0), select_shake_axis(), l.Shake(1, get_shake_axis(), l.shake_width, l.shake_freq), update_shake_axis() )
+  sm['shake2'].Actions[-1].Action= lambda: ( l.ChargeTimer(2.0), select_shake_axis(), l.Shake(2, get_shake_axis(), l.shake_width, l.shake_freq), update_shake_axis() )
   sm['shake2'].Actions[-1].NextState= ORIGIN_STATE
   sm['shake2'].NewAction()
   sm['shake2'].Actions[-1].Condition= lambda: not l.IsTimerTimeout()
-  sm['shake2'].Actions[-1].Action= lambda: ( select_shake_axis(), l.Shake(1, get_shake_axis(), l.shake_width, l.shake_freq), update_shake_axis() )
+  sm['shake2'].Actions[-1].Action= lambda: ( select_shake_axis(), l.Shake(2, get_shake_axis(), l.shake_width, l.shake_freq), update_shake_axis() )
   sm['shake2'].Actions[-1].NextState= ORIGIN_STATE
   sm['shake2'].ElseAction.Condition= lambda: True
   sm['shake2'].ElseAction.NextState= 'start'

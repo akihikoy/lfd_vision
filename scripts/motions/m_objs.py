@@ -91,6 +91,80 @@ def Run(t,args=()):
   t.attributes['b3']['l_axis_shake3']= [1,0,0]
   t.attributes['b3']['shake_width3']= 0.02
 
+  #Bottle No.4
+  if not 'b4' in t.attributes:  t.attributes['b4']={}
+  t.attributes['b4']['help']= 'Handmade bottle where a white cup and a transparent plastic cup are connected.'
+  #Pose [x,y,z, qx,qy,qz,qw] in robot's frame
+  if not 'x' in t.attributes['b4']: t.attributes['b4']['x']= []
+  #Gripper width before grab
+  t.attributes['b4']['g_pre']= 0.08
+  #Grab power (max effort):
+  t.attributes['b4']['f_grab']= 20.0
+  #Grab pose:
+  t.attributes['b4']['l_x_grab']= [0.0, 0.0, 0.14,  0, 0, 0, 1.0]
+  #Pouring edge point:
+  t.attributes['b4']['l_x_pour_e']= [0.0, 0.0, 0.215, 0.0,0.0,0.0,1.0]
+  #Orientation to start pouring
+  t.attributes['b4']['q_pour_start']= QFromAxisAngle([1,0,0],30.0/180.0*math.pi)
+  #Orientation where the flow is max
+  t.attributes['b4']['q_pour_max']= QFromAxisAngle([1,0,0],math.pi)
+  #t.attributes['b4']['l_axis_shake']= [0,0,-1]
+  t.attributes['b4']['l_axis_shake1']= [0,0,-1]
+  t.attributes['b4']['shake_width1']= 0.06
+  t.attributes['b4']['l_axis_shake2']= [0,1,0]
+  t.attributes['b4']['shake_width2']= 0.02
+  t.attributes['b4']['l_axis_shake3']= [1,0,0]
+  t.attributes['b4']['shake_width3']= 0.02
+
+  #Bottle No.5
+  if not 'b5' in t.attributes:  t.attributes['b5']={}
+  t.attributes['b5']['help']= 'Transparent green bottle with a blue cap.'
+  #Pose [x,y,z, qx,qy,qz,qw] in robot's frame
+  if not 'x' in t.attributes['b5']: t.attributes['b5']['x']= []
+  #Gripper width before grab
+  t.attributes['b5']['g_pre']= 0.08
+  #Grab power (max effort):
+  t.attributes['b5']['f_grab']= 50.0
+  #Grab pose:
+  t.attributes['b5']['l_x_grab']= [0.0, 0.0, 0.085,  0, 0, 0, 1.0]
+  #Pouring edge point:
+  t.attributes['b5']['l_x_pour_e']= [0.0, -0.025, 0.175, 0.0,0.0,0.0,1.0]
+  #Orientation to start pouring
+  t.attributes['b5']['q_pour_start']= QFromAxisAngle([1,0,0],30.0/180.0*math.pi)
+  #Orientation where the flow is max
+  t.attributes['b5']['q_pour_max']= QFromAxisAngle([1,0,0],math.pi)
+  #t.attributes['b5']['l_axis_shake']= [0,0,-1]
+  t.attributes['b5']['l_axis_shake1']= [0,0,-1]
+  t.attributes['b5']['shake_width1']= 0.06
+  t.attributes['b5']['l_axis_shake2']= [0,1,0]
+  t.attributes['b5']['shake_width2']= 0.02
+  t.attributes['b5']['l_axis_shake3']= [1,0,0]
+  t.attributes['b5']['shake_width3']= 0.02
+
+  #Bottle No.6
+  if not 'b6' in t.attributes:  t.attributes['b6']={}
+  t.attributes['b6']['help']= 'Lions head beer can, which is dark red.'
+  #Pose [x,y,z, qx,qy,qz,qw] in robot's frame
+  if not 'x' in t.attributes['b6']: t.attributes['b6']['x']= []
+  #Gripper width before grab
+  t.attributes['b6']['g_pre']= 0.08
+  #Grab power (max effort):
+  t.attributes['b6']['f_grab']= 15.0
+  #Grab pose:
+  t.attributes['b6']['l_x_grab']= [0.0, 0.0, 0.05,  0, 0, 0, 1.0]
+  #Pouring edge point:
+  t.attributes['b6']['l_x_pour_e']= [0.0, -0.018, 0.12, 0.0,0.0,0.0,1.0]
+  #Orientation to start pouring
+  t.attributes['b6']['q_pour_start']= QFromAxisAngle([1,0,0],30.0/180.0*math.pi)
+  #Orientation where the flow is max
+  t.attributes['b6']['q_pour_max']= QFromAxisAngle([1,0,0],math.pi)
+  #t.attributes['b6']['l_axis_shake']= [0,0,-1]
+  t.attributes['b6']['l_axis_shake1']= [0,0,-1]
+  t.attributes['b6']['shake_width1']= 0.06
+  t.attributes['b6']['l_axis_shake2']= [0,1,0]
+  t.attributes['b6']['shake_width2']= 0.02
+  t.attributes['b6']['l_axis_shake3']= [1,0,0]
+  t.attributes['b6']['shake_width3']= 0.02
 
   #Cup No.1
   if not 'c1' in t.attributes:  t.attributes['c1']={}

@@ -415,6 +415,7 @@ class TCoreTool:
     self.mu.arm[i].moveToCartPos(cart_pos, dt, blocking)
     if self.mu.arm[i].last_error_code != 1:
       print "Error code= "+str(self.mu.arm[i].last_error_code)
+      raise
 
 
   #Move to a cart position with interpolation
@@ -462,7 +463,7 @@ class TCoreTool:
             time.sleep(traj_duration*0.02)
         else:
           print "IK error: ",resp.error_code.val
-          break
+          raise
     elif interpolation_controller_version==3:
       '''
       Version 3:
@@ -493,7 +494,7 @@ class TCoreTool:
           angles_prev= angles
         else:
           print "IK error: ",resp.error_code.val
-          break
+          raise
       if len(goal.trajectory.points)==inum:
         AngleTrajSmoother(goal.trajectory.points)
         #fp=file('/tmp/trajxxx1.dat','w')
@@ -540,7 +541,7 @@ class TCoreTool:
         else:
           print "IK error: ",resp.error_code.val
           ik_error= True
-          break
+          raise
       if not ik_error:
         AngleTrajSmoother(goal.trajectory.points)
         #fp=file('/tmp/trajxxx1.dat','w')
@@ -720,7 +721,7 @@ class TCoreTool:
 
       else:
         print "IK error: ",resp.error_code.val
-        break
+        raise
 
       elapsed_time+= self.flow_control_time_step
 
@@ -830,6 +831,7 @@ class TCoreTool:
 
     #else:
       #print "IK error: ",resp.error_code.val
+      #raise
 
 
   #Load external motion script written in python,
