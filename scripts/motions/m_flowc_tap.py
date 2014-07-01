@@ -34,6 +34,8 @@ def Run(t,args=()):
   l.x_r_init= np.array(t.CartPos(l.x_r_ext))
   t.SwitchArm(1) #Left arm
 
+  l.flow_obs_sensitivity= 0.003
+
   def MoveRGripperToTap():
     t.SwitchArm(0) #Right arm
     print 'Moving R-gripper to the tapping pose...'
@@ -94,7 +96,7 @@ def Run(t,args=()):
   sm['start'].NewAction()
   sm['start'].Actions[-1]= timeout_action
   sm['start'].NewAction()
-  sm['start'].Actions[-1].Condition= lambda: l.IsFlowObserved(0.05)  #FIXME
+  sm['start'].Actions[-1].Condition= lambda: l.IsFlowObserved(l.flow_obs_sensitivity)
   sm['start'].Actions[-1].NextState= 'move_r_tap'
   sm['start'].ElseAction.Condition= lambda: True
   sm['start'].ElseAction.Action= lambda: l.ControlStep(0.2 * t.flow_control_dtheta_max)
@@ -116,7 +118,7 @@ def Run(t,args=()):
   sm['tap'].NewAction()
   sm['tap'].Actions[-1]= timeout_action
   sm['tap'].NewAction()
-  sm['tap'].Actions[-1].Condition= l.IsFlowObserved
+  sm['tap'].Actions[-1].Condition= lambda: l.IsFlowObserved(l.flow_obs_sensitivity)
   sm['tap'].Actions[-1].Action= lambda: Vibrate(3)
   sm['tap'].Actions[-1].NextState= 'tap'
   sm['tap'].ElseAction.Condition= lambda: True
@@ -137,7 +139,7 @@ def Run(t,args=()):
   sm['pour'].NewAction()
   sm['pour'].Actions[-1]= timeout_action
   sm['pour'].NewAction()
-  sm['pour'].Actions[-1].Condition= lambda: l.IsFlowObserved(0.05)  #FIXME
+  sm['pour'].Actions[-1].Condition= lambda: l.IsFlowObserved(l.flow_obs_sensitivity)
   sm['pour'].Actions[-1].NextState= 'move_r_tap'
   sm['pour'].ElseAction.Condition= lambda: True
   sm['pour'].ElseAction.Action= lambda: l.ControlStep(0.2 * t.flow_control_dtheta_max)  #FIXME: magic number

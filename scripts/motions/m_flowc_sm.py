@@ -27,6 +27,8 @@ def Run(t,args=()):
   if not l.Setup(t, bottle,amount_trg,max_duration):
     return
 
+  l.flow_obs_sensitivity= 0.003
+
   sm= TStateMachine()
   sm.Debug= True
 
@@ -45,7 +47,7 @@ def Run(t,args=()):
   sm['start'].NewAction()
   sm['start'].Actions[-1]= timeout_action
   sm['start'].NewAction()
-  sm['start'].Actions[-1].Condition= lambda: l.IsFlowObserved(0.02)  #FIXME:magic number
+  sm['start'].Actions[-1].Condition= lambda: l.IsFlowObserved(l.flow_obs_sensitivity)
   sm['start'].Actions[-1].NextState= 'pour'
   sm['start'].ElseAction.Condition= lambda: True
   sm['start'].ElseAction.Action= lambda: l.ControlStep(t.flow_control_dtheta_max)
@@ -57,7 +59,7 @@ def Run(t,args=()):
   sm['pour'].NewAction()
   sm['pour'].Actions[-1]= timeout_action
   sm['pour'].NewAction()
-  sm['pour'].Actions[-1].Condition= l.IsFlowObserved
+  sm['pour'].Actions[-1].Condition= lambda: l.IsFlowObserved(l.flow_obs_sensitivity)
   sm['pour'].Actions[-1].Action= lambda: l.ControlStep(0.0)
   sm['pour'].Actions[-1].NextState= 'pour'
   sm['pour'].ElseAction.Condition= lambda: True
