@@ -93,9 +93,15 @@ class TLocal:
     l.m_infer= t.LoadMotion('infer')
 
     now= time.localtime()
-    l.tmpfp= file('%s/tmp/flowc%02i%02i%02i%02i%02i%02i.dat' % (os.environ['HOME'],now.tm_year%100,now.tm_mon,now.tm_mday,now.tm_hour,now.tm_min,now.tm_sec),'w')
+    l.log_file_name= '%s/tmp/flowc%02i%02i%02i%02i%02i%02i.dat' % (os.environ['HOME'],now.tm_year%100,now.tm_mon,now.tm_mday,now.tm_hour,now.tm_min,now.tm_sec)
+    print 'Logging to',l.log_file_name
+    l.tmpfp= file(l.log_file_name,'w')
 
     return True
+
+  def __del__(self):
+    l= self; t= self.t
+    print 'Logged to',l.log_file_name
 
   def IsFlowObserved(self, sensitivity=0.01):  #FIXME: using magic number
     l= self; t= self.t
