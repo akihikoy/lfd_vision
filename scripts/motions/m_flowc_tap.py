@@ -37,6 +37,7 @@ def Run(t,args=()):
   l.flow_obs_sensitivity= 0.003 #FIXME
 
   def MoveRGripperToTap():
+    l.ctrl_type= 'mrt'
     t.SwitchArm(0) #Right arm
     print 'Moving R-gripper to the tapping pose...'
     l.tmpfp.write('%f %f %f %f %f %f mrt\n' % (rospy.Time.now().to_nsec(),t.material_amount,l.amount_trg,l.amount_trg,-999,-999))
@@ -52,6 +53,7 @@ def Run(t,args=()):
     t.SwitchArm(1) #Left arm
 
   def MoveRGripperToInit():
+    l.ctrl_type= 'mri'
     t.SwitchArm(0) #Right arm
     print 'Moving R-gripper to the initial pose...'
     l.tmpfp.write('%f %f %f %f %f %f mri\n' % (rospy.Time.now().to_nsec(),t.material_amount,l.amount_trg,l.amount_trg,-999,-999))
@@ -61,6 +63,7 @@ def Run(t,args=()):
     t.SwitchArm(1) #Left arm
 
   def Vibrate(count,dt=0.4):
+    l.ctrl_type= 'tp'
     l.amount_prev= l.amount
     l.amount= t.material_amount
 
@@ -78,6 +81,11 @@ def Run(t,args=()):
       l.elapsed_time+= dt
     t.SwitchArm(1) #Left arm
 
+  def Repeat(duration, action):
+    l.ChargeTimer(duration)
+    while not l.IsTimerTimeout():
+      action()
+
   sm= TStateMachine()
   sm.Debug= True
 
@@ -89,6 +97,8 @@ def Run(t,args=()):
   poured_action.Condition= l.IsPoured
   poured_action.NextState= 'stop'
 
+  move_back_action= lambda: Repeat(0.3,lambda: l.ControlStep(0.2 * t.flow_control_dtheta_min))
+
   sm.StartState= 'start'
   sm['start']= TFSMState()
   sm['start'].NewAction()
@@ -97,10 +107,11 @@ def Run(t,args=()):
   sm['start'].Actions[-1]= timeout_action
   sm['start'].NewAction()
   sm['start'].Actions[-1].Condition= lambda: l.IsFlowObserved(l.flow_obs_sensitivity) or l.theta>(l.max_theta-0.5*math.pi)
+  sm['start'].Actions[-1].Action= move_back_action
   sm['start'].Actions[-1].NextState= 'move_r_tap'
   sm['start'].ElseAction.Condition= lambda: True
   sm['start'].ElseAction.Action= lambda: l.ControlStep(0.2 * t.flow_control_dtheta_max)
-  sm['start'].ElseAction.NextState= 'start'
+  sm['start'].ElseAction.NextState= ORIGIN_STATE
 
   sm['move_r_tap']= TFSMState()
   sm['move_r_tap'].EntryAction= MoveRGripperToTap
@@ -113,14 +124,18 @@ def Run(t,args=()):
 
   sm['tap']= TFSMState()
   sm['tap'].NewAction()
-  sm['tap'].EntryAction= lambda: Vibrate(3)
+  sm['tap'].EntryAction= lambda: l.ChargeTimer(4.0)
   sm['tap'].Actions[-1]= poured_action
   sm['tap'].NewAction()
   sm['tap'].Actions[-1]= timeout_action
   sm['tap'].NewAction()
   sm['tap'].Actions[-1].Condition= lambda: l.IsFlowObserved(l.flow_obs_sensitivity)
+  sm['tap'].Actions[-1].Action= lambda: (l.ChargeTimer(4.0), Vibrate(3))
+  sm['tap'].Actions[-1].NextState= ORIGIN_STATE
+  sm['tap'].NewAction()
+  sm['tap'].Actions[-1].Condition= lambda: not l.IsTimerTimeout()
   sm['tap'].Actions[-1].Action= lambda: Vibrate(3)
-  sm['tap'].Actions[-1].NextState= 'tap'
+  sm['tap'].Actions[-1].NextState= ORIGIN_STATE
   sm['tap'].ElseAction.Condition= lambda: True
   sm['tap'].ElseAction.NextState= 'move_r_init'
 
@@ -140,17 +155,27 @@ def Run(t,args=()):
   sm['pour'].Actions[-1]= timeout_action
   sm['pour'].NewAction()
   sm['pour'].Actions[-1].Condition= lambda: l.IsFlowObserved(l.flow_obs_sensitivity)
+  sm['pour'].Actions[-1].Action= move_back_action
   sm['pour'].Actions[-1].NextState= 'move_r_tap'
   sm['pour'].ElseAction.Condition= lambda: True
   sm['pour'].ElseAction.Action= lambda: l.ControlStep(0.05 * t.flow_control_dtheta_max)  #FIXME: magic number
-  sm['pour'].ElseAction.NextState= 'pour'
+  sm['pour'].ElseAction.NextState= ORIGIN_STATE
 
   sm['stop']= TFSMState()
-  sm['stop'].EntryAction= lambda: (MoveRGripperToInit(), l.MoveBackToInit())
+  #sm['stop'].EntryAction= lambda: (MoveRGripperToInit(), l.MoveBackToInit())
+  #sm['stop'].ElseAction.Condition= lambda: True
+  #sm['stop'].ElseAction.Action= lambda: Print('End of pouring')
+  #sm['stop'].ElseAction.NextState= EXIT_STATE
+  sm['stop'].EntryAction= lambda: MoveRGripperToInit()
+  sm['stop'].NewAction()
+  sm['stop'].Actions[-1].Condition= lambda: l.IsThetaEqTo(0.0)
+  sm['stop'].Actions[-1].Action= lambda: Print('End of pouring')
+  sm['stop'].Actions[-1].NextState= EXIT_STATE
   sm['stop'].ElseAction.Condition= lambda: True
-  sm['stop'].ElseAction.Action= lambda: Print('End of pouring')
-  sm['stop'].ElseAction.NextState= EXIT_STATE
+  sm['stop'].ElseAction.Action= lambda: l.ControlStep(t.flow_control_dtheta_min)
+  sm['stop'].ElseAction.NextState= ORIGIN_STATE
 
   sm.Run()
 
   t.SwitchArm(whicharm) #Original arm
+  l.Close()

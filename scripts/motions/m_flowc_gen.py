@@ -6,10 +6,11 @@ def Help():
   Assumptions:
     Gripper holds a bottle
     Bottle is close to the cup
-  Usage: flowc_gen BOTTLE_ID [, AMOUNT_TRG [, MAX_DURATION]]
+  Usage: flowc_gen BOTTLE_ID [, AMOUNT_TRG [, MAX_DURATION [, TRICK]]]
     BOTTLE_ID: identifier of bottle. e.g. 'b1'
     AMOUNT_TRG: Target amount (default=0.03)
-    MAX_DURATION: Maximum duration (default=25.0)'''
+    MAX_DURATION: Maximum duration (default=25.0)
+    TRICK: Select a trick to be used (default=None)'''
   #Usage: flowc_gen AMOUNT_TRG, ROT_AXIS, MAX_THETA, X_EXT, MAX_DURATION
     #AMOUNT_TRG: Target amount
     #ROT_AXIS: Rotation axis
@@ -21,6 +22,7 @@ def Run(t,args=()):
   bottle= args[0]
   amount_trg= args[1] if len(args)>1 else 0.03
   max_duration= args[2] if len(args)>2 else 25.0
+  specified_trick= args[3] if len(args)>3 else None
 
   m_flowc_cmn= t.LoadMotion('flowc_cmn')
   l= m_flowc_cmn.TLocal()
@@ -59,6 +61,8 @@ def Run(t,args=()):
     l.trick_id_time_begin= l.elapsed_time
     trick_id.Select()
   def get_trick_id():
+    if specified_trick:
+      return specified_trick
     return trick_id.Param()
     #return 'shake_B'
   def update_trick_id():
@@ -145,14 +149,14 @@ def Run(t,args=()):
   sm['find_flow_p'].ElseAction.NextState= ORIGIN_STATE
 
   sm.NewState('pour')
-  sm['pour'].EntryAction= lambda: l.ChargeTimer(0.2)
+  sm['pour'].EntryAction= lambda: l.ChargeTimer(0.3)
   sm['pour'].NewAction()
   sm['pour'].Actions[-1]= poured_action
   sm['pour'].NewAction()
   sm['pour'].Actions[-1]= timeout_action
   sm['pour'].NewAction()
   sm['pour'].Actions[-1].Condition= lambda: l.IsFlowObserved(l.flow_obs_sensitivity)
-  sm['pour'].Actions[-1].Action= lambda: ( l.ChargeTimer(0.2), l.ControlStep(0.0) )
+  sm['pour'].Actions[-1].Action= lambda: ( l.ChargeTimer(0.3), l.ControlStep(0.0) )
   sm['pour'].Actions[-1].NextState= ORIGIN_STATE
   sm['pour'].NewAction()
   sm['pour'].Actions[-1].Condition= lambda: l.IsTimerTimeout()
@@ -231,6 +235,7 @@ def Run(t,args=()):
   sm['find_flow_p2'].ElseAction.NextState= ORIGIN_STATE
 
   sm.NewState('shake2')
+  shake2_action= lambda: ( select_shake_axis(), l.Shake(2, get_shake_axis(), l.shake_width, l.shake_freq), update_shake_axis() )
   sm['shake2'].EntryAction= lambda: l.ChargeTimer(2.0)
   sm['shake2'].NewAction()
   sm['shake2'].Actions[-1]= poured_action
@@ -238,21 +243,29 @@ def Run(t,args=()):
   sm['shake2'].Actions[-1]= timeout_action
   sm['shake2'].NewAction()
   sm['shake2'].Actions[-1].Condition= lambda: l.IsFlowObserved(l.flow_obs_sensitivity)
-  sm['shake2'].Actions[-1].Action= lambda: ( l.ChargeTimer(2.0), select_shake_axis(), l.Shake(2, get_shake_axis(), l.shake_width, l.shake_freq), update_shake_axis() )
+  sm['shake2'].Actions[-1].Action= lambda: ( l.ChargeTimer(2.0), shake2_action() )
   sm['shake2'].Actions[-1].NextState= ORIGIN_STATE
   sm['shake2'].NewAction()
   sm['shake2'].Actions[-1].Condition= lambda: not l.IsTimerTimeout()
-  sm['shake2'].Actions[-1].Action= lambda: ( select_shake_axis(), l.Shake(2, get_shake_axis(), l.shake_width, l.shake_freq), update_shake_axis() )
+  sm['shake2'].Actions[-1].Action= lambda: shake2_action()
   sm['shake2'].Actions[-1].NextState= ORIGIN_STATE
   sm['shake2'].ElseAction.Condition= lambda: True
   sm['shake2'].ElseAction.NextState= 'start'
 
 
   sm.NewState('stop')
-  sm['stop'].EntryAction= l.MoveBackToInit
+  #sm['stop'].EntryAction= l.MoveBackToInit
+  #sm['stop'].ElseAction.Condition= lambda: True
+  #sm['stop'].ElseAction.Action= lambda: Print('End of pouring')
+  #sm['stop'].ElseAction.NextState= EXIT_STATE
+  sm['stop'].NewAction()
+  sm['stop'].Actions[-1].Condition= lambda: l.IsThetaEqTo(0.0)
+  sm['stop'].Actions[-1].Action= lambda: Print('End of pouring')
+  sm['stop'].Actions[-1].NextState= EXIT_STATE
   sm['stop'].ElseAction.Condition= lambda: True
-  sm['stop'].ElseAction.Action= lambda: Print('End of pouring')
-  sm['stop'].ElseAction.NextState= EXIT_STATE
+  sm['stop'].ElseAction.Action= lambda: l.ControlStep(t.flow_control_dtheta_min)
+  sm['stop'].ElseAction.NextState= ORIGIN_STATE
+
 
   #sm.Show()
   sm.Run()
@@ -269,4 +282,6 @@ def Run(t,args=()):
       print '  fopt:',param.es.result()[1]
       print '  xmean:',param.es.result()[5]
       print '  stds:',param.es.result()[6]
+
+  l.Close()
 

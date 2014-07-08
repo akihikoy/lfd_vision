@@ -67,10 +67,18 @@ def Run(t,args=()):
   sm['pour'].ElseAction.NextState= 'pour'
 
   sm['stop']= TFSMState()
-  sm['stop'].EntryAction= l.MoveBackToInit
+  #sm['stop'].EntryAction= l.MoveBackToInit
+  #sm['stop'].ElseAction.Condition= lambda: True
+  #sm['stop'].ElseAction.Action= lambda: Print('End of pouring')
+  #sm['stop'].ElseAction.NextState= EXIT_STATE
+  sm['stop'].NewAction()
+  sm['stop'].Actions[-1].Condition= lambda: l.IsThetaEqTo(0.0)
+  sm['stop'].Actions[-1].Action= lambda: Print('End of pouring')
+  sm['stop'].Actions[-1].NextState= EXIT_STATE
   sm['stop'].ElseAction.Condition= lambda: True
-  sm['stop'].ElseAction.Action= lambda: Print('End of pouring')
-  sm['stop'].ElseAction.NextState= EXIT_STATE
+  sm['stop'].ElseAction.Action= lambda: l.ControlStep(t.flow_control_dtheta_min)
+  sm['stop'].ElseAction.NextState= ORIGIN_STATE
 
   sm.Run()
 
+  l.Close()

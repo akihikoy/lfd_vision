@@ -94,14 +94,28 @@ class TLocal:
 
     now= time.localtime()
     l.log_file_name= '%s/tmp/flowc%02i%02i%02i%02i%02i%02i.dat' % (os.environ['HOME'],now.tm_year%100,now.tm_mon,now.tm_mday,now.tm_hour,now.tm_min,now.tm_sec)
-    print 'Logging to',l.log_file_name
+    l.log_file_nameB= '%s/tmp/flowcB%02i%02i%02i%02i%02i%02i.dat' % (os.environ['HOME'],now.tm_year%100,now.tm_mon,now.tm_mday,now.tm_hour,now.tm_min,now.tm_sec)
+    l.ctrl_type= '-'
+    print 'Logging to',l.log_file_name,', ',l.log_file_nameB
     l.tmpfp= file(l.log_file_name,'w')
+    l.logfp= file(l.log_file_nameB,'w')
+    t.amount_observer_callback= l.Logger
 
     return True
 
   def __del__(self):
     l= self; t= self.t
+    l.Close()
     print 'Logged to',l.log_file_name
+    print 'Logged to',l.log_file_nameB
+
+  def Close(self):
+    l= self; t= self.t
+    t.amount_observer_callback= None
+
+  def Logger(self):
+    l= self; t= self.t
+    l.logfp.write('%f %f %f %f %s\n' % (rospy.Time.now().to_nsec(),l.amount,l.amount_trg,l.theta,l.ctrl_type))
 
   def IsFlowObserved(self, sensitivity=0.01):  #FIXME: using magic number
     l= self; t= self.t
@@ -137,6 +151,7 @@ class TLocal:
 
   def ControlStep(self,dtheta):
     l= self; t= self.t
+    l.ctrl_type= 'c'
     l.amount_prev= l.amount
     l.amount= t.material_amount
 
@@ -186,6 +201,7 @@ class TLocal:
 
   def MoveBackToInit(self):
     l= self; t= self.t
+    l.ctrl_type= 'mbi'
     print 'Moving back to the initial pose...'
     l.tmpfp.write('%f %f %f %f %f %f mbi\n' % (rospy.Time.now().to_nsec(),t.material_amount,l.amount_trg,l.amount_trg,-999,-999))
     t.MoveToCartPosI(l.x_init,3.0,l.x_ext,inum=30,blocking=True)
@@ -194,6 +210,7 @@ class TLocal:
 
   def Shake(self,count,lb_axis_shake,shake_width,shake_freq):
     l= self; t= self.t
+    l.ctrl_type= 's2'
     l.amount_prev= l.amount
     l.amount= t.material_amount
 

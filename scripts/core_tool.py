@@ -231,6 +231,7 @@ class TCoreTool:
 
     self.material_amount= 0
     self.material_amount_observed= False
+    self.amount_observer_callback= None
     rospy.Subscriber("/color_occupied_ratio", std_msgs.msg.Float64, self.AmountObserver)
 
 
@@ -348,6 +349,8 @@ class TCoreTool:
   def AmountObserver(self, msg):
     self.material_amount_observed= True
     self.material_amount= msg.data
+    if self.amount_observer_callback:
+      self.amount_observer_callback()
 
 
   def SwitchArm(self,arm):
