@@ -6,11 +6,12 @@ def Help():
   Assumptions:
     Gripper holds a bottle
     Bottle is close to the cup
-  Usage: flowc_gen BOTTLE_ID [, AMOUNT_TRG [, MAX_DURATION [, TRICK]]]
+  Usage: flowc_gen BOTTLE_ID [, AMOUNT_TRG [, MAX_DURATION [, PARAM_ADJUST [, TRICK]]]]
     BOTTLE_ID: identifier of bottle. e.g. 'b1'
     AMOUNT_TRG: Target amount (default=0.03)
     MAX_DURATION: Maximum duration (default=25.0)
-    TRICK: Select a trick to be used (default=None)'''
+    PARAM_ADJUST: Using parameter adjustment architecture (default=True)
+    TRICK: Select A trick to be used (default=None)'''
   #Usage: flowc_gen AMOUNT_TRG, ROT_AXIS, MAX_THETA, X_EXT, MAX_DURATION
     #AMOUNT_TRG: Target amount
     #ROT_AXIS: Rotation axis
@@ -22,7 +23,8 @@ def Run(t,args=()):
   bottle= args[0]
   amount_trg= args[1] if len(args)>1 else 0.03
   max_duration= args[2] if len(args)>2 else 25.0
-  specified_trick= args[3] if len(args)>3 else None
+  updating_param= args[3] if len(args)>3 else True
+  specified_trick= args[4] if len(args)>4 else None
 
   m_flowc_cmn= t.LoadMotion('flowc_cmn')
   l= m_flowc_cmn.TLocal()
@@ -63,10 +65,12 @@ def Run(t,args=()):
   def get_trick_id():
     if specified_trick:
       return specified_trick
+    if not updating_param:
+      return 'std_pour'
     return trick_id.Param()
     #return 'shake_B'
   def update_trick_id():
-    if trick_id.Param():
+    if updating_param and trick_id.Param():
       score= (t.material_amount - l.trick_id_amount_begin) / (l.elapsed_time - l.trick_id_time_begin)
       trick_id.Update(score)
 
@@ -83,10 +87,16 @@ def Run(t,args=()):
     l.shake_axis_time_begin= l.elapsed_time
     shake_axis_theta.Select()
   def get_shake_axis():
-    return [math.sin(shake_axis_theta.Param()[0]),0.0,-math.cos(shake_axis_theta.Param()[0])]
+    if not updating_param:
+      #th= 0.0
+      th= math.pi/4.0
+    else:
+      th= shake_axis_theta.Param()[0]
+    return [math.sin(th),0.0,-math.cos(th)]
   def update_shake_axis():
-    score= (t.material_amount - l.shake_axis_amount_begin) / (l.elapsed_time - l.shake_axis_time_begin)
-    shake_axis_theta.Update(score)
+    if updating_param:
+      score= (t.material_amount - l.shake_axis_amount_begin) / (l.elapsed_time - l.shake_axis_time_begin)
+      shake_axis_theta.Update(score)
 
 
   timeout_action= TFSMConditionedAction()
@@ -149,14 +159,14 @@ def Run(t,args=()):
   sm['find_flow_p'].ElseAction.NextState= ORIGIN_STATE
 
   sm.NewState('pour')
-  sm['pour'].EntryAction= lambda: l.ChargeTimer(0.3)
+  sm['pour'].EntryAction= lambda: l.ChargeTimer(0.5)
   sm['pour'].NewAction()
   sm['pour'].Actions[-1]= poured_action
   sm['pour'].NewAction()
   sm['pour'].Actions[-1]= timeout_action
   sm['pour'].NewAction()
   sm['pour'].Actions[-1].Condition= lambda: l.IsFlowObserved(l.flow_obs_sensitivity)
-  sm['pour'].Actions[-1].Action= lambda: ( l.ChargeTimer(0.3), l.ControlStep(0.0) )
+  sm['pour'].Actions[-1].Action= lambda: ( l.ChargeTimer(0.5), l.ControlStep(0.0) )
   sm['pour'].Actions[-1].NextState= ORIGIN_STATE
   sm['pour'].NewAction()
   sm['pour'].Actions[-1].Condition= lambda: l.IsTimerTimeout()
@@ -168,7 +178,19 @@ def Run(t,args=()):
   #Shake-A flow amount controller
   sm.NewState('shake_A')
   sm['shake_A'].ElseAction.Condition= lambda: True
-  sm['shake_A'].ElseAction.NextState= 'to_max'
+  sm['shake_A'].ElseAction.NextState= 'to_initial2'
+
+  sm.NewState('to_initial2')
+  sm['to_initial2'].NewAction()
+  sm['to_initial2'].Actions[-1]= poured_action
+  sm['to_initial2'].NewAction()
+  sm['to_initial2'].Actions[-1]= timeout_action
+  sm['to_initial2'].NewAction()
+  sm['to_initial2'].Actions[-1].Condition= lambda: l.IsThetaEqTo(0.0)
+  sm['to_initial2'].Actions[-1].NextState= 'to_max'
+  sm['to_initial2'].ElseAction.Condition= lambda: True
+  sm['to_initial2'].ElseAction.Action= lambda: l.ControlStep(t.flow_control_dtheta_min)
+  sm['to_initial2'].ElseAction.NextState= ORIGIN_STATE
 
   sm.NewState('to_max')
   sm['to_max'].NewAction()
@@ -258,30 +280,46 @@ def Run(t,args=()):
   #sm['stop'].ElseAction.Condition= lambda: True
   #sm['stop'].ElseAction.Action= lambda: Print('End of pouring')
   #sm['stop'].ElseAction.NextState= EXIT_STATE
+  #sm['stop'].NewAction() #TEST:FIXME
+  #sm['stop'].Actions[-1].Condition= lambda: not l.IsTimeout() and not l.IsPoured()
+  #sm['stop'].Actions[-1].Action= lambda: Print('Try again')
+  #sm['stop'].Actions[-1].NextState= 'start'
   sm['stop'].NewAction()
   sm['stop'].Actions[-1].Condition= lambda: l.IsThetaEqTo(0.0)
-  sm['stop'].Actions[-1].Action= lambda: Print('End of pouring')
+  sm['stop'].Actions[-1].Action= lambda: ( Print('End of pouring'), Print('First pour: ',l.first_poured_time) )
   sm['stop'].Actions[-1].NextState= EXIT_STATE
   sm['stop'].ElseAction.Condition= lambda: True
   sm['stop'].ElseAction.Action= lambda: l.ControlStep(t.flow_control_dtheta_min)
   sm['stop'].ElseAction.NextState= ORIGIN_STATE
 
+  def ShowParam():
+    for (key,param) in sm.Params.items():
+      print 'Param ',key,':'
+      if isinstance(param,TDiscParam):
+        print '  Means:',param.Means
+        print '  UCB:',param.UCB()
+        print '  SqMeans:',param.SqMeans
+      elif isinstance(param,TContParamGrad):
+        print '  Mean:',param.Mean
+      elif isinstance(param,TContParamNoGrad):
+        print '  xopt:',param.es.result()[0]
+        print '  fopt:',param.es.result()[1]
+        print '  xmean:',param.es.result()[5]
+        print '  stds:',param.es.result()[6]
 
   #sm.Show()
   sm.Run()
-  for (key,param) in sm.Params.items():
-    print 'Param ',key,':'
-    if isinstance(param,TDiscParam):
-      print '  Means:',param.Means
-      print '  UCB:',param.UCB()
-      print '  SqMeans:',param.SqMeans
-    elif isinstance(param,TContParamGrad):
-      print '  Mean:',param.Mean
-    elif isinstance(param,TContParamNoGrad):
-      print '  xopt:',param.es.result()[0]
-      print '  fopt:',param.es.result()[1]
-      print '  xmean:',param.es.result()[5]
-      print '  stds:',param.es.result()[6]
-
+  ShowParam()
   l.Close()
 
+  n_trial= 1
+  while True:
+    print 'Try again? (',n_trial,')'
+    if not AskYesNo():
+      break
+
+    n_trial+= 1
+    l.Reset()
+    sm.Run()
+    ShowParam()
+    l.Close()

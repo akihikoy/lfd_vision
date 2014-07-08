@@ -92,6 +92,10 @@ class TLocal:
 
     l.m_infer= t.LoadMotion('infer')
 
+    l.initialized_time= rospy.Time.now()
+    l.is_poured= False
+    l.first_poured_time= -1.0
+
     now= time.localtime()
     l.log_file_name= '%s/tmp/flowc%02i%02i%02i%02i%02i%02i.dat' % (os.environ['HOME'],now.tm_year%100,now.tm_mon,now.tm_mday,now.tm_hour,now.tm_min,now.tm_sec)
     l.log_file_nameB= '%s/tmp/flowcB%02i%02i%02i%02i%02i%02i.dat' % (os.environ['HOME'],now.tm_year%100,now.tm_mon,now.tm_mday,now.tm_hour,now.tm_min,now.tm_sec)
@@ -106,12 +110,21 @@ class TLocal:
   def __del__(self):
     l= self; t= self.t
     l.Close()
-    print 'Logged to',l.log_file_name
-    print 'Logged to',l.log_file_nameB
 
   def Close(self):
     l= self; t= self.t
     t.amount_observer_callback= None
+    if not l.tmpfp.closed:
+      l.tmpfp.close()
+      print 'Logged to',l.log_file_name
+    if not l.logfp.closed:
+      l.logfp.close()
+      print 'Logged to',l.log_file_nameB
+
+  def Reset(self):
+    l= self; t= self.t
+    l.Close()
+    l.Setup(t, l.bottle, l.amount_trg, l.max_duration)
 
   def Logger(self):
     l= self; t= self.t
@@ -126,6 +139,9 @@ class TLocal:
     l= self; t= self.t
     if t.material_amount >= l.amount_trg:
       print 'Poured! (',t.material_amount,' / ',l.amount_trg,')'
+      if not l.is_poured:
+        l.is_poured= True
+        l.first_poured_time= rospy.Time.now().to_sec() - l.initialized_time.to_sec()
       return True
     return False
 
