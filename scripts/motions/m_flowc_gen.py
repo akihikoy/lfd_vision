@@ -47,9 +47,6 @@ def Run(t,args=()):
   sm.Debug= True
 
 
-  def get_trick_id():
-    return 'shake_B'
-
   #Search the best trick_id
   sm.Params['trick_id']= TDiscParam()
   trick_id= sm.Params['trick_id']
