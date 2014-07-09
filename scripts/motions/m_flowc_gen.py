@@ -6,12 +6,14 @@ def Help():
   Assumptions:
     Gripper holds a bottle
     Bottle is close to the cup
-  Usage: flowc_gen BOTTLE_ID [, AMOUNT_TRG [, MAX_DURATION [, PARAM_ADJUST [, TRICK]]]]
+  Usage: flowc_gen BOTTLE_ID [, AMOUNT_TRG [, MAX_DURATION [, TRICK [, PARAM_ADJUST_D [, PARAM_ADJUST_C]]]]]
     BOTTLE_ID: identifier of bottle. e.g. 'b1'
     AMOUNT_TRG: Target amount (default=0.03)
     MAX_DURATION: Maximum duration (default=25.0)
-    PARAM_ADJUST: Using parameter adjustment architecture (default=True)
-    TRICK: Select A trick to be used (default=None)'''
+    TRICK: Select A trick to be used (default=None)
+    PARAM_ADJUST_D: Using discrete parameter adjustment architecture, i.e. trick selection (default=True)
+    PARAM_ADJUST_C: Using continuous parameter adjustment architecture (default=True)
+    '''
   #Usage: flowc_gen AMOUNT_TRG, ROT_AXIS, MAX_THETA, X_EXT, MAX_DURATION
     #AMOUNT_TRG: Target amount
     #ROT_AXIS: Rotation axis
@@ -23,8 +25,9 @@ def Run(t,args=()):
   bottle= args[0]
   amount_trg= args[1] if len(args)>1 else 0.03
   max_duration= args[2] if len(args)>2 else 25.0
-  updating_param= args[3] if len(args)>3 else True
-  specified_trick= args[4] if len(args)>4 else None
+  specified_trick= args[3] if len(args)>3 else None
+  updating_param_d= args[4] if len(args)>4 else True
+  updating_param_c= args[5] if len(args)>5 else True
 
   m_flowc_cmn= t.LoadMotion('flowc_cmn')
   l= m_flowc_cmn.TLocal()
@@ -50,6 +53,9 @@ def Run(t,args=()):
   sm= TStateMachine()
   sm.Debug= True
 
+  def SetBehavior(b):
+    l.behavior_type= b
+
 
   #Search the best trick_id
   sm.Params['trick_id']= TDiscParam()
@@ -57,22 +63,29 @@ def Run(t,args=()):
   trick_id.Candidates= ['std_pour','shake_A','shake_B']
   trick_id.Means= [1.0,0.5,0.5]
   trick_id.SqMeans= [1.0+1.0,0.25+1.0,0.25+1.0]
+  trick_id.Alpha= 0.4
   trick_id.Init()
+  l.trick_id_can_be_updated= False
   def select_trick_id():
     l.trick_id_amount_begin= t.material_amount
     l.trick_id_time_begin= l.elapsed_time
+    l.trick_id_can_be_updated= True
     trick_id.Select()
   def get_trick_id():
     if specified_trick:
       return specified_trick
-    if not updating_param:
+    if not updating_param_d:
       return 'std_pour'
     return trick_id.Param()
     #return 'shake_B'
   def update_trick_id():
-    if updating_param and trick_id.Param():
-      score= (t.material_amount - l.trick_id_amount_begin) / (l.elapsed_time - l.trick_id_time_begin)
+    if updating_param_d and l.trick_id_can_be_updated:
+      score= 100.0*(t.material_amount - l.trick_id_amount_begin) / (l.elapsed_time - l.trick_id_time_begin)
+      #score= (t.material_amount - l.trick_id_amount_begin)
       trick_id.Update(score)
+      l.trick_id_can_be_updated= False
+      #print '###DEBUG:',l.trick_id_amount_begin,t.material_amount, '@',l.elapsed_time - l.trick_id_time_begin
+      #print '###DEBUG'; AskYesNo()
 
   #Search the best lb_axis_shake
   sm.Params['shake_axis_theta']= TContParamNoGrad()
@@ -82,21 +95,26 @@ def Run(t,args=()):
   shake_axis_theta.Min= [0.0]
   shake_axis_theta.Max= [math.pi/2.0]
   shake_axis_theta.Init()
+  l.shake_axis_can_be_updated= False
   def select_shake_axis():
     l.shake_axis_amount_begin= t.material_amount
     l.shake_axis_time_begin= l.elapsed_time
     shake_axis_theta.Select()
+    l.shake_axis_can_be_updated= True
   def get_shake_axis():
-    if not updating_param:
+    if not updating_param_c:
       #th= 0.0
       th= math.pi/4.0
     else:
       th= shake_axis_theta.Param()[0]
     return [math.sin(th),0.0,-math.cos(th)]
   def update_shake_axis():
-    if updating_param:
-      score= (t.material_amount - l.shake_axis_amount_begin) / (l.elapsed_time - l.shake_axis_time_begin)
+    if updating_param_c and l.shake_axis_can_be_updated:
+      score= 100.0*(t.material_amount - l.shake_axis_amount_begin) / (l.elapsed_time - l.shake_axis_time_begin)
       shake_axis_theta.Update(score)
+      l.shake_axis_can_be_updated= False
+      print '###DEBUG:',l.shake_axis_amount_begin,t.material_amount, '@',l.elapsed_time - l.shake_axis_time_begin
+      #print '###DEBUG'; AskYesNo()
 
 
   timeout_action= TFSMConditionedAction()
@@ -118,12 +136,15 @@ def Run(t,args=()):
   sm['start'].Actions[-1]= timeout_action
   sm['start'].NewAction()
   sm['start'].Actions[-1].Condition= lambda: get_trick_id()=='std_pour'
+  sm['start'].Actions[-1].Action= lambda: SetBehavior(get_trick_id())
   sm['start'].Actions[-1].NextState= 'std_pour'
   sm['start'].NewAction()
   sm['start'].Actions[-1].Condition= lambda: get_trick_id()=='shake_A'
+  sm['start'].Actions[-1].Action= lambda: SetBehavior(get_trick_id())
   sm['start'].Actions[-1].NextState= 'shake_A'
   sm['start'].NewAction()
   sm['start'].Actions[-1].Condition= lambda: get_trick_id()=='shake_B'
+  sm['start'].Actions[-1].Action= lambda: SetBehavior(get_trick_id())
   sm['start'].Actions[-1].NextState= 'shake_B'
 
   #Standard flow amount controller
@@ -320,6 +341,8 @@ def Run(t,args=()):
 
     n_trial+= 1
     l.Reset()
+    l.trick_id_can_be_updated= False
+    l.shake_axis_can_be_updated= False
     sm.Run()
     ShowParam()
     l.Close()

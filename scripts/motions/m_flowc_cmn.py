@@ -100,6 +100,7 @@ class TLocal:
     l.log_file_name= '%s/tmp/flowc%02i%02i%02i%02i%02i%02i.dat' % (os.environ['HOME'],now.tm_year%100,now.tm_mon,now.tm_mday,now.tm_hour,now.tm_min,now.tm_sec)
     l.log_file_nameB= '%s/tmp/flowcB%02i%02i%02i%02i%02i%02i.dat' % (os.environ['HOME'],now.tm_year%100,now.tm_mon,now.tm_mday,now.tm_hour,now.tm_min,now.tm_sec)
     l.ctrl_type= '-'
+    l.behavior_type= '-'
     print 'Logging to',l.log_file_name,', ',l.log_file_nameB
     l.tmpfp= file(l.log_file_name,'w')
     l.logfp= file(l.log_file_nameB,'w')
@@ -128,7 +129,7 @@ class TLocal:
 
   def Logger(self):
     l= self; t= self.t
-    l.logfp.write('%f %f %f %f %s\n' % (rospy.Time.now().to_nsec(),l.amount,l.amount_trg,l.theta,l.ctrl_type))
+    l.logfp.write('%f %f %f %f %s %s\n' % (rospy.Time.now().to_nsec(),l.amount,l.amount_trg,l.theta,l.ctrl_type,l.behavior_type))
 
   def IsFlowObserved(self, sensitivity=0.01):  #FIXME: using magic number
     l= self; t= self.t

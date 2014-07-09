@@ -36,6 +36,8 @@ def Run(t,args=()):
 
   l.flow_obs_sensitivity= 0.003 #FIXME
 
+  l.behavior_type= 'tap'
+
   def MoveRGripperToTap():
     l.ctrl_type= 'mrt'
     t.SwitchArm(0) #Right arm
