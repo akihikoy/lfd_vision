@@ -45,6 +45,7 @@ def Run(t,args=()):
   t.attributes['b1']['l_axis_shake3']= [1,0,0]
   t.attributes['b1']['shake_width3']= 0.02
   t.attributes['b1']['l_x_tap']= [-0.011706553252399636, 0.066821805995982878, 0.085212694401439817, 0.78612053767768464, -0.45186131636266486, -0.30451820262824753, -0.29172678191144796]
+  t.attributes['b1']['trick_id_means']= [1.0,0.0,0.0]
 
 
   #Bottle No.2
@@ -64,6 +65,7 @@ def Run(t,args=()):
   t.attributes['b2']['q_pour_start']= QFromAxisAngle([1,0,0],30.0/180.0*math.pi)
   #Orientation where the flow is max
   t.attributes['b2']['q_pour_max']= QFromAxisAngle([1,0,0],math.pi)
+  t.attributes['b2']['trick_id_means']= [1.0,0.0,0.0]
 
 
   #Bottle No.3
@@ -90,6 +92,9 @@ def Run(t,args=()):
   t.attributes['b3']['shake_width2']= 0.02
   t.attributes['b3']['l_axis_shake3']= [1,0,0]
   t.attributes['b3']['shake_width3']= 0.02
+  t.attributes['b3']['trick_id_means']= [0.0,0.0,1.0]
+  t.attributes['b3']['shake_axis_theta_means']= [math.pi/4.0]
+  t.attributes['b3']['shake_axis_theta_std']= 0.01
 
   #Bottle No.4
   if not 'b4' in t.attributes:  t.attributes['b4']={}
@@ -115,6 +120,7 @@ def Run(t,args=()):
   t.attributes['b4']['shake_width2']= 0.02
   t.attributes['b4']['l_axis_shake3']= [1,0,0]
   t.attributes['b4']['shake_width3']= 0.02
+  t.attributes['b4']['trick_id_means']= [0.0,1.0,0.0]
 
   #Bottle No.5
   if not 'b5' in t.attributes:  t.attributes['b5']={}
@@ -165,6 +171,7 @@ def Run(t,args=()):
   t.attributes['b6']['shake_width2']= 0.02
   t.attributes['b6']['l_axis_shake3']= [1,0,0]
   t.attributes['b6']['shake_width3']= 0.02
+  t.attributes['b6']['trick_id_means']= [1.0,0.0,0.0]
 
   #Bottle No.7
   if not 'b7' in t.attributes:  t.attributes['b7']={}
@@ -191,6 +198,9 @@ def Run(t,args=()):
   t.attributes['b7']['l_axis_shake3']= [1,0,0]
   t.attributes['b7']['shake_width3']= 0.02
   t.attributes['b7']['l_x_tap']= [-0.013305315314423397, 0.054026163873771474, 0.16121146749427367, -0.72013543875519936, 0.33357436784303918, 0.24582016055923492, 0.55651194023992456]
+  t.attributes['b7']['trick_id_means']= [1.0,0.0,0.0]
+
+
 
   #Cup No.1
   if not 'c1' in t.attributes:  t.attributes['c1']={}

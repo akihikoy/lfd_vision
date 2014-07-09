@@ -61,8 +61,14 @@ def Run(t,args=()):
   sm.Params['trick_id']= TDiscParam()
   trick_id= sm.Params['trick_id']
   trick_id.Candidates= ['std_pour','shake_A','shake_B']
-  trick_id.Means= [1.0,0.5,0.5]
-  trick_id.SqMeans= [1.0+1.0,0.25+1.0,0.25+1.0]
+  if 'trick_id_means' in t.attributes[l.bottle]:
+    trick_id.Means= t.attributes[l.bottle]['trick_id_means']
+  else:
+    trick_id.Means= [1.0,0.5,0.5]
+  if 'trick_id_sqmeans' in t.attributes[l.bottle]:
+    trick_id.SqMeans= t.attributes[l.bottle]['trick_id_sqmeans']
+  else:
+    trick_id.SqMeans= [1.0+1.0,0.25+1.0,0.25+1.0]
   trick_id.Alpha= 0.4
   trick_id.Init()
   l.trick_id_can_be_updated= False
@@ -90,8 +96,14 @@ def Run(t,args=()):
   #Search the best lb_axis_shake
   sm.Params['shake_axis_theta']= TContParamNoGrad()
   shake_axis_theta= sm.Params['shake_axis_theta']
-  shake_axis_theta.Mean= [math.pi/4.0]
-  shake_axis_theta.Std= 1.0
+  if 'shake_axis_theta_means' in t.attributes[l.bottle]:
+    shake_axis_theta.Mean= t.attributes[l.bottle]['shake_axis_theta_means']
+  else:
+    shake_axis_theta.Mean= [math.pi/4.0]
+  if 'shake_axis_theta_std' in t.attributes[l.bottle]:
+    shake_axis_theta.Std= t.attributes[l.bottle]['shake_axis_theta_std']
+  else:
+    shake_axis_theta.Std= 1.0
   shake_axis_theta.Min= [0.0]
   shake_axis_theta.Max= [math.pi/2.0]
   shake_axis_theta.Init()
