@@ -200,6 +200,151 @@ def Run(t,args=()):
   t.attributes['b7']['l_x_tap']= [-0.013305315314423397, 0.054026163873771474, 0.16121146749427367, -0.72013543875519936, 0.33357436784303918, 0.24582016055923492, 0.55651194023992456]
   t.attributes['b7']['trick_id_means']= [1.0,0.0,0.0]
 
+  #Bottle No.8
+  if not 'b8' in t.attributes:  t.attributes['b8']={}
+  t.attributes['b8']['help']= 'Transparent plastic bottle with a blue cap.'
+  #Pose [x,y,z, qx,qy,qz,qw] in robot's frame
+  if not 'x' in t.attributes['b8']: t.attributes['b8']['x']= []
+  #Gripper width before grab
+  t.attributes['b8']['g_pre']= 0.08
+  #Grab power (max effort):
+  t.attributes['b8']['f_grab']= 15.0
+  #Grab pose:
+  t.attributes['b8']['l_x_grab']= [0.0, 0.0, 0.08,  0, 0, 0, 1.0]
+  #Pouring edge point:
+  t.attributes['b8']['l_x_pour_e']= [0.0, -0.01, 0.21,  0, 0, 0, 1.0]
+  #Orientation to start pouring
+  t.attributes['b8']['q_pour_start']= QFromAxisAngle([1,0,0],30.0/180.0*math.pi)
+  #Orientation where the flow is max
+  t.attributes['b8']['q_pour_max']= QFromAxisAngle([1,0,0],math.pi)
+
+  #Bottle No.9
+  if not 'b9' in t.attributes:  t.attributes['b9']={}
+  t.attributes['b9']['help']= 'Lumpy transparent plastic bottle with a wider blue cap.'
+  #Pose [x,y,z, qx,qy,qz,qw] in robot's frame
+  if not 'x' in t.attributes['b9']: t.attributes['b9']['x']= []
+  #Gripper width before grab
+  t.attributes['b9']['g_pre']= 0.08
+  #Grab power (max effort):
+  t.attributes['b9']['f_grab']= 15.0
+  #Grab pose:
+  t.attributes['b9']['l_x_grab']= [0.0, 0.0, 0.10,  0, 0, 0, 1.0]
+  #Pouring edge point:
+  t.attributes['b9']['l_x_pour_e']= [0.0, -0.015, 0.19,  0, 0, 0, 1.0]
+  #Orientation to start pouring
+  t.attributes['b9']['q_pour_start']= QFromAxisAngle([1,0,0],30.0/180.0*math.pi)
+  #Orientation where the flow is max
+  t.attributes['b9']['q_pour_max']= QFromAxisAngle([1,0,0],math.pi)
+
+
+  #Bottle No.11 (copied from b3)
+  if not 'b11' in t.attributes:  t.attributes['b11']={}
+  t.attributes['b11']['help']= 'Transparent JONES apple soda bottle.'
+  #Pose [x,y,z, qx,qy,qz,qw] in robot's frame
+  if not 'x' in t.attributes['b11']: t.attributes['b11']['x']= []
+  #Gripper width before grab
+  t.attributes['b11']['g_pre']= 0.06
+  #Grab power (max effort):
+  t.attributes['b11']['f_grab']= 80.0
+  #Grab pose:
+  t.attributes['b11']['l_x_grab']= [0.00830453390238, 0.00361607117282, 0.0827408487728, -0.0127897898305, 0.0400529652898, -0.0388682992739, 0.99835937245]
+  #Pouring edge point:
+  t.attributes['b11']['l_x_pour_e']= [0.00290016130429, 0.00562692930508, 0.222366269117, 0.0,0.0,0.0,1.0]
+  #Orientation to start pouring
+  t.attributes['b11']['q_pour_start']= QFromAxisAngle([1,0,0],30.0/180.0*math.pi)
+  #Orientation where the flow is max
+  t.attributes['b11']['q_pour_max']= QFromAxisAngle([1,0,0],math.pi)
+
+  #Bottle No.25
+  if not 'b25' in t.attributes:  t.attributes['b25']={}
+  t.attributes['b25']['help']= 'Transparent Starbucks ice coffee glass bottle.'
+  #Pose [x,y,z, qx,qy,qz,qw] in robot's frame
+  if not 'x' in t.attributes['b25']: t.attributes['b25']['x']= []
+  #Gripper width before grab
+  t.attributes['b25']['g_pre']= 0.08
+  #Grab power (max effort):
+  t.attributes['b25']['f_grab']= 80.0
+  #Grab pose:
+  t.attributes['b25']['l_x_grab']= [0.0, 0.0, 0.08,  0, 0, 0, 1.0]
+  #Pouring edge point:
+  t.attributes['b25']['l_x_pour_e']= [0.0, -0.02, 0.185,  0, 0, 0, 1.0]
+  #Orientation to start pouring
+  t.attributes['b25']['q_pour_start']= QFromAxisAngle([1,0,0],30.0/180.0*math.pi)
+  #Orientation where the flow is max
+  t.attributes['b25']['q_pour_max']= QFromAxisAngle([1,0,0],math.pi)
+  t.attributes['b25']['l_x_tap']= [0.02404184763657051, 0.047897221695018484, 0.17690179455829111, 0.6625605200090352, -0.60242791412431751, -0.31039498720516173, -0.31898137489058548]
+
+  #Bottle No.30
+  if not 'b30' in t.attributes:  t.attributes['b30']={}
+  t.attributes['b30']['help']= 'Transparent chocolate milk plastic bottle with a caw illustration.'
+  #Pose [x,y,z, qx,qy,qz,qw] in robot's frame
+  if not 'x' in t.attributes['b30']: t.attributes['b30']['x']= []
+  #Gripper width before grab
+  t.attributes['b30']['g_pre']= 0.08
+  #Grab power (max effort):
+  t.attributes['b30']['f_grab']= 15.0
+  #Grab pose:
+  t.attributes['b30']['l_x_grab']= [0.0, 0.0, 0.08,  0, 0, 0, 1.0]
+  #Pouring edge point:
+  t.attributes['b30']['l_x_pour_e']= [0.0, -0.015, 0.185,  0, 0, 0, 1.0]
+  #Orientation to start pouring
+  t.attributes['b30']['q_pour_start']= QFromAxisAngle([1,0,0],30.0/180.0*math.pi)
+  #Orientation where the flow is max
+  t.attributes['b30']['q_pour_max']= QFromAxisAngle([1,0,0],math.pi)
+
+  #Bottle No.40
+  if not 'b40' in t.attributes:  t.attributes['b40']={}
+  t.attributes['b40']['help']= 'White-transparent milk bottle of Trader Joe\'s.'
+  #Pose [x,y,z, qx,qy,qz,qw] in robot's frame
+  if not 'x' in t.attributes['b40']: t.attributes['b40']['x']= []
+  #Gripper width before grab
+  t.attributes['b40']['g_pre']= 0.08
+  #Grab power (max effort):
+  t.attributes['b40']['f_grab']= 30.0
+  #Grab pose:
+  t.attributes['b40']['l_x_grab']= [0.0, 0.0, 0.11,  0, 0, 0, 1.0]
+  #Pouring edge point:
+  t.attributes['b40']['l_x_pour_e']= [0.0, -0.015, 0.228,  0, 0, 0, 1.0]
+  #Orientation to start pouring
+  t.attributes['b40']['q_pour_start']= QFromAxisAngle([1,0,0],30.0/180.0*math.pi)
+  #Orientation where the flow is max
+  t.attributes['b40']['q_pour_max']= QFromAxisAngle([1,0,0],math.pi)
+
+  #Bottle No.41
+  if not 'b41' in t.attributes:  t.attributes['b41']={}
+  t.attributes['b41']['help']= 'Transparent small glass salt bottle without a cap.'
+  #Pose [x,y,z, qx,qy,qz,qw] in robot's frame
+  if not 'x' in t.attributes['b41']: t.attributes['b41']['x']= []
+  #Gripper width before grab
+  t.attributes['b41']['g_pre']= 0.08
+  #Grab power (max effort):
+  t.attributes['b41']['f_grab']= 50.0
+  #Grab pose:
+  t.attributes['b41']['l_x_grab']= [0.0, 0.0, 0.04,  0, 0, 0, 1.0]
+  #Pouring edge point:
+  t.attributes['b41']['l_x_pour_e']= [0.0, -0.015, 0.108,  0, 0, 0, 1.0]
+  #Orientation to start pouring
+  t.attributes['b41']['q_pour_start']= QFromAxisAngle([1,0,0],30.0/180.0*math.pi)
+  #Orientation where the flow is max
+  t.attributes['b41']['q_pour_max']= QFromAxisAngle([1,0,0],math.pi)
+
+  #Bottle No.42
+  if not 'b42' in t.attributes:  t.attributes['b42']={}
+  t.attributes['b42']['help']= 'Transparent small glass salt bottle with a mesh cap.'
+  #Pose [x,y,z, qx,qy,qz,qw] in robot's frame
+  if not 'x' in t.attributes['b42']: t.attributes['b42']['x']= []
+  #Gripper width before grab
+  t.attributes['b42']['g_pre']= t.attributes['b41']['g_pre']
+  #Grab power (max effort):
+  t.attributes['b42']['f_grab']= t.attributes['b41']['f_grab']
+  #Grab pose:
+  t.attributes['b42']['l_x_grab']= t.attributes['b41']['l_x_grab']
+  #Pouring edge point:
+  t.attributes['b42']['l_x_pour_e']= [0.0, -0.0, 0.108,  0, 0, 0, 1.0]
+  #Orientation to start pouring
+  t.attributes['b42']['q_pour_start']= t.attributes['b41']['q_pour_start']
+  #Orientation where the flow is max
+  t.attributes['b42']['q_pour_max']= t.attributes['b41']['q_pour_max']
 
 
   #Cup No.1

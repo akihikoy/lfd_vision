@@ -26,6 +26,7 @@ def Run(t,args=()):
   t.attributes[obj]['grabbed']['grabber_wrist']= 'wrist_'+hand
   t.attributes[obj]['grabbed']['grabber_hand']= hand
   t.attributes[obj]['grabbed']['grabber_handid']= handid
+  t.attributes[obj]['grabbed']['joint_angles']= t.mu.arm[handid].getCurrentPosition()
 
   t.SwitchArm(whicharm)
 

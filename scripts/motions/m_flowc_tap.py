@@ -74,7 +74,7 @@ def Run(t,args=()):
     #x_r= np.array(t.CartPos(l.x_r_ext))
     x_r= l.x_tap
     x_r_trg= copy.deepcopy(x_r)
-    x_r_trg[2]-= 0.015  #FIXME: magic number!!!
+    x_r_trg[2]-= 0.018  #FIXME: magic number!!!
     for i in range(count):
       t.MoveToCartPosI(x_r_trg,dt/2.0,l.x_r_ext,inum=5,blocking=True)
       l.tmpfp.write('%f %f %f %f %f %f tp\n' % (rospy.Time.now().to_nsec(),t.material_amount,l.amount_trg,l.amount_trg,-999,-999))
@@ -88,6 +88,22 @@ def Run(t,args=()):
     while not l.IsTimerTimeout():
       action()
 
+  def LVibrate(count,dt=0.01):
+    l.ctrl_type= 'vc'
+    l.amount_prev= l.amount
+    l.amount= t.material_amount
+
+    print 'l-vibrate:',l.elapsed_time,': ',l.amount,' / ',l.amount_trg #,' : ',dt
+    x_trg1= copy.deepcopy(l.x_init2)
+    x_trg2= copy.deepcopy(l.x_init2)
+    x_trg2[0]+= 0.005  #FIXME: magic number!!!
+    for i in range(count):
+      t.MoveToCartPosI(x_trg1,dt/2.0,l.x_ext,inum=5,blocking=True)
+      l.tmpfp.write('%f %f %f %f %f %f vc\n' % (rospy.Time.now().to_nsec(),t.material_amount,l.amount_trg,l.amount_trg,-999,-999))
+      t.MoveToCartPosI(x_trg2,dt/2.0,l.x_ext,inum=5,blocking=True)
+      l.tmpfp.write('%f %f %f %f %f %f vc\n' % (rospy.Time.now().to_nsec(),t.material_amount,l.amount_trg,l.amount_trg,-999,-999))
+      l.elapsed_time+= dt
+
   sm= TStateMachine()
   sm.Debug= True
 
@@ -99,7 +115,7 @@ def Run(t,args=()):
   poured_action.Condition= l.IsPoured
   poured_action.NextState= 'stop'
 
-  move_back_action= lambda: Repeat(0.3,lambda: l.ControlStep(0.2 * t.flow_control_dtheta_min))
+  move_back_action= lambda: Repeat(0.3,lambda: l.ControlStep(0.5 * t.flow_control_dtheta_min))
 
   sm.StartState= 'start'
   sm['start']= TFSMState()
@@ -108,8 +124,11 @@ def Run(t,args=()):
   sm['start'].NewAction()
   sm['start'].Actions[-1]= timeout_action
   sm['start'].NewAction()
-  sm['start'].Actions[-1].Condition= lambda: l.IsFlowObserved(l.flow_obs_sensitivity) or l.theta>(l.max_theta-0.5*math.pi)
-  sm['start'].Actions[-1].Action= move_back_action
+  sm['start'].Actions[-1].Condition= lambda: l.IsFlowObserved(l.flow_obs_sensitivity)
+  #sm['start'].Actions[-1].Action= move_back_action
+  sm['start'].Actions[-1].NextState= 'move_r_tap'
+  sm['start'].NewAction()
+  sm['start'].Actions[-1].Condition= lambda: l.theta>(l.max_theta-0.5*math.pi)
   sm['start'].Actions[-1].NextState= 'move_r_tap'
   sm['start'].ElseAction.Condition= lambda: True
   sm['start'].ElseAction.Action= lambda: l.ControlStep(0.2 * t.flow_control_dtheta_max)
@@ -125,8 +144,8 @@ def Run(t,args=()):
   sm['move_r_tap'].ElseAction.NextState= 'tap'
 
   sm['tap']= TFSMState()
-  sm['tap'].NewAction()
   sm['tap'].EntryAction= lambda: l.ChargeTimer(4.0)
+  sm['tap'].NewAction()
   sm['tap'].Actions[-1]= poured_action
   sm['tap'].NewAction()
   sm['tap'].Actions[-1]= timeout_action
@@ -151,13 +170,17 @@ def Run(t,args=()):
   sm['move_r_init'].ElseAction.NextState= 'pour'
 
   sm['pour']= TFSMState()
+  sm['pour'].EntryAction= lambda: l.ChargeTimer(4.0)
   sm['pour'].NewAction()
   sm['pour'].Actions[-1]= poured_action
   sm['pour'].NewAction()
   sm['pour'].Actions[-1]= timeout_action
   sm['pour'].NewAction()
   sm['pour'].Actions[-1].Condition= lambda: l.IsFlowObserved(l.flow_obs_sensitivity)
-  sm['pour'].Actions[-1].Action= move_back_action
+  #sm['pour'].Actions[-1].Action= move_back_action
+  sm['pour'].Actions[-1].NextState= 'move_r_tap'
+  sm['pour'].NewAction()
+  sm['pour'].Actions[-1].Condition= lambda: l.IsTimerTimeout()
   sm['pour'].Actions[-1].NextState= 'move_r_tap'
   sm['pour'].ElseAction.Condition= lambda: True
   sm['pour'].ElseAction.Action= lambda: l.ControlStep(0.05 * t.flow_control_dtheta_max)  #FIXME: magic number
