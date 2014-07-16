@@ -70,7 +70,7 @@ def Run(t,args=()):
 
   #Bottle No.3
   if not 'b3' in t.attributes:  t.attributes['b3']={}
-  t.attributes['b3']['help']= 'A green beer (Heineken) bottle.'
+  t.attributes['b3']['help']= 'A green beer (Heineken) bottle, whose mouth is modified.'
   #Pose [x,y,z, qx,qy,qz,qw] in robot's frame
   if not 'x' in t.attributes['b3']: t.attributes['b3']['x']= []
   #Gripper width before grab

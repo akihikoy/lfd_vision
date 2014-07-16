@@ -129,7 +129,7 @@ class TLocal:
 
   def Logger(self):
     l= self; t= self.t
-    l.logfp.write('%f %f %f %f %s %s\n' % (rospy.Time.now().to_nsec(),t.material_amount,l.amount_trg,l.theta,l.ctrl_type,l.behavior_type))
+    l.logfp.write('%f %f %f %f %f %s %s\n' % (rospy.Time.now().to_nsec(),t.material_amount,l.amount_trg,l.theta,l.max_theta,l.ctrl_type,l.behavior_type))
 
   def IsFlowObserved(self, sensitivity=0.01):  #FIXME: using magic number
     l= self; t= self.t
