@@ -1,0 +1,8 @@
+<launch>
+  <node type="color_detector_node" pkg="pr2_lfd_trick" name="color_detector_node" output="screen">
+    <param name="camera" value="1" />
+    <param name="mode" value="2" />
+    <param name="num_detectors" value="1" />
+    <param name="color_files_base" value="$(find pr2_lfd_trick)/x" />
+  </node>
+</launch>

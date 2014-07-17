@@ -35,6 +35,17 @@ public:
     {
       lookup_table_= cv::Scalar(0,0,0);
     }
+  TColorDetector(const TColorDetector &src)
+    : color_code_            (src.color_code_           ),
+      using_blur_            (src.using_blur_           ),
+      gaussian_kernel_size_  (src.gaussian_kernel_size_ ),
+      gaussian_sigma_x_      (src.gaussian_sigma_x_     ),
+      gaussian_sigma_y_      (src.gaussian_sigma_y_     ),
+      dilations_erosions_    (src.dilations_erosions_   ),
+      lookup_table_          (256, 1, CV_8UC3)
+    {
+      src.lookup_table_.copyTo(lookup_table_);
+    }
   ~TColorDetector()  {}
 
   /*! Setup colors to be detected.
