@@ -31,9 +31,9 @@ def Run(t,args=()):
   #Grab power (max effort):
   t.attributes['b1']['f_grab']= 15.0
   #Grab pose:
-  t.attributes['b1']['l_x_grab']= [0.0143257412366, -0.00243017410404, 0.00332284373253, -0.0386798980774, 0.0474739514813, 0.0058252014884, 0.998106285144]
+  t.attributes['b1']['l_x_grab']= [0.0, 0.0, 0.015, -0.0386798980774, 0.0474739514813, 0.0058252014884, 0.998106285144]
   #Pouring edge point:
-  t.attributes['b1']['l_x_pour_e']= [0.0385446328044, -0.043639339547, 0.102811025179, 0.0,0.0,0.0,1.0]
+  t.attributes['b1']['l_x_pour_e']= [0.0, -0.04, 0.11, 0.0,0.0,0.0,1.0]
   #Orientation to start pouring
   t.attributes['b1']['q_pour_start']= QFromAxisAngle([1,0,0],30.0/180.0*math.pi)
   #Orientation where the flow is max
@@ -46,6 +46,12 @@ def Run(t,args=()):
   t.attributes['b1']['shake_width3']= 0.02
   t.attributes['b1']['l_x_tap']= [-0.011706553252399636, 0.066821805995982878, 0.085212694401439817, 0.78612053767768464, -0.45186131636266486, -0.30451820262824753, -0.29172678191144796]
   t.attributes['b1']['trick_id_means']= [1.0,0.0,0.0]
+
+  #TEST1-1: put a receiving container left side of the robot (change the grab pose):
+  #t.attributes['b1']['l_x_grab']= Transform([0,0,0]+list(QFromAxisAngle([0,0,-1],math.pi)),t.attributes['b1']['l_x_grab'])
+  #t.attributes['b1']['q_pour_max']= QFromAxisAngle([0,1,0],math.pi)
+  #TEST1-2: put a receiving container left side of the robot (change the pour point):
+  #t.attributes['b1']['l_x_pour_e'][1]= -t.attributes['b1']['l_x_pour_e'][1]
 
 
   #Bottle No.2

@@ -50,21 +50,32 @@ class TLocal:
 
 
     #Store the current position to move back later
-    xe_init= t.CartPos(lw_x_pour_e)
+    #xe_init= t.CartPos(lw_x_pour_e)
     #print 'lw_x_pour_e=',VecToStr(lw_x_pour_e)
 
-    #Estimate axis and max-angle for flow amount control
-    p_init, R_init= XToPosRot(xe_init)
-    R_max= QToRot(t.attributes[l.bottle]['q_pour_max'])
-    trans_R= np.dot(R_max,R_init.T)
-    axis_angle= InvRodrigues(trans_R)
-    max_theta= la.norm(axis_angle)
-    axis= axis_angle / max_theta
+    #Estimate axis and max-angle for flow amount control(ver.1)
+    #xe_init= t.CartPos(lw_x_pour_e)
+    #p_init, R_init= XToPosRot(xe_init)
+    #R_max= QToRot(t.attributes[l.bottle]['q_pour_max'])
+    #trans_R= np.dot(R_max,R_init.T)
+    #axis_angle= InvRodrigues(trans_R)
+    #max_theta= la.norm(axis_angle)
+    #axis= axis_angle / max_theta
+
+    #Estimate axis and max-angle for flow amount control(ver.2)
+    p_b,R_b= XToPosRot(x_b)
+    print 'R_b:',R_b
+    print 'la.norm(R_b[:,2]):',la.norm(R_b[:,2])
+    ax_gravity= [0,0,-1]
+    axis= np.cross(R_b[:,2],ax_gravity)
+    axis= axis / la.norm(axis)
+    max_theta= math.acos(np.dot(R_b[:,2],ax_gravity))
 
     #<<<FIXME: the above code is copied from m_flowc.py; a part of code is overwrapping with the below code!!!
 
-    print 'axis:',axis
+    print 'axis: %r (%f)' % (axis, la.norm(axis))
     print 'max_theta:',max_theta
+    #if not AskYesNo():  return False
 
 
     l.rot_axis= axis
