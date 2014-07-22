@@ -1,4 +1,5 @@
 <launch>
+  <!--Camera 1: measure the amount-->
   <node type="color_detector_node" pkg="pr2_lfd_trick" name="color_detector_node">
     <param name="camera" value="1" />
     <param name="mode" value="2" />
@@ -6,6 +7,7 @@
     <param name="color_files_base" value="$(find pr2_lfd_trick)/x" />
   </node>
 
+  <!--Camera 0: cup orientation tracker-->
   <node type="color_detector_node" pkg="pr2_lfd_trick" name="color_detector_node_h">
     <remap from="color_middle_xy" to="color_middle_xy1" />
     <remap from="color_occupied_ratio" to="color_occupied_ratio1" />

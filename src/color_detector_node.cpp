@@ -16,6 +16,7 @@
 #include <fstream>
 #include <vector>
 #include <algorithm>
+#include <sys/time.h>  // gettimeofday
 //-------------------------------------------------------------------------------------------
 namespace trick
 {
@@ -53,6 +54,23 @@ static cv::Vec3b  disp_colors[]= {
     cv::Vec3b(255,0,255),
     cv::Vec3b(0,255,255)};
 
+inline double GetCurrentTime(void)
+{
+  struct timeval time;
+  gettimeofday (&time, NULL);
+  return static_cast<double>(time.tv_sec) + static_cast<double>(time.tv_usec)*1.0e-6;
+}
+
+/*! \brief check the filename exists */
+bool FileExists(const std::string &filename)
+{
+  bool res(false);
+  std::ifstream ifs (filename.c_str());
+  res = ifs.is_open();
+  ifs.close();
+  return res;
+}
+
 void OnMouseCamera(int event, int x, int y, int, void *vpimg)
 {
   if(event == cv::EVENT_RBUTTONDOWN)
@@ -64,7 +82,7 @@ void OnMouseCamera(int event, int x, int y, int, void *vpimg)
   }
   if(event == cv::EVENT_LBUTTONDBLCLK)
   {
-    for(int i(0); i<col_detectors.size(); ++i)
+    for(int i(0); i<(int)col_detectors.size(); ++i)
       NonzeroBase[i]= 0;
     return;
   }
@@ -85,7 +103,7 @@ void OnMouseMask(int event, int x, int y, int, void*)
 {
   if(event == cv::EVENT_LBUTTONDBLCLK)
   {
-    for(int i(0); i<col_detectors.size(); ++i)
+    for(int i(0); i<(int)col_detectors.size(); ++i)
       NonzeroBase[i]= 0;
     return;
   }
@@ -151,6 +169,20 @@ void GetMedian(const cv::Mat &src, int &x_med, int &y_med)
   y_med= arrayy[arrayy.size()/2];
 }
 
+bool OpenVideoOut(cv::VideoWriter &vout, const char *file_name, int fps, const cv::Size &size)
+{
+  int codec= CV_FOURCC('P','I','M','1');
+  vout.open(file_name, codec, fps, size, true);
+
+  if (!vout.isOpened())
+  {
+    std::cout<<"###Failed to open the output video: "<<file_name<<std::endl;
+    return false;
+  }
+  std::cerr<<"###Opened video output: "<<file_name<<std::endl;
+  return true;
+}
+
 int main(int argc, char**argv)
 {
   ros::init(argc, argv, "color_detector_node");
@@ -158,10 +190,12 @@ int main(int argc, char**argv)
   int camera(0);
   int mode(1);
   int num_detectors(1);
+  std::string vout_base;
   node.param("camera",camera,0);
   node.param("mode",mode,2);
   node.param("num_detectors",num_detectors,1);
   node.param("color_files_base",ColorFilesBase,std::string(""));
+  node.param("vout_base",vout_base,std::string("/tmp/vout_"));
 
   cv::VideoCapture cap(camera); // open the default camera
   if(!cap.isOpened())  // check if we succeeded
@@ -216,6 +250,10 @@ int main(int argc, char**argv)
   cv::setMouseCallback("camera", OnMouseCamera, &frame);
   cv::setMouseCallback("mask_img", OnMouseMask);
 
+  cv::VideoWriter vout_camera, vout_mask;
+  double time_prev= GetCurrentTime(), fps(10.0), fps_alpha(0.05);
+  int    show_fps(0);
+
   // ros::Rate loop_rate(5);  // 5 Hz
   while(ros::ok())
   {
@@ -241,7 +279,11 @@ int main(int argc, char**argv)
       else
       {
         mask_imgs[0]= col_detectors[0].Detect(frame);
-        disp_img= mask_imgs[0];
+        disp_imgs[0]= mask_imgs[0];
+        disp_imgs[1]= mask_imgs[0];
+        disp_imgs[2]= mask_imgs[0];
+        // disp_img= mask_imgs[0];
+        cv::merge(disp_imgs, 3, disp_img);
       }
 
       for(int i(0); i<num_detectors; ++i)
@@ -291,11 +333,23 @@ int main(int argc, char**argv)
       // detected= cv::Scalar(0,0,0);
       // frame.copyTo(detected, mask_img);
       // cv::imshow("detected", detected);
-    }
+
+      if(vout_camera.isOpened())  vout_camera<<frame;
+      if(vout_mask.isOpened())    vout_mask<<disp_img;
+
+      // get fps
+      fps= fps_alpha*(1.0/(GetCurrentTime()-time_prev)) + (1.0-fps_alpha)*fps;
+      time_prev= GetCurrentTime();
+      if(show_fps==0)  {std::cerr<<"fps: "<<fps<<std::endl;  show_fps=20;}
+      --show_fps;
+
+    }  // running
     else
     {
       usleep(200*1000);
     }
+
+    // keyboard interface:
     int c(cv::waitKey(1));
     if(c=='\x1b'||c=='q') break;
     else if(c=='r')
@@ -329,6 +383,32 @@ int main(int argc, char**argv)
         cd_idx= old_cd_idx;
       else
         std::cerr<<"###Selected: "<<(cd_idx+1)<<std::endl;
+    }
+    else if(c=='w')
+    {
+      if(vout_camera.isOpened() || vout_mask.isOpened())
+      {
+        vout_camera.release();
+        vout_mask.release();
+        std::cerr<<"###Finished: video output"<<std::endl;
+      }
+      else
+      {
+        int i(0);
+        std::string file_name_camera, file_name_mask;
+        do
+        {
+          std::stringstream ss1;
+          ss1<<vout_base<<"camera"<<i<<".avi";
+          file_name_camera= ss1.str();
+          std::stringstream ss2;
+          ss2<<vout_base<<"mask"<<i<<".avi";
+          file_name_mask= ss2.str();
+          ++i;
+        } while(FileExists(file_name_camera) || FileExists(file_name_mask));
+        OpenVideoOut(vout_camera, file_name_camera.c_str(), fps, cv::Size(frame.cols,frame.rows));
+        OpenVideoOut(vout_mask, file_name_mask.c_str(), fps, cv::Size(disp_img.cols,disp_img.rows));
+      }
     }
     else if(c==' ')
     {
