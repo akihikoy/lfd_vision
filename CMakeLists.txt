@@ -33,3 +33,9 @@ rosbuild_add_executable(color_detector_node
       src/color_detector_node.cpp
       src/color_detector.cpp)
 
+rosbuild_add_executable(cyl_detector_node
+      src/cyl_detector.cpp
+      src/cyl_detector_node.cpp)
+include_directories(/home/akihiko/install/boost1.49/include)
+target_link_libraries(cyl_detector_node vtkCommon vtkFiltering vtkRendering vtkGraphics)
+

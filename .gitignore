@@ -16,8 +16,9 @@ tmp*
 backup*
 trash
 
-build
-data
+bin/
+build/
+data/
 
 msg_gen
 srv_gen

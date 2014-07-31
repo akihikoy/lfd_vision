@@ -1,7 +1,7 @@
 //-------------------------------------------------------------------------------------------
 /*! \file    color_detector_node.cpp
-    \brief   certain c++ source file
-    \author  Akihiko Yamaguchi, akihiko-y@is.naist.jp / ay@akiyam.sakura.ne.jp
+    \brief   Color detector node.
+    \author  Akihiko Yamaguchi, xakiyam@gmail.com
     \version 0.1
     \date    Jun.05, 2014
 */
