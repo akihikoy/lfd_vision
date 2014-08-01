@@ -363,5 +363,5 @@ def Run(t,args=()):
   t.attributes['c1']['l_x_pour_l']= [0.0164938693088, 0.01293250989281, 0.210512294328, 0.0,0.0,0.0,1.0]
 
 
-  t.ExecuteMotion('attr')
+  t.ExecuteMotion('attr',(0,))
 

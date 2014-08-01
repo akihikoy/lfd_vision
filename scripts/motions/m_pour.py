@@ -14,6 +14,17 @@ def Run(t,args=()):
   whicharm= t.whicharm
   t.SwitchArm(1)
 
+  #Estimating bottle/cup positions from the AR markers
+  m_id_bottle= 1
+  m_id_cup= 2
+  if (not m_id_bottle in t.ar_markers) or (not m_id_cup in t.ar_markers):
+    print 'Marker observation: %i, %r' % (m_id_bottle, m_id_bottle in t.ar_markers)
+    print 'Marker observation: %i, %r' % (m_id_cup, m_id_cup in t.ar_markers)
+    return
+  t.attributes[bottle]['x']= t.ARX(m_id_bottle)
+  t.attributes[cup]['x']= t.ARX(m_id_cup)
+
+
   #Current control point in the wrist frame
   #lw_xe= t.control_frame[t.whicharm]
   #x_b= t.attributes[bottle]['x'] #Bottle base pose on the torso frame
@@ -38,6 +49,27 @@ def Run(t,args=()):
   #x_grab0[0]= t.CartPos(lw_xe)[0]
   #t.MoveToCartPos(x_grab0,3.0,lw_xe,True)
   #t.MoveToCartPos(x_grab,3.0,lw_xe,True)
+
+
+  #Grab pose 'l_x_grab' estimation:
+  l_x_grab
+  if 'l_x_grab_set' in t.attributes[bottle]:
+    candidates= t.attributes[bottle]['l_x_grab_set']
+    l_x_grab_avr= np.average(candidates,0)
+    #Find a grab point whose z position is closest to the average
+    i_closest= -1
+    d_closest= 1.0e10
+    for i in range(len(candidates)):
+      if abs(candidates[i][2]-l_x_grab_avr[2]) < d_closest:
+        d_closest= abs(candidates[i][2]-l_x_grab_avr[2])
+        i_closest= i
+    l_x_grab= candidates[i_closest]
+    t.attributes[bottle]['l_x_grab']= l_x_grab
+  elif not 'l_x_grab' in t.attributes[bottle]:
+    print 'Cannot estimate l_x_grab of',bottle
+    t.SwitchArm(whicharm)
+    return
+  print 'l_x_grab=',t.attributes[bottle]['l_x_grab']
 
   t.ExecuteMotion('pregrab',(bottle,'l'))
 

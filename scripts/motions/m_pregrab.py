@@ -27,10 +27,14 @@ def Run(t,args=()):
   #Grab pose on the torso frame
   x_grab= Transform(x_o,lo_x_grab)
   print 'x_grab=',VecToStr(x_grab)
-  t.CommandGripper(t.attributes[obj]['g_pre'],50,True)
   x_grab0= copy.deepcopy(x_grab)
-  x_grab0[0]= t.CartPos(lw_xe)[0]
+  x_grab0[0]-= t.attributes[obj]['g_width']
+
+  #Open the gripper to 'g_pre' value
+  t.CommandGripper(t.attributes[obj]['g_pre'],50,True)
+  #Move the gripper to front of the object
   t.MoveToCartPos(x_grab0,3.0,lw_xe,True)
+  #Move the gripper to the grab pose
   t.MoveToCartPos(x_grab,3.0,lw_xe,True)
 
   t.SwitchArm(whicharm)

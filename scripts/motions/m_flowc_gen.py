@@ -7,7 +7,7 @@ def Help():
     Gripper holds a bottle
     Bottle is close to the cup
   Usage: flowc_gen BOTTLE_ID [, AMOUNT_TRG [, MAX_DURATION [, TRICK [, PARAM_ADJUST_D [, PARAM_ADJUST_C]]]]]
-    BOTTLE_ID: identifier of bottle. e.g. 'b1'
+    BOTTLE_ID: Identifier of bottle. e.g. 'b1'
     AMOUNT_TRG: Target amount (default=0.03)
     MAX_DURATION: Maximum duration (default=25.0)
     TRICK: Select A trick to be used (default=None)

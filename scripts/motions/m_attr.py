@@ -2,22 +2,18 @@
 from core_tool import *
 def Help():
   return '''List up the attributes or assign value to an element.
-  Usage: attr
+  Usage: attr [MAX_LEVEL]
     List up the attributes
+    MAX_LEVEL: Maximum level of printed attribute (default=-1)
   Usage: attr OBJ_ID, ELEM_ID, VALUE
     Assign VALUE to [OBJ_ID][ELEM_ID]
   Example:
     attr 'c1', 'x', [0,0,0, 0,0,0,1]  '''
-def PrintDict(d,indent=0):
-  for k,v in d.items():
-    if type(v)==dict:
-      print '  '*indent,'[',k,']=...'
-      PrintDict(v,indent+1)
-    else:
-      print '  '*indent,'[',k,']=',v
 def Run(t,args=()):
   if len(args)==0:
     PrintDict(t.attributes)
+  elif len(args)==1:
+    PrintDict(t.attributes,args[0])
   else:
     obj= args[0]
     elem= args[1]

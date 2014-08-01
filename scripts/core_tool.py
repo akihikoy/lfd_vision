@@ -7,7 +7,8 @@ import rospy
 #import actionlib as al
 from cmnUtils import *
 import moveUtils
-import arWorldModel
+#import arWorldModel
+import ar_track_alvar.msg
 #from sensor_msgs.msg import *
 #from joyKind import *
 #import kinematics_msgs.srv
@@ -25,6 +26,7 @@ import traceback
 #import signal
 import copy
 import math
+import yaml
 
 
 def AskYesNo():
@@ -72,6 +74,33 @@ def EstStrConvert(v_str):
 def QFromAxisAngle(axis,angle):
   axis= axis / la.norm(axis)
   return tf.transformations.quaternion_about_axis(angle,axis)
+
+#Add a sub-dictionary with the key into a dictionary d
+def AddSubDict(d,key):
+  if not key in d:  d[key]= {}
+
+#Print a dictionary with a nice format
+def PrintDict(d,max_level=-1,level=0):
+  for k,v in d.items():
+    if type(v)==dict:
+      print '  '*level,'[',k,']=...'
+      if max_level<0 or level<max_level:
+        PrintDict(v,max_level,level+1)
+    else:
+      print '  '*level,'[',k,']=',v
+
+#Insert a new dictionary to the base dictionary
+def InsertDict(d_base, d_new):
+  for k_new,v_new in d_new.items():
+    if k_new in d_base and (type(v_new)==dict and type(d_base[k_new])==dict):
+      InsertDict(d_base[k_new], v_new)
+    else:
+      d_base[k_new]= v_new
+
+#Load a YAML and insert the data into a dictionary
+def InsertYAML(d_base, file_name):
+  d_new= yaml.load(file(file_name).read())
+  InsertDict(d_base, d_new)
 
 #Quaternion to 3x3 rotation matrix
 def QToRot(q):
@@ -125,6 +154,31 @@ def Transform(x2, x1):
   R= np.dot(R2, R1)
   return PosRotToX(p,R)
 
+#Get weighted average of two rotation matrices (intuitively, (1-w2)*R1 + w2*R2)
+def AverageRot(R1, R2, w2):
+  w= InvRodrigues(np.dot(R2,R1.T))
+  return np.dot(Rodrigues(w2*w),R1)
+
+#Get weighted average of two rotation quaternions (intuitively, (1-w2)*q1 + w2*q2)
+def AverageQ(q1, q2, w2):
+  return RotToQ( AverageRot(QToRot(q1), QToRot(q2), w2) )
+
+#Get weighted average of two pose (intuitively, (1-w2)*x1 + w2*x2)
+def AverageX(x1, x2, w2):
+  x= [0]*7
+  x[0:3]= (1.0-w2)*np.array(x1[0:3])+w2*np.array(x2[0:3])
+  x[3:]= AverageQ(x1[3:], x2[3:], w2)
+  return x
+
+#Get average of poses
+def AverageXData(x_data):
+  if len(x_data)==0:  return []
+  x_avr= x_data[0]
+  for i in range(1,len(x_data)):
+    w2= 1.0/(1.0+float(i))
+    x_avr= AverageX(x_avr, x_data[i], w2)
+  return x_avr
+
 #Return the interpolation from x1 to x2 with N points
 #p1 is not included
 def CartPosInterpolation(x1,x2,N):
@@ -140,6 +194,102 @@ def CartPosInterpolation(x1,x2,N):
     traj.append(PosRotToX(p1,R))
   return traj
 
+#Fitting a circle to the data XY, return the center [x,y] and the radius
+def CircleFit2D_SVD(XY):
+  centroid= np.average(XY,0) # the centroid of the data set
+
+  X= [XY[d][0]-centroid[0] for d in range(len(XY))] # centering data
+  Y= [XY[d][1]-centroid[1] for d in range(len(XY))] # centering data
+  Z= [X[d]**2 + Y[d]**2 for d in range(len(XY))]
+  ZXY1= np.matrix([Z, X, Y, [1.0]*len(Z)]).transpose()
+  U,S,V= la.svd(ZXY1,0)
+  if S[3]/S[0]<1.0e-12:  # singular case
+    print "SINGULAR"
+    A= (V.transpose())[:,3]
+  else:  # regular case
+    R= np.average(np.array(ZXY1),0)
+    N= np.matrix([[8.0*R[0], 4.0*R[1], 4.0*R[2], 2.0],
+                  [4.0*R[1], 1.0, 0.0, 0.0],
+                  [4.0*R[2], 0.0, 1.0, 0.0],
+                  [2.0,      0.0, 0.0, 0.0]])
+    W= V.transpose()*np.diag(S)*V
+    D,E= la.eig(W*la.inv(N)*W)  # values, vectors
+    idx= D.argsort()
+    Astar= E[:,idx[1]]
+    A= la.solve(W, Astar)
+
+  A= np.array(A)[:,0]
+  center= -A[1:3].transpose()/A[0]/2.0+centroid
+  radius= math.sqrt(A[1]**2+A[2]**2-4.0*A[0]*A[3])/abs(A[0])/2.0
+  return center, radius
+
+#Fitting a circle to the data marker_data, return the center [x,y,z] and the radius
+#  marker_data: a sequence of pose vector [0-2]: position x,y,z, [3-6]: orientation qx,qy,qz,qw
+def CircleFit3D(marker_data):
+  #Compute the normal vector
+  p_mean= np.array([0.0,0.0,0.0])
+  n_z= np.array([0.0,0.0,0.0])
+  for x in marker_data:
+    p,R= XToPosRot(x)
+    n_z+= R[:,2]
+    p_mean+= p
+  n_z= n_z/float(len(marker_data))
+  p_mean= p_mean/float(len(marker_data))
+  n_x= np.array([-n_z[1],-n_z[0],0.0])
+  n_x= n_x/la.norm(n_x)
+  n_y= np.cross(n_z,n_x)
+
+  #print 'p_mean= ',p_mean
+  #print 'n_x= ',n_x
+  #print 'n_y= ',n_y
+
+  #Project the data onto the plane n_x, n_y
+  p_data= []
+  for x in marker_data:
+    p= np.array([x[0],x[1],x[2]])
+    lx= np.dot(p-p_mean,n_x)
+    ly= np.dot(p-p_mean,n_y)
+    p_data.append([lx,ly])
+    #print 'lx,ly= ',lx,ly
+
+  #print p_data
+  p_file= file('/tmp/original.dat','w')
+  for x in marker_data:
+    p_file.write('%f %f %f\n' % (x[0],x[1],x[2]))
+  p_file.close()
+
+  #Compute the circle parameters
+  lcx, radius= CircleFit2D_SVD(p_data)
+  x_center= lcx[0]*n_x + lcx[1]*n_y + p_mean
+  #print x_center, radius
+
+  p_file= file('/tmp/circle.dat','w')
+  for ith in range(1000):
+    th= (2.0*math.pi)/1000.0*float(ith)
+    lx= lcx[0]+radius*math.cos(th)
+    ly= lcx[1]+radius*math.sin(th)
+    x= lx*n_x + ly*n_y + p_mean
+    p_file.write('%f %f %f\n' % (x[0],x[1],x[2]))
+  p_file.close()
+
+  return x_center, radius
+
+#Compute the sensor pose x_sensor on the robot frame from data
+#  marker_data: a sequence of pose vector [0-2]: position x,y,z, [3-6]: orientation qx,qy,qz,qw
+#  gripper_data: corresponding gripper pose sequence (on the robot frame)
+#  x_g2m: marker pose on the gripper's local frame
+def CalibrateSensorPose(marker_data, gripper_data, x_g2m):
+  assert(len(marker_data)==len(gripper_data))
+  #Marker poses on the robot frame
+  robot_marker_data= map(lambda x: Transform(x,x_g2m), gripper_data)
+  #Sensor poses
+  x_sensor_data= [TransformRightInv(robot_marker_data[d], marker_data[d]) for d in range(len(marker_data))]
+  #Average sensor poses to get x_sensor
+  x_sensor= AverageXData(x_sensor_data)
+  #for x in x_sensor_data:
+    #print x
+  #print x_sensor
+  return x_sensor
 
 
 #There must be a planning scene or FK / IK crashes
@@ -201,8 +351,8 @@ class TCoreTool:
     self.flow_shake_width= 0.04
     self.flow_shake_axis= [0.0,0.0,1.0]
 
-    self.ar_x= {}
-    self.x_marker_to_torso= []
+    #self.ar_x= {}
+    #self.x_marker_to_torso= []
     self.base_x= {}
 
     #Attributes of objects
@@ -234,6 +384,14 @@ class TCoreTool:
     self.amount_observer_callback= None
     rospy.Subscriber("/color_occupied_ratio", std_msgs.msg.Float64, self.AmountObserver)
 
+    #[id]=[pose x,y,z,qx,qy,qz,qw]
+    self.ar_markers= {}
+    self.ar_marker_frame_id= ""
+    self.ar_marker_observer_callback= None
+    #Sensor pose in robot frame
+    self.x_sensor= []
+    self.br= tf.TransformBroadcaster()
+    rospy.Subscriber("/ar_pose_marker", ar_track_alvar.msg.AlvarMarkers, self.ARMarkerObserver)
 
   def __del__(self):
     #self.stopRecord()
@@ -243,7 +401,7 @@ class TCoreTool:
   def Setup(self):
     SetupPlanningScene()
     self.mu= moveUtils.MoveUtils()
-    self.wm= arWorldModel.ARWorldModel()
+    #self.wm= arWorldModel.ARWorldModel()
 
 
   def ArmStr(self):
@@ -251,6 +409,26 @@ class TCoreTool:
   def ArmStrS(self):
     return 'R' if self.whicharm==0 else 'L'
 
+
+  #FIXME: Make a function to get an attribute
+  #TODO: if there is no item with a key, search from a DEFAULT attribute
+  #TODO: if no default, return None
+  #def GetAttr(self,keys):
+    #if type(keys)==str:
+      #return self.attributes[keys]
+    #elif type(keys)==list:
+      #d= self.attributes
+      #for n in keys:
+        #d= d[n]
+      #return d
+  #Add a dictionary into attribute
+  #FIXME: implement this
+  #TODO:  element can be specified by a list of key
+  #def AddDictAttr(self,keys):
+    #if type(keys)==str:
+      #AddSubDict(self.attributes,keys)
+    #elif type(keys)==list:
+      #...
 
   def MoveArmsToSide(self):
     #self.init = True
@@ -352,6 +530,20 @@ class TCoreTool:
     if self.amount_observer_callback:
       self.amount_observer_callback()
 
+  def ARMarkerObserver(self, msg):
+    for m in msg.markers:
+      self.ar_markers[m.id]= m.pose.pose
+      self.ar_marker_frame_id= m.header.frame_id
+
+    if len(self.x_sensor)==7:
+      self.br.sendTransform(self.x_sensor[0:3],self.x_sensor[3:],
+          rospy.Time.now(),
+          self.ar_marker_frame_id,
+          "torso_lift_link")
+
+    if self.ar_marker_observer_callback:
+      self.ar_marker_observer_callback()
+
 
   def SwitchArm(self,arm):
     self.whicharm= arm
@@ -377,6 +569,13 @@ class TCoreTool:
       #Re= np.dot(R,l_R)
       #xe= PosRotToX(pe,Re)
       return xe
+
+  #Get cart pos of specified link_name
+  #def CartPosAt(self,link_name,q):
+    #link_name_org= self.mu.arm[i].cart_exec.FKreq.fk_link_names
+    #self.mu.arm[i].cart_exec.FKreq.fk_link_names = [link_name]
+    #x= self.mu.arm[i].cart_exec.makeFKRequest(q)
+    #self.mu.arm[i].cart_exec.FKreq.fk_link_names = link_name_org
 
 
   def MakeIKRequest(self, x_trg, x_ext=[], v_start_angles=[]):
@@ -573,50 +772,56 @@ class TCoreTool:
     self.head_pub.publish(traj)
 
 
-  def UpdateAR(self,id):
-    x= self.wm.getObjectById(id)
-    if x != -1:  self.ar_x[id]= x
-    else:  print 'Marker is not observed'
+  #def UpdateAR(self,id):
+    ##x= self.wm.getObjectById(id)
+    #x= -1
+    #if x != -1:  self.ar_x[id]= x
+    #else:  print 'Marker is not observed'
 
-  def IsARObserved(self,id):
-    return (id in self.ar_x)
+  #def IsARObserved(self,id):
+    #return (id in self.ar_x)
 
-  def IsARAvailable(self,id):
-    if not self.IsARObserved(id):
-      print 'AR marker ',id,' has not been observed'
-      return False
-    if len(self.x_marker_to_torso)!=7:
-      print 'Calibration has not done. Execute "calib"'
-      return False
-    return True
+  #def IsARAvailable(self,id):
+    #if not self.IsARObserved(id):
+      #print 'AR marker ',id,' has not been observed'
+      #return False
+    #if len(self.x_marker_to_torso)!=7:
+      #print 'Calibration has not done. Execute "calib"'
+      #return False
+    #return True
 
   def ARX(self,id):
-    #if not self.IsARAvailable(id):
-      #return -1
-    return Transform(self.x_marker_to_torso,self.ar_x[id])
+    ##if not self.IsARAvailable(id):
+      ##return -1
+    #return Transform(self.x_marker_to_torso,self.ar_x[id])
+    x_raw= self.ar_markers[id]
+    xp= x_raw.position
+    xq= x_raw.orientation
+    x= [xp.x,xp.y,xp.z, xq.x,xq.y,xq.z,xq.w]
+    return Transform(self.x_sensor, x)
 
   def BPX(self,id):
     return self.base_x[id]
 
 
-  #Calibration to transform a marker pose to torso-frame
-  def Calibration(self):
-    print 'Do you want to calibrate?'
-    if AskYesNo():
-      print 'Let the robot hold a marker tag.  Use',self.ArmStr(),'arm.'
-      print 'Make sure to put the marker at the position obtained by "xe" command.'
-      print 'Any arm posture is OK.'
-      print 'Then, type the marker ID.'
-      id= int(raw_input('  ID (-1 to cancel calib) > '))
-      if id!=-1:
-        self.UpdateAR(id)
-        if self.IsARObserved(id):
-          xe= self.CartPos(self.control_frame[self.whicharm])
-          self.x_marker_to_torso= TransformRightInv(xe, self.ar_x[id])
-          print 'Result: ',VecToStr(self.x_marker_to_torso)
-        else:
-          print 'Marker ',id,' is not observed.  Make sure the camera position, then try again.'
-    print 'Done'
+  ##Calibration to transform a marker pose to torso-frame
+  #def Calibration(self):
+    #print 'Do you want to calibrate?'
+    #if AskYesNo():
+      #print 'Let the robot hold a marker tag.  Use',self.ArmStr(),'arm.'
+      #print 'Make sure to put the marker at the position obtained by "xe" command.'
+      #print 'Any arm posture is OK.'
+      #print 'Then, type the marker ID.'
+      #id= int(raw_input('  ID (-1 to cancel calib) > '))
+      #if id!=-1:
+        #self.UpdateAR(id)
+        #if self.IsARObserved(id):
+          #xe= self.CartPos(self.control_frame[self.whicharm])
+          #self.x_marker_to_torso= TransformRightInv(xe, self.ar_x[id])
+          #print 'Result: ',VecToStr(self.x_marker_to_torso)
+        #else:
+          #print 'Marker ',id,' is not observed.  Make sure the camera position, then try again.'
+    #print 'Done'
 
 
   def FlowAmountControl(self, amount_trg, rot_axis, max_theta, x_ext=[], trg_duration=8.0, max_duration=10.0):

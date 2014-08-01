@@ -61,7 +61,7 @@ class TCUITool:
   def _setup(self):
     self.t.Setup()
     #self.t.mu= self.mu
-    #self.t.wm= self.wm
+    ##self.t.wm= self.wm
 
   def Start(self):
     print 'Setup...'
@@ -102,13 +102,18 @@ class TCUITool:
           elif cmd[0] == 'reloadf':
             #self.t.Setup()
             self.t.mu= old_dict['mu']
-            self.t.wm= old_dict['wm']
+            #self.t.wm= old_dict['wm']
         elif cmd[0] == 'home':
           self.t.MoveArmsToSide()
         elif cmd[0]=='r':
           self.t.SwitchArm(0)
         elif cmd[0]=='l':
           self.t.SwitchArm(1)
+        elif cmd[0]=='set':
+          vid= cmd[1]
+          value= self.Eval(cmd[2:])
+          self.t.__dict__[vid]= value
+          print 'Set t.%s= %r' % (vid,value)
         elif cmd[0]=='calc':
           if cmd[1]=='e2q':
             args= self.Eval(cmd[2:])
@@ -129,7 +134,7 @@ class TCUITool:
             print 'Euler: ',np.degrees(e)
           else:
             res= self.Eval(cmd[1:])
-            print 'Calc result: ',res
+            print 'Calc result:\n',res
         elif cmd[0]=='var':
           val= self.Eval(cmd[2:])
           self.__dict__[cmd[1]]= val
