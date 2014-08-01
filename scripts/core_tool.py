@@ -286,9 +286,16 @@ def CalibrateSensorPose(marker_data, gripper_data, x_g2m):
   x_sensor_data= [TransformRightInv(robot_marker_data[d], marker_data[d]) for d in range(len(marker_data))]
   #Average sensor poses to get x_sensor
   x_sensor= AverageXData(x_sensor_data)
+  print 'la.norm(x_sensor[3:]):',la.norm(x_sensor[3:])
   #for x in x_sensor_data:
     #print x
   #print x_sensor
+  err= [0.0]*7
+  for d in range(len(robot_marker_data)):
+    err= [err[k]+abs(Transform(x_sensor,marker_data[d])[k]-robot_marker_data[d][k]) for k in range(7)]
+    #err+= la.norm(np.array(Transform(x_sensor,marker_data[d]))-np.array(robot_marker_data[d]))
+  err= [err[k]/float(len(robot_marker_data)) for k in range(7)]
+  print 'Error:',err
   return x_sensor
 
 

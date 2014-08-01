@@ -8,9 +8,9 @@ def Help():
 def Run(t,args=()):
   m_id= args[0] if len(args)>0 else 0
 
-  calib_angle= -0.4*math.pi
+  calib_angle= -0.5*math.pi
   obs_count= 200
-  duration= 3
+  duration= 5
 
   if not m_id in t.ar_markers:
     print 'Marker not observed: %i' % m_id
@@ -26,28 +26,35 @@ def Run(t,args=()):
     #if whicharm!=-1:
       #t.SwitchArm(whicharm)
 
-  print 'Start calibration. ',t.ArmStr(),'arm is relaxed. OK?'
-  if not AskYesNo():
-    #exit_proc()
-    return
+  #print 'Start calibration. ',t.ArmStr(),'arm is relaxed. OK?'
+  #if not AskYesNo():
+    ##exit_proc()
+    #return
 
-  print '###CAUTION:',t.ArmStr(),'arm is relaxed'
-  t.ActivateMannController()
-  while True:
-    print 'Move',t.ArmStr(),'arm to preferred pose (wrist-roll should be zero)'
-    print 'Is it OK?'
-    print 'If say Y,',t.ArmStr(),'wrist-roll joint moves to zero'
-    print 'Then,',t.ArmStr(),'wrist-flex joint moves %f degree' % (calib_angle*180.0/math.pi)
-    if AskYesNo():
-      break
-  print '###CAUTION:',t.ArmStr(),'arm is fixed'
-  t.ActivateStdController()
+  #print '###CAUTION:',t.ArmStr(),'arm is relaxed'
+  #t.ActivateMannController()
+  #while True:
+    #print 'Move',t.ArmStr(),'arm to preferred pose (wrist-roll should be zero)'
+    #print 'Is it OK?'
+    #print 'If say Y,',t.ArmStr(),'wrist-roll joint moves to zero'
+    #print 'Then,',t.ArmStr(),'wrist-flex joint moves %f degree' % (calib_angle*180.0/math.pi)
+    #if AskYesNo():
+      #break
+  #print '###CAUTION:',t.ArmStr(),'arm is fixed'
+  #t.ActivateStdController()
 
+  print 'Moveing',t.ArmStr(),'wrist to zero...'
   i= t.whicharm
   angles_trg= list(t.mu.arm[i].getCurrentPosition())
   print angles_trg
   angles_trg[-1]= 0.0
   t.MoveToJointPos(angles_trg,dt=2.0,blocking=True)
+
+  print 'After 0.5s,',t.ArmStr(),'wrist-flex joint moves %f degree' % (calib_angle*180.0/math.pi)
+  print 'OK?'
+  if not AskYesNo():
+    #exit_proc()
+    return
 
   print 'After 0.5s,',t.ArmStr(),'wrist-flex joint moves %f degree' % (calib_angle*180.0/math.pi)
   del t.ar_markers[m_id]
@@ -93,8 +100,9 @@ def Run(t,args=()):
   #print "gripper_data=",gripper_data
 
 
-  x_g2m= [0.0,0.0,radius, 0,0,0,1]
+  x_g2m= [radius,0.0,0.0, 0,0,0,1]
   p,R= XToPosRot(gripper_data[0])
+  print 'R[2,1]=',R[2,1]
   if R[2,1]>0:  # gripper ey axis is up
     x_g2m[3:]= QFromAxisAngle([1,0,0],-math.pi*0.5)
   else:  # gripper ey axis is down

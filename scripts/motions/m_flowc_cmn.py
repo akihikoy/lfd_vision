@@ -66,7 +66,7 @@ class TLocal:
     p_b,R_b= XToPosRot(x_b)
     print 'R_b:',R_b
     print 'la.norm(R_b[:,2]):',la.norm(R_b[:,2])
-    ax_gravity= [0,0,-1]
+    ax_gravity= [0,0,-1]  #TODO: define in attributes
     axis= np.cross(R_b[:,2],ax_gravity)
     axis= axis / la.norm(axis)
     max_theta= math.acos(np.dot(R_b[:,2],ax_gravity))

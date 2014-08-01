@@ -20,7 +20,17 @@ def Run(t,args=()):
 
   print 'Grabbing',obj,', which is ',t.attributes[obj]['help']
 
-  t.CommandGripper(0.0,t.attributes[obj]['f_grab'],True)
+  g_width= 0.0
+  if 'g_width' in t.attributes[obj]:
+    g_width= t.attributes[obj]['g_width']
+  else:
+    print 'This object',obj,'does not have g_width attribute'
+    print 'Use',g_width
+    print 'OK?'
+    if not AskYesNo():
+      t.SwitchArm(whicharm)
+      return
+  t.CommandGripper(g_width,t.attributes[obj]['f_grab'],True)
   t.attributes[obj]['grabbed']= {}
   t.attributes[obj]['grabbed']['grabber']= 'gripper_'+hand
   t.attributes[obj]['grabbed']['grabber_wrist']= 'wrist_'+hand

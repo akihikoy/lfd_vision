@@ -17,10 +17,8 @@ def Run(t,args=()):
   t.attributes['b50']['g_pre']= 0.08
   #Grab power (max effort):
   t.attributes['b50']['f_grab']= 50.0
-  #Orientation to start pouring
-  t.attributes['b50']['q_pour_start']= QFromAxisAngle([1,0,0],30.0/180.0*math.pi)
-  #Orientation where the flow is max
-  t.attributes['b50']['q_pour_max']= QFromAxisAngle([1,0,0],math.pi)
+  #Angle to start pouring
+  t.attributes['b50']['pour_start_angle']= 45.0/180.0*math.pi
 
   AddSubDict(t.attributes, 'b51')
   InsertYAML(t.attributes['b51'], 'models/obj/b51.yaml')
@@ -29,10 +27,8 @@ def Run(t,args=()):
   t.attributes['b51']['g_pre']= 0.08
   #Grab power (max effort):
   t.attributes['b51']['f_grab']= 50.0
-  #Orientation to start pouring
-  t.attributes['b51']['q_pour_start']= QFromAxisAngle([1,0,0],30.0/180.0*math.pi)
-  #Orientation where the flow is max
-  t.attributes['b51']['q_pour_max']= QFromAxisAngle([1,0,0],math.pi)
+  #Angle to start pouring
+  t.attributes['b51']['pour_start_angle']= 45.0/180.0*math.pi
 
 
   t.ExecuteMotion('attr',(0,))
