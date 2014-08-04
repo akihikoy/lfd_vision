@@ -655,7 +655,7 @@ struct TContainerProperty
       viewer.AddCylinder(coefficients_std, coefficients_ext, name+"_cyl", 3);
     }
 
-  void PrintAsPyFormat(std::ostream &os, const double &g_width_margin)
+  void PrintAsYAML(std::ostream &os, const double &g_width_margin)
     {
       // typename pcl::PointCloud<t_point>::Ptr  Cloud;
       // typename pcl::PointCloud<pcl::PointXYZ>::Ptr  PourPoints;
@@ -679,34 +679,29 @@ struct TContainerProperty
       // t.attributes['b1']['l_x_pour_e']= [0.0, -0.04, 0.11, 0.0,0.0,0.0,1.0]
 
       os<<"#Gripper width to grab:"<<std::endl;
-      os<<"attribute['g_width']= "<<2.0*CylRadius*g_width_margin<<std::endl;
+      os<<"g_width: "<<2.0*CylRadius*g_width_margin<<std::endl;
 
-      std::string delim;
-      delim= "\n  ";
       os<<"#Pouring edge point candidates:"<<std::endl;
-      os<<"attribute['l_x_pour_e_set']= [";
+      os<<"l_x_pour_e_set:"<<std::endl;
       for(size_t i(0); i<PourPoints->points.size(); ++i)
       {
-        os<<delim<<"["<<PourPoints->points[i].x<<", "
-                      <<PourPoints->points[i].y<<", "
-                      <<PourPoints->points[i].z<<",  "
-                      <<" 0.0,0.0,0.0,1.0]";
-        delim= ",\n  ";
+        os<<"- [" <<PourPoints->points[i].x<<", "
+                  <<PourPoints->points[i].y<<", "
+                  <<PourPoints->points[i].z<<",  "
+                  <<" 0.0,0.0,0.0,1.0]"
+                  <<std::endl;
       }
-      os<<std::endl;
 
-      delim= "\n  ";
       os<<"#Grab pose candidates:"<<std::endl;
-      os<<"attribute['l_x_grab_set']= [";
+      os<<"l_x_grab_set:"<<std::endl;
       for(size_t i(0); i<GrabPoints->points.size(); ++i)
       {
-        os<<delim<<"["<<GrabPoints->points[i].x<<", "
-                      <<GrabPoints->points[i].y<<", "
-                      <<GrabPoints->points[i].z<<",  "
-                      <<q_cyl.x()<<", "<<q_cyl.y()<<", "<<q_cyl.z()<<", "<<q_cyl.w()<<"]";
-        delim= ",\n  ";
+        os<<"- [" <<GrabPoints->points[i].x<<", "
+                  <<GrabPoints->points[i].y<<", "
+                  <<GrabPoints->points[i].z<<",  "
+                  <<q_cyl.x()<<", "<<q_cyl.y()<<", "<<q_cyl.z()<<", "<<q_cyl.w()<<"]"
+                  <<std::endl;
       }
-      os<<std::endl;
     }
 
 };

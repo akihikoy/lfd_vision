@@ -8,6 +8,7 @@
 //-------------------------------------------------------------------------------------------
 #include "pr2_lfd_trick/cyl_detector.h"
 #include <list>
+#include <fstream>
 //-------------------------------------------------------------------------------------------
 namespace trick
 {
@@ -413,7 +414,11 @@ void DetectCylinder(
           /*grab_z_step_ratio=*/0.01,
           /*grab_radius_sd_thresh_ratio=*/0.2);
       container_property.Visualize(pcl_viewer, GetID("container",j));
-      container_property.PrintAsPyFormat(std::cout, /*g_width_margin=*/0.8);
+      // container_property.PrintAsYAML(std::cout, /*g_width_margin=*/0.8);
+      std::string file_name("/tmp/cyl_info.yaml");
+      std::ofstream ofs(file_name.c_str());
+      container_property.PrintAsYAML(ofs, /*g_width_margin=*/0.8);
+      std::cerr<<"Saved cylinder info into: "<<file_name<<std::endl;
 
       /*DEBUG*/{
         pcl::ModelCoefficients::Ptr sq_coefficients(new pcl::ModelCoefficients);
