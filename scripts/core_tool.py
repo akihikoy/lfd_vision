@@ -234,14 +234,16 @@ def CircleFit3D(marker_data):
     n_z+= R[:,2]
     p_mean+= p
   n_z= n_z/float(len(marker_data))
+  n_z= n_z/la.norm(n_z)
   p_mean= p_mean/float(len(marker_data))
-  n_x= np.array([-n_z[1],-n_z[0],0.0])
+  n_x= np.array([-n_z[1],n_z[0],0.0])
   n_x= n_x/la.norm(n_x)
   n_y= np.cross(n_z,n_x)
 
-  #print 'p_mean= ',p_mean
-  #print 'n_x= ',n_x
-  #print 'n_y= ',n_y
+  print 'p_mean= ',p_mean
+  print 'n_x= ',n_x
+  print 'n_y= ',n_y
+  print 'n_z= ',n_z
 
   #Project the data onto the plane n_x, n_y
   p_data= []
@@ -286,7 +288,14 @@ def CalibrateSensorPose(marker_data, gripper_data, x_g2m):
   x_sensor_data= [TransformRightInv(robot_marker_data[d], marker_data[d]) for d in range(len(marker_data))]
   #Average sensor poses to get x_sensor
   x_sensor= AverageXData(x_sensor_data)
+  #x_sensor= x_sensor_data[0]
   print 'la.norm(x_sensor[3:]):',la.norm(x_sensor[3:])
+  print '##gripper_data[0]:',gripper_data[0]
+  print '##robot_marker_data[0]:',robot_marker_data[0]
+  print '##Transform(gripper_data[0],x_g2m):',Transform(gripper_data[0],x_g2m)
+  print '##marker_data[0]:',marker_data[0]
+  print '##x_sensor_data[0]:',x_sensor_data[0]
+  print '##Transform(x_sensor_data[0],marker_data[0]):',Transform(x_sensor_data[0],marker_data[0])
   #for x in x_sensor_data:
     #print x
   #print x_sensor

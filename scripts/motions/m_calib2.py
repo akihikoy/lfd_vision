@@ -10,7 +10,9 @@ def Run(t,args=()):
 
   calib_angle= -0.5*math.pi
   obs_count= 200
-  duration= 5
+  total_duration= 16
+  ctrl_duration= 1.0*total_duration/float(obs_count)
+  obs_duration= 0.0*total_duration/float(obs_count)
 
   if not m_id in t.ar_markers:
     print 'Marker not observed: %i' % m_id
@@ -70,8 +72,12 @@ def Run(t,args=()):
 
   angles_trg= list(t.mu.arm[i].getCurrentPosition())
   angle_step= calib_angle/float(obs_count)
-  time_step= duration/float(obs_count)
+  #time_step= duration/float(obs_count)
   for k in range(obs_count):
+    start_time= rospy.Time.now()
+    while rospy.Time.now() < start_time + rospy.Duration(obs_duration):
+      time.sleep(obs_duration*0.02)
+
     if m_id in t.ar_markers:
       x= t.ar_markers[m_id]
       xp= x.position
@@ -83,13 +89,14 @@ def Run(t,args=()):
 
     angles_trg[-2]+= angle_step
     goal.trajectory.points[0].positions = angles_trg
-    goal.trajectory.points[0].time_from_start = rospy.Duration(time_step)
+    goal.trajectory.points[0].time_from_start = rospy.Duration(ctrl_duration)
     goal.trajectory.header.stamp= rospy.Time.now()
     t.mu.arm[i].traj_client.send_goal(goal)
     start_time= rospy.Time.now()
-    while rospy.Time.now() < start_time + rospy.Duration(time_step):
-      time.sleep(time_step*0.02)
+    while rospy.Time.now() < start_time + rospy.Duration(ctrl_duration):
+      time.sleep(ctrl_duration*0.02)
 
+  print '# of data:',len(marker_data)
 
   x_center, radius= CircleFit3D(marker_data)
 

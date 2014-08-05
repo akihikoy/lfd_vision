@@ -3,20 +3,26 @@ from core_tool import *
 import copy
 def Help():
   return '''Whole pouring procedure.
-  Usage: pour BOTTLE_ID, CUP_ID [, AMOUNT_TRG [, MAX_DURATION]]
+  Usage: pour BOTTLE_ID, CUP_ID [, AMOUNT_TRG [, MAX_DURATION, [CONSERVATIVE]]]
     BOTTLE_ID: identifier of bottle. e.g. 'b1'
     CUP_ID: identifier of cup. e.g. 'c1'
     AMOUNT_TRG: Target amount (default=0.03)
-    MAX_DURATION: Maximum duration (default=25.0)'''
+    MAX_DURATION: Maximum duration (default=25.0)
+    CONSERVATIVE: Robot becomes conservative, i.e. asking at each step (default=False)'''
 def Run(t,args=()):
   bottle= args[0]
   cup= args[1]
   amount_trg= args[2] if len(args)>2 else 0.03
   max_duration= args[3] if len(args)>3 else 25.0
+  conservative= args[4] if len(args)>4 else False
 
   #Use left hand
   whicharm= t.whicharm
   t.SwitchArm(1)
+
+  def ExitProc():
+    t.SwitchArm(whicharm)
+
 
   #Estimating bottle/cup positions from the AR markers
   #TODO: change by arguments
@@ -35,15 +41,15 @@ def Run(t,args=()):
   #x_b= t.attributes[bottle]['x'] #Bottle base pose on the torso frame
   #if len(x_b)!=7:
     #print 'Bottle ',bottle,' pose is not observed'
-    #t.SwitchArm(whicharm)
+    #ExitProc()
     #return
 
-  #FIXME
-  x_c= t.attributes[cup]['x'] #Cup base pose on the torso frame
-  if len(x_c)!=7:
-    print 'Cup',cup,' pose is not observed'
-    t.SwitchArm(whicharm)
-    return
+  ##FIXME
+  #x_c= t.attributes[cup]['x'] #Cup base pose on the torso frame
+  #if len(x_c)!=7:
+    #print 'Cup',cup,' pose is not observed'
+    #ExitProc()
+    #return
 
   #Grab pose on the bottle frame:
   #lb_x_grab= t.attributes[bottle]['l_x_grab']
@@ -73,16 +79,17 @@ def Run(t,args=()):
       t.attributes[bottle]['l_x_grab']= candidates[i_closest]
   if not 'l_x_grab' in t.attributes[bottle]:
     print 'Cannot estimate l_x_grab of',bottle
-    t.SwitchArm(whicharm)
+    ExitProc()
     return
   print 'l_x_grab=',t.attributes[bottle]['l_x_grab']
 
-  t.ExecuteMotion('pregrab',(bottle,'l'))
-
-  #t.CommandGripper(0.0,t.attributes[bottle]['f_grab'],True)
-
-  t.ExecuteMotion('grab',(bottle,'l'))
-
+  print 'Continue motion?: pregrab and grab'
+  if not conservative or AskYesNo():
+    t.ExecuteMotion('pregrab',(bottle,'l'))
+    t.ExecuteMotion('grab',(bottle,'l'))
+  else:
+    ExitProc()
+    return
 
   #FIXME
   #Infere bottle pose
@@ -90,7 +97,7 @@ def Run(t,args=()):
   x_b= t.attributes[bottle]['x']
   if len(x_b)!=7:
     print 'Bottle ',bottle,' pose is not observed'
-    t.SwitchArm(whicharm)
+    ExitProc()
     return
 
   #TODO: move to m_pour_est.py
@@ -114,7 +121,7 @@ def Run(t,args=()):
       t.attributes[bottle]['l_x_pour_e']= candidates[i_closest]
   if not 'l_x_pour_e' in t.attributes[bottle]:
     print 'Cannot estimate l_x_pour_e of',bottle
-    t.SwitchArm(whicharm)
+    ExitProc()
     return
   print 'l_x_pour_e=',t.attributes[bottle]['l_x_pour_e']
 
@@ -143,7 +150,7 @@ def Run(t,args=()):
       t.attributes[cup]['l_x_pour_l'][2]+= 0.03
   if not 'l_x_pour_l' in t.attributes[cup]:
     print 'Cannot estimate l_x_pour_l of',cup
-    t.SwitchArm(whicharm)
+    ExitProc()
     return
   print 'l_x_pour_l=',t.attributes[cup]['l_x_pour_l']
 
@@ -164,14 +171,27 @@ def Run(t,args=()):
     print 'Cannot estimate q_pour_start of',bottle
   print 'q_pour_start=',t.attributes[bottle]['q_pour_start']
 
+  print 'Continue motion?: prepour'
+  if not conservative or AskYesNo():
+    t.ExecuteMotion('prepour',(bottle,cup))
+  else:
+    ExitProc()
+    return
 
-  t.ExecuteMotion('prepour',(bottle,cup))
+  print 'Continue motion?: flowc_gen'
+  if not conservative or AskYesNo():
+    t.ExecuteMotion('flowc_gen',(bottle,amount_trg,max_duration))
+  else:
+    ExitProc()
+    return
 
-  t.ExecuteMotion('flowc_gen',(bottle,amount_trg,max_duration))
+  print 'Continue motion?: backtog and release'
+  if not conservative or AskYesNo():
+    t.ExecuteMotion('backtog',(bottle,))
+    t.ExecuteMotion('release',(bottle,))
+  else:
+    ExitProc()
+    return
 
-  t.ExecuteMotion('backtog',(bottle,))
-
-  t.ExecuteMotion('release',(bottle,))
-
-  t.SwitchArm(whicharm)
+  ExitProc()
 
