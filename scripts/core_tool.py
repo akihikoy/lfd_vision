@@ -406,6 +406,11 @@ class TCoreTool:
     self.ar_marker_observer_callback= None
     #Sensor pose in robot frame
     self.x_sensor= []
+    #Marker ID attached on the (left)-wrist link to adjust the marker error
+    self.ar_adjust_m_id= 3
+    self.ar_adjust_arm= 1  #Left arm
+    self.l_x_m_wrist= []  #Marker pose in the wrist frame
+    self.ar_adjust_ratio= 0.02  #Update ratio
     self.br= tf.TransformBroadcaster()
     rospy.Subscriber("/ar_pose_marker", ar_track_alvar.msg.AlvarMarkers, self.ARMarkerObserver)
 
@@ -550,6 +555,14 @@ class TCoreTool:
     for m in msg.markers:
       self.ar_markers[m.id]= m.pose.pose
       self.ar_marker_frame_id= m.header.frame_id
+
+      if m.id==self.ar_adjust_m_id and len(self.l_x_m_wrist)==7:
+        whicharm= self.whicharm
+        self.whicharm= self.ar_adjust_arm
+        x_m_wrist= self.CartPos(self.l_x_m_wrist)
+        x_sensor2= TransformRightInv(x_m_wrist,self.ARXraw(self.ar_adjust_m_id))
+        self.x_sensor= AverageX(self.x_sensor, x_sensor2, self.ar_adjust_ratio)
+        self.whicharm= whicharm
 
     if len(self.x_sensor)==7:
       self.br.sendTransform(self.x_sensor[0:3],self.x_sensor[3:],
@@ -806,14 +819,14 @@ class TCoreTool:
       #return False
     #return True
 
-  def ARX(self,id):
-    ##if not self.IsARAvailable(id):
-      ##return -1
-    #return Transform(self.x_marker_to_torso,self.ar_x[id])
+  def ARXraw(self,id):
     x_raw= self.ar_markers[id]
     xp= x_raw.position
     xq= x_raw.orientation
-    x= [xp.x,xp.y,xp.z, xq.x,xq.y,xq.z,xq.w]
+    return [xp.x, xp.y, xp.z,  xq.x, xq.y, xq.z, xq.w]
+
+  def ARX(self,id):
+    x= self.ARXraw(id)
     return Transform(self.x_sensor, x)
 
   def BPX(self,id):
