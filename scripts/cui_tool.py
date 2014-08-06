@@ -91,6 +91,8 @@ class TCUITool:
         elif cmd[0] == 'quit' or cmd[0] == 'exit':
           rospy.signal_shutdown('quit...')
         elif cmd[0] == 'reload' or cmd[0] == 'reloadf':
+          self.t.Cleanup()
+          old_t= self.t
           old_dict= self.t.__dict__
           reload(core_tool)
           reload(state_machine)
@@ -103,6 +105,8 @@ class TCUITool:
             #self.t.Setup()
             self.t.mu= old_dict['mu']
             #self.t.wm= old_dict['wm']
+          print 'Delete',old_t
+          del old_t
         elif cmd[0] == 'home':
           self.t.MoveArmsToSide()
         elif cmd[0]=='r':

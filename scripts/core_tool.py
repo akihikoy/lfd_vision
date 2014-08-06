@@ -289,6 +289,7 @@ def CalibrateSensorPose(marker_data, gripper_data, x_g2m):
   #Average sensor poses to get x_sensor
   x_sensor= AverageXData(x_sensor_data)
   #x_sensor= x_sensor_data[0]
+  print '##--------------##'
   print 'la.norm(x_sensor[3:]):',la.norm(x_sensor[3:])
   print '##gripper_data[0]:',gripper_data[0]
   print '##robot_marker_data[0]:',robot_marker_data[0]
@@ -296,8 +297,12 @@ def CalibrateSensorPose(marker_data, gripper_data, x_g2m):
   print '##marker_data[0]:',marker_data[0]
   print '##x_sensor_data[0]:',x_sensor_data[0]
   print '##Transform(x_sensor_data[0],marker_data[0]):',Transform(x_sensor_data[0],marker_data[0])
-  #for x in x_sensor_data:
-    #print x
+  print '##Transform(x_sensor,marker_data[0]):',Transform(x_sensor,marker_data[0])
+  print '##--------------##'
+  #for i in range(len(x_sensor_data)):
+    #x= x_sensor_data[i]
+    #print x, tf.transformations.euler_from_quaternion(x[3:7]), marker_data[i]
+  print '##--------------##'
   #print x_sensor
   err= [0.0]*7
   for d in range(len(robot_marker_data)):
@@ -387,10 +392,10 @@ class TCoreTool:
     self.standard_controllers = ['r_arm_controller', 'l_arm_controller']
     self.mannequin_controllers = ['r_arm_controller_loose', 'l_arm_controller_loose']
 
-    self.r_pub = rospy.Publisher("/r_arm_controller_loose/command", trajectory_msgs.msg.JointTrajectory)
-    rospy.Subscriber("/r_arm_controller_loose/state", pr2_controllers_msgs.msg.JointTrajectoryControllerState, self.RightJointStateCallback)
-    self.l_pub = rospy.Publisher("/l_arm_controller_loose/command", trajectory_msgs.msg.JointTrajectory)
-    rospy.Subscriber("/l_arm_controller_loose/state", pr2_controllers_msgs.msg.JointTrajectoryControllerState, self.LeftJointStateCallback)
+    self.r_pub= rospy.Publisher("/r_arm_controller_loose/command", trajectory_msgs.msg.JointTrajectory)
+    self.r_sub= rospy.Subscriber("/r_arm_controller_loose/state", pr2_controllers_msgs.msg.JointTrajectoryControllerState, self.RightJointStateCallback)
+    self.l_pub= rospy.Publisher("/l_arm_controller_loose/command", trajectory_msgs.msg.JointTrajectory)
+    self.l_sub= rospy.Subscriber("/l_arm_controller_loose/state", pr2_controllers_msgs.msg.JointTrajectoryControllerState, self.LeftJointStateCallback)
 
     self.head_pub = rospy.Publisher("/head_traj_controller/command", trajectory_msgs.msg.JointTrajectory)
     self.head_joint_names= ['head_pan_joint', 'head_tilt_joint']
@@ -398,7 +403,7 @@ class TCoreTool:
     self.material_amount= 0
     self.material_amount_observed= False
     self.amount_observer_callback= None
-    rospy.Subscriber("/color_occupied_ratio", std_msgs.msg.Float64, self.AmountObserver)
+    self.amount_sub= rospy.Subscriber("/color_occupied_ratio", std_msgs.msg.Float64, self.AmountObserver)
 
     #[id]=[pose x,y,z,qx,qy,qz,qw]
     self.ar_markers= {}
@@ -411,19 +416,34 @@ class TCoreTool:
     self.ar_adjust_arm= 1  #Left arm
     self.l_x_m_wrist= []  #Marker pose in the wrist frame
     self.ar_adjust_ratio= 0.02  #Update ratio
+    self.ar_adjust_err= 0.0  #Error norm is stored
     self.br= tf.TransformBroadcaster()
-    rospy.Subscriber("/ar_pose_marker", ar_track_alvar.msg.AlvarMarkers, self.ARMarkerObserver)
+    self.ar_sub= rospy.Subscriber("/ar_pose_marker", ar_track_alvar.msg.AlvarMarkers, self.ARMarkerObserver)
 
   def __del__(self):
     #self.stopRecord()
-    print 'TCoreTool: done'
-
+    print 'TCoreTool: done',self
 
   def Setup(self):
     SetupPlanningScene()
     self.mu= moveUtils.MoveUtils()
     #self.wm= arWorldModel.ARWorldModel()
 
+  def Cleanup(self):
+    self.r_pub.unregister()
+    self.r_sub.unregister()
+    self.l_pub.unregister()
+    self.l_sub.unregister()
+    self.head_pub.unregister()
+    self.amount_sub.unregister()
+    self.ar_sub.unregister()
+    del self.r_pub
+    del self.r_sub
+    del self.l_pub
+    del self.l_sub
+    del self.head_pub
+    del self.amount_sub
+    del self.ar_sub
 
   def ArmStr(self):
     return 'Right' if self.whicharm==0 else 'Left'
@@ -553,16 +573,25 @@ class TCoreTool:
 
   def ARMarkerObserver(self, msg):
     for m in msg.markers:
-      self.ar_markers[m.id]= m.pose.pose
+      self.ar_markers[m.id]= copy.deepcopy(m.pose.pose)
       self.ar_marker_frame_id= m.header.frame_id
 
+      #Adjustment with the marker on the wrist
       if m.id==self.ar_adjust_m_id and len(self.l_x_m_wrist)==7:
         whicharm= self.whicharm
         self.whicharm= self.ar_adjust_arm
         x_m_wrist= self.CartPos(self.l_x_m_wrist)
-        x_sensor2= TransformRightInv(x_m_wrist,self.ARXraw(self.ar_adjust_m_id))
-        self.x_sensor= AverageX(self.x_sensor, x_sensor2, self.ar_adjust_ratio)
         self.whicharm= whicharm
+        x_sensor2= TransformRightInv(x_m_wrist,self.ARXraw(self.ar_adjust_m_id))
+        del self.ar_markers[self.ar_adjust_m_id]
+
+        n_x= QToRot(self.x_sensor[3:7])[:,0]
+        n_x2= QToRot(x_sensor2[3:7])[:,0]
+        ang_nx= math.acos(np.dot(n_x,n_x2)/(la.norm(n_x)*la.norm(n_x2)))
+        #Acceptable angle is 10 [deg], otherwise it is considered as a noise
+        if ang_nx<10.0/180.0*math.pi:
+          self.ar_adjust_err= la.norm(np.array(self.x_sensor)-x_sensor2)
+          self.x_sensor= AverageX(self.x_sensor, x_sensor2, self.ar_adjust_ratio)
 
     if len(self.x_sensor)==7:
       self.br.sendTransform(self.x_sensor[0:3],self.x_sensor[3:],

@@ -38,5 +38,9 @@ def Run(t,args=()):
   t.attributes[obj]['grabbed']['grabber_handid']= handid
   t.attributes[obj]['grabbed']['joint_angles']= t.mu.arm[handid].getCurrentPosition()
 
+  #When grabbing, inference from the base marker does not work:
+  if 'base_marker_id' in t.attributes[obj]:
+    del t.attributes[obj]['base_marker_id']
+
   t.SwitchArm(whicharm)
 

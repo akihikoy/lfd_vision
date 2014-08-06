@@ -1,3 +1,4 @@
+help: A white soft cup.
 #Reference AR marker ID and pose:
 ref_marker_id: 4
 ref_marker_pose: [0.0338918, 0.00763136, 0.058467,  0.772273, 0.0382911, 0.633143, -0.0354675]

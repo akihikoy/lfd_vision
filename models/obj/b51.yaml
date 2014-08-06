@@ -1,3 +1,4 @@
+help: A blue-painted soft plastic cup which was originaly transparent.
 #Reference AR marker ID and pose:
 ref_marker_id: 5
 ref_marker_pose: [0.0393888, -0.00426883, 0.0762733,  0.764147, -0.0284004, 0.643949, 0.0245243]

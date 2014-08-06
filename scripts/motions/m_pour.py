@@ -21,6 +21,10 @@ def Run(t,args=()):
   t.SwitchArm(1)
 
   def ExitProc():
+    if 'base_marker_id' in t.attributes[bottle]:
+      del t.attributes[bottle]['base_marker_id']
+    if 'base_marker_id' in t.attributes[cup]:
+      del t.attributes[cup]['base_marker_id']
     t.SwitchArm(whicharm)
 
 
@@ -32,9 +36,11 @@ def Run(t,args=()):
     print 'Marker observation: %i, %r' % (m_id_bottle, m_id_bottle in t.ar_markers)
     print 'Marker observation: %i, %r' % (m_id_cup, m_id_cup in t.ar_markers)
     return
-  t.attributes[bottle]['x']= t.ARX(m_id_bottle)
-  t.attributes[cup]['x']= t.ARX(m_id_cup)
-
+  #t.attributes[bottle]['x']= t.ARX(m_id_bottle)
+  #t.attributes[cup]['x']= t.ARX(m_id_cup)
+  #Registering the base markers for inference (script infer is available)
+  t.attributes[bottle]['base_marker_id']= m_id_bottle
+  t.attributes[cup]['base_marker_id']= m_id_cup
 
   #Current control point in the wrist frame
   #lw_xe= t.control_frame[t.whicharm]
