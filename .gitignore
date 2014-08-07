@@ -8,7 +8,7 @@
 *.out
 *.pyc
 *.kate-swp
-core*
+core
 
 *.old
 old-*

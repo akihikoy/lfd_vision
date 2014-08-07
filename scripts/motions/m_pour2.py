@@ -1,30 +1,35 @@
 #!/usr/bin/python
-from cuiTool import *
+from core_tool import *
 import copy
-def Run(t,args):
+def Help():
+  return '''Script to pour (DUPLICATED).  Use `pour'
+  Usage: pour2'''
+def Run(t,args=()):
+  print Help()
+  return
 
+  bottle='b2'
+  cup='c1'
   l_cf_e= t.control_frame[t.whicharm] #Local vector to the current control frame
   b= t.BPX('b') #Bottle base pose on the torso frame
   c= t.BPX('c') #Cup base pose on the torso frame
   #Grab pose on the bottle frame (constant):
-  ##l_grabx= [0.0143257412366, -0.00243017410404, 0.00332284373253, -0.0386798980774, 0.0474739514813, 0.0058252014884, 0.998106285144]
-  l_grabx= [0.0173701175184, 0.132963892485, 0.0746058303632, -0.0496690610081, 0.0729356705803, -0.0512348563445, 0.994780559637]
+  lx_grab= t.attributes[bottle]['l_x_grab']
   #Grab pose on the torso frame
-  grabx= Transform(b,l_grabx)
+  grabx= Transform(b,lx_grab)
   print 'grabx=',VecToStr(grabx)
-  t.CommandGripper(0.03,50,True)
+  t.CommandGripper(t.attributes[bottle]['g_pre'],50,True)
   grabx0= copy.deepcopy(grabx)
   grabx0[0]= t.CartPos(l_cf_e)[0]
   t.MoveToCartPos(grabx0,3.0,l_cf_e,True)
   t.MoveToCartPos(grabx,3.0,l_cf_e,True)
-  t.CommandGripper(0.0,50,True)
+  t.CommandGripper(0.0,t.attributes[bottle]['f_grab'],True)
 
   #Pouring edge point on the bottle frame (constant):
-  ##l_pourex= [0.0385446328044, -0.043639339547, 0.102811025179, 0.0,0.0,0.0,1.0]
-  l_pourex= [-0.0017665710111, -0.15640101956, 0.169072305583, 0.0,0.0,0.0,1.0]
+  lx_pour_e= t.attributes[bottle]['l_x_pour_e']
 
   x= t.CartPos()
-  l_cf_pe= TransformLeftInv(x, Transform(b,l_pourex))
+  l_cf_pe= TransformLeftInv(x, Transform(b,lx_pour_e))
   print 'l_cf_pe=',VecToStr(l_cf_pe)
 
   #Move upward
@@ -33,8 +38,8 @@ def Run(t,args):
   t.MoveToCartPos(x,2.0,[],True)
 
   #Pouring location on the cup frame (constant):
-  l_pourlx= [0.0164938693088, 0.01293250989281, 0.210512294328, 0.0,0.0,0.0,1.0]
-  pourlx= Transform(c,l_pourlx)
+  lx_pour_l= t.attributes[cup]['l_x_pour_l']
+  pourlx= Transform(c,lx_pour_l)
 
   print 'pourlx=',VecToStr(pourlx)
   t.MoveToCartPos(pourlx,3.0,l_cf_pe,True)
