@@ -18,7 +18,6 @@ namespace trick
 {
 TPCLViewer PCLViewer;
 bool IsCameraSetup(false);
-double MarkerSize(0.044);
 }
 //-------------------------------------------------------------------------------------------
 using namespace std;
@@ -77,7 +76,7 @@ int main(int argc, char**argv)
 
   std::string pcd_in;
   node.param("pcd_in",pcd_in,std::string(""));
-  node.param("marker_size",MarkerSize,0.044);
+  node.param("marker_size",MarkerSize,0.048);
 
   if(pcd_in!="")
   {

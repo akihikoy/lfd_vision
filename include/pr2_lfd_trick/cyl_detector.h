@@ -35,9 +35,14 @@ struct TARMarker
   double Orientation[4];  // x,y,z,w
   double Size;
 };
-namespace detail {extern std::map<int,TARMarker>  ARMarkers;}
+namespace detail
+{
+extern std::map<int,TARMarker>  ARMarkers;
+extern double MarkerSize;
+}
 static const float ColorWhite[3]= {255,255,255};
 static const float ColorGray[3]= {128,128,128};
+static const double IdentityTransform[7]= {0.0,0.0,0.0, 0.0,0.0,0.0,1.0};
 //-------------------------------------------------------------------------------------------
 
 template <typename t_value>
@@ -52,6 +57,61 @@ inline std::string GetID(const std::string &base, int idx)
   std::stringstream ss;
   ss<<base<<idx;
   return ss.str();
+}
+//-------------------------------------------------------------------------------------------
+
+/* Pose to Eigen::Affine3d.
+    x: [0-2]: position x,y,z, [3-6]: orientation x,y,z,w. */
+template <typename t_value>
+inline Eigen::Affine3d XToEigMat(const t_value x[])
+{
+  Eigen::Affine3d res;
+  res= Eigen::Translation3d(x[0],x[1],x[2])
+          * Eigen::Quaterniond(x[6], x[3],x[4],x[5]);
+  return res;
+}
+/* Eigen::Affine3d to pose.
+    x: [0-2]: position x,y,z, [3-6]: orientation x,y,z,w. */
+template <typename t_value>
+inline void EigMatToX(const Eigen::Affine3d T, t_value x[7])
+{
+  const Eigen::Vector3d p= T.translation();
+  x[0]= p[0];
+  x[1]= p[1];
+  x[2]= p[2];
+  Eigen::Quaterniond q(T.rotation());
+  x[3]= q.x();
+  x[4]= q.y();
+  x[5]= q.z();
+  x[6]= q.w();
+}
+//-------------------------------------------------------------------------------------------
+
+/* Pose to TARMarker.  Size is not changed.
+    x: [0-2]: position x,y,z, [3-6]: orientation x,y,z,w. */
+template <typename t_value>
+inline void XToARMarker(const t_value x[], TARMarker &ar_marker)
+{
+  ar_marker.Position[0]   = x[0];
+  ar_marker.Position[1]   = x[1];
+  ar_marker.Position[2]   = x[2];
+  ar_marker.Orientation[0]= x[3];
+  ar_marker.Orientation[1]= x[4];
+  ar_marker.Orientation[2]= x[5];
+  ar_marker.Orientation[3]= x[6];
+}
+/* TARMarker to pose.
+    x: [0-2]: position x,y,z, [3-6]: orientation x,y,z,w. */
+template <typename t_value>
+inline void ARMarkerToX(const TARMarker &ar_marker, t_value x[7])
+{
+  x[0]= ar_marker.Position[0];
+  x[1]= ar_marker.Position[1];
+  x[2]= ar_marker.Position[2];
+  x[3]= ar_marker.Orientation[0];
+  x[4]= ar_marker.Orientation[1];
+  x[5]= ar_marker.Orientation[2];
+  x[6]= ar_marker.Orientation[3];
 }
 //-------------------------------------------------------------------------------------------
 
@@ -71,13 +131,23 @@ class TPCLViewer;
 void ExecuteDetection(
     TPCLViewer &pcl_viewer,
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr &cloud_org);
-
 void DetectCylinder(
     TPCLViewer &pcl_viewer,
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr &cloud_org,
     bool focused_analysis,
-    const Eigen::Vector3d &focusing_point,
-    const TARMarker &base_ar_marker);
+    const TARMarker &base_ar_marker,
+    int ref_ar_marker_id=-1,
+    const TARMarker &ref_ar_marker=TARMarker());
+
+// Analyzing an object's point cloud by detecting a single cylinder
+void AnalyzeObjectVer1(
+    TPCLViewer &pcl_viewer,
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr &cloud_obj,
+    int obj_id,
+    bool focused_analysis,
+    const TARMarker &base_ar_marker,
+    int ref_ar_marker_id=-1,
+    const TARMarker &ref_ar_marker=TARMarker());
 //-------------------------------------------------------------------------------------------
 
 
@@ -260,6 +330,17 @@ private:
 };
 //-------------------------------------------------------------------------------------------
 
+// Transform a point cloud and return a new cloud (new memory is allocated)
+template <typename t_point>
+typename pcl::PointCloud<t_point>::Ptr  TransformCloud(
+    const typename pcl::PointCloud<t_point>::ConstPtr &cloud_in,
+    const Eigen::Affine3d &T)
+{
+  typename pcl::PointCloud<t_point>::Ptr  cloud_out(new pcl::PointCloud<t_point>());
+  pcl::transformPointCloud(*cloud_in, *cloud_out, T.matrix().cast<float>());
+  return cloud_out;
+}
+//-------------------------------------------------------------------------------------------
 
 // Apply VoxelGrid filter of leaf size (lx,ly,lz)
 template <typename t_point>
@@ -511,16 +592,18 @@ double ExtractCylinder(
 
 
 //===========================================================================================
-/* Detailed container analyzer.
+/* Detailed container analyzer.  Analyzing an object's point cloud with a single cylinder.
     coefficients_std: [0-2]: point on axis, [3-5]: axis, [6]: radius,
     coefficients_ext: [0-2]: center x,y,z, [3]: length,
     base_frame: [0-2]: position x,y,z, [3-6]: orientation x,y,z,w,
     pour_edge_ratio: points whose z value is within Length*this from z-max are considered as PourPoints. */
 template <typename t_point>
-struct TContainerProperty
+struct TContainerAnalyzer1
 //===========================================================================================
 {
-  typename pcl::PointCloud<t_point>::Ptr  Cloud;
+  typedef boost::shared_ptr<TContainerAnalyzer1<t_point> >  Ptr;
+  typedef boost::shared_ptr<const TContainerAnalyzer1<t_point> >  ConstPtr;
+  typename pcl::PointCloud<t_point>::Ptr        Cloud;
   typename pcl::PointCloud<pcl::PointXYZ>::Ptr  PourPoints;
   typename pcl::PointCloud<pcl::PointXYZ>::Ptr  GrabPoints;
   pcl::PointIndices::Ptr  CylInliers;
@@ -529,8 +612,11 @@ struct TContainerProperty
   double  CylRadius;
   double  CylLength;
   double  Length;
+  double  GrabWidth;
+  int     RefMarkerID;  // Reference AR marker on the container
+  double  RefMarkerPose[7];  // Its pose
 
-  TContainerProperty(
+  TContainerAnalyzer1(
       typename pcl::PointCloud<t_point>::Ptr &cloud_in,
       pcl::PointIndices::Ptr &inliers,
       const pcl::ModelCoefficients::Ptr &coefficients_std,
@@ -539,14 +625,16 @@ struct TContainerProperty
       const double &pour_edge_ratio,
       const double &grab_height,
       const double &grab_z_step_ratio,
-      const double &grab_radius_sd_thresh_ratio)
+      const double &grab_radius_sd_thresh_ratio,
+      const double &g_width_margin,
+      const double ref_marker_id=-1,
+      const double *ref_marker_pose=NULL)
     {
       const std::vector<float> &c_std(coefficients_std->values);
       const std::vector<float> &c_ext(coefficients_ext->values);
 
       Eigen::Affine3d Tbase, Tf;
-      Tbase= Eigen::Translation3d(base_frame[0],base_frame[1],base_frame[2])
-              * Eigen::Quaterniond(base_frame[6],base_frame[3],base_frame[4],base_frame[5]);
+      Tbase= XToEigMat(base_frame);
       Tf= Tbase.inverse();
       //*DEBUG*/std::cerr<<"Tbase= "<<Tbase.matrix()<<std::endl;
       //*DEBUG*/std::cerr<<"Tf= "<<Tf.matrix()<<std::endl;
@@ -570,6 +658,13 @@ struct TContainerProperty
       //*DEBUG*/std::cerr<<"CylAxis= "<<CylAxis.transpose()<<std::endl;
       //*DEBUG*/std::cerr<<"cyl_axis2= "<<(Tbase.rotation()*CylAxis).transpose()<<std::endl;
 
+      if(ref_marker_id>=0)
+      {
+        RefMarkerID= ref_marker_id;
+        Eigen::Affine3d  Tref;
+        Tref= Tf * XToEigMat(ref_marker_pose);
+        EigMatToX(Tref, RefMarkerPose);
+      }
 
       /*Getting Length and PourPoints...*/{
         pcl::PointXYZ pt_min, pt_max;
@@ -627,35 +722,62 @@ struct TContainerProperty
         GrabPoints= pcl::PointCloud<pcl::PointXYZ>::Ptr(new pcl::PointCloud<pcl::PointXYZ>());
         pcl::transformPointCloud(*grab_points_cyl, *GrabPoints, Tcyl.inverse().matrix().cast<float>());
       }  // Getting GrabPoints
+
+      GrabWidth= 2.0*CylRadius*g_width_margin;
     }
 
-  void Visualize(TPCLViewer &viewer, const std::string &name)
+  void Visualize(
+      TPCLViewer &viewer,
+      const std::string &name,
+      const double base_frame[7]=IdentityTransform,
+      const float rgb[3]=ColorWhite)
     {
+      Eigen::Affine3d Tbase;
+      Tbase= XToEigMat(base_frame);
+      boost::function<typename pcl::PointCloud<t_point>::Ptr (const typename pcl::PointCloud<t_point>::ConstPtr)>
+          tfpc= boost::bind(&TransformCloud<t_point>, _1, Tbase);
+
       const float pour_ps_color[3]= {255,0,0};
       const float grab_ps_color[3]= {0,255,0};
-      viewer.AddPointCloud(Cloud, name+"_cloud", 1);
-      viewer.AddPointCloud(ColorPointCloud(PourPoints,pour_ps_color), name+"_pour", 3);
-      viewer.AddPointCloud(ColorPointCloud(GrabPoints,grab_ps_color), name+"_grab", 5);
+      viewer.AddPointCloud(tfpc(Cloud), name+"_cloud", 2);
+      viewer.AddPointCloud(tfpc(ColorPointCloud(PourPoints,pour_ps_color)), name+"_pour", 3);
+      viewer.AddPointCloud(tfpc(ColorPointCloud(GrabPoints,grab_ps_color)), name+"_grab", 5);
 
       pcl::ModelCoefficients::Ptr  coefficients_std(new pcl::ModelCoefficients);
       pcl::ModelCoefficients::Ptr  coefficients_ext(new pcl::ModelCoefficients);
+      Eigen::Vector3d cyl_center= (Tbase * Eigen::Translation3d(CylCenter)).translation();
+      Eigen::Vector3d cyl_axis= Tbase.rotation() * CylAxis;
       coefficients_std->values.resize(7);
-      coefficients_std->values[0]= CylCenter[0];
-      coefficients_std->values[1]= CylCenter[1];
-      coefficients_std->values[2]= CylCenter[2];
-      coefficients_std->values[3]= CylAxis[0];
-      coefficients_std->values[4]= CylAxis[1];
-      coefficients_std->values[5]= CylAxis[2];
+      coefficients_std->values[0]= cyl_center[0];
+      coefficients_std->values[1]= cyl_center[1];
+      coefficients_std->values[2]= cyl_center[2];
+      coefficients_std->values[3]= cyl_axis[0];
+      coefficients_std->values[4]= cyl_axis[1];
+      coefficients_std->values[5]= cyl_axis[2];
       coefficients_std->values[6]= CylRadius;
       coefficients_ext->values.resize(4);
-      coefficients_ext->values[0]= CylCenter[0];
-      coefficients_ext->values[1]= CylCenter[1];
-      coefficients_ext->values[2]= CylCenter[2];
+      coefficients_ext->values[0]= cyl_center[0];
+      coefficients_ext->values[1]= cyl_center[1];
+      coefficients_ext->values[2]= cyl_center[2];
       coefficients_ext->values[3]= CylLength;
-      viewer.AddCylinder(coefficients_std, coefficients_ext, name+"_cyl", 3);
+      viewer.AddCylinder(coefficients_std, coefficients_ext, name+"_cyl", 3, rgb);
+
+      pcl::ModelCoefficients::Ptr sq_coefficients(new pcl::ModelCoefficients);
+      sq_coefficients->values.resize(8);
+      for(int i(0); i<7; ++i)
+        sq_coefficients->values[i]= base_frame[i];
+      sq_coefficients->values[7]= detail::MarkerSize;
+      viewer.AddSquare(sq_coefficients, name+"_base", 5, rgb);
+
+      double ref_marker_pose[7];
+      EigMatToX(Tbase*XToEigMat(RefMarkerPose), ref_marker_pose);
+      for(int i(0); i<7; ++i)
+        sq_coefficients->values[i]= ref_marker_pose[i];
+      sq_coefficients->values[7]= detail::MarkerSize;
+      viewer.AddSquare(sq_coefficients, name+"_ref", 4, rgb);
     }
 
-  void PrintAsYAML(std::ostream &os, const double &g_width_margin)
+  void PrintAsYAML(std::ostream &os)
     {
       // typename pcl::PointCloud<t_point>::Ptr  Cloud;
       // typename pcl::PointCloud<pcl::PointXYZ>::Ptr  PourPoints;
@@ -678,8 +800,15 @@ struct TContainerProperty
       // #Pouring edge point:
       // t.attributes['b1']['l_x_pour_e']= [0.0, -0.04, 0.11, 0.0,0.0,0.0,1.0]
 
+      os<<"#Reference AR marker ID and pose:"<<std::endl;
+      os<<"ref_marker_id: "<<RefMarkerID<<std::endl;
+      os<<"ref_marker_pose: ["
+          <<RefMarkerPose[0]<<", "<<RefMarkerPose[1]<<", "<<RefMarkerPose[2]<<",  "
+          <<RefMarkerPose[3]<<", "<<RefMarkerPose[4]<<", "<<RefMarkerPose[5]<<", "<<RefMarkerPose[6]
+          <<"]"<<std::endl;
+
       os<<"#Gripper width to grab:"<<std::endl;
-      os<<"g_width: "<<2.0*CylRadius*g_width_margin<<std::endl;
+      os<<"g_width: "<<GrabWidth<<std::endl;
 
       os<<"#Pouring edge point candidates:"<<std::endl;
       os<<"l_x_pour_e_set:"<<std::endl;
@@ -707,6 +836,37 @@ struct TContainerProperty
 };
 //-------------------------------------------------------------------------------------------
 
+
+
+
+
+
+//===========================================================================================
+/* Detailed container analyzer ver.2.  Analyzing an object's point cloud with multiple cylinders.
+    coefficients_std: [0-2]: point on axis, [3-5]: axis, [6]: radius,
+    coefficients_ext: [0-2]: center x,y,z, [3]: length,
+    base_frame: [0-2]: position x,y,z, [3-6]: orientation x,y,z,w,
+    pour_edge_ratio: points whose z value is within Length*this from z-max are considered as PourPoints. */
+#if 0
+template <typename t_point>
+struct TContainerAnalyzer2
+//===========================================================================================
+{
+  typedef boost::shared_ptr<TContainerAnalyzer2<t_point> >  Ptr;
+  typedef boost::shared_ptr<const TContainerAnalyzer2<t_point> >  ConstPtr;
+  typename pcl::PointCloud<t_point>::Ptr  Cloud;
+  pcl::PointCloud<pcl::PointXYZ>::Ptr     PourPoints;  //!< Set of pouring points
+  pcl::PointCloud<pcl::PointXYZ>::Ptr     GrabPoints;  //!< Set of grab poses
+  std::vector<double>                     GrabWidths;  //!< Set of grab width corresponding with GrabPoints
+  std::vector<pcl::PointIndices::Ptr>  CylInliers;
+  std::vector<Eigen::Vector3d>  CylCenter;
+  std::vector<Eigen::Vector3d>  CylAxis;
+  std::vector<double>  CylRadius;
+  std::vector<double>  CylLength;
+  double  Length;
+
+#endif
+//-------------------------------------------------------------------------------------------
 
 
 
