@@ -592,6 +592,18 @@ double ExtractCylinder(
 
 
 //===========================================================================================
+// Grab primitive that models a local grab shape
+enum TGrabPrimitiveKind {gpkCylinder=0};
+struct TGrabPrimitive
+//===========================================================================================
+{
+  TGrabPrimitiveKind Kind;
+  Eigen::Vector3d  P1, P2;  // Bottom and top points (gpkCylinder)
+  double           Width;  // Width (gpkCylinder)
+};
+//-------------------------------------------------------------------------------------------
+
+//===========================================================================================
 /* Detailed container analyzer.  Analyzing an object's point cloud with a single cylinder.
     coefficients_std: [0-2]: point on axis, [3-5]: axis, [6]: radius,
     coefficients_ext: [0-2]: center x,y,z, [3]: length,
@@ -605,14 +617,15 @@ struct TContainerAnalyzer1
   typedef boost::shared_ptr<const TContainerAnalyzer1<t_point> >  ConstPtr;
   typename pcl::PointCloud<t_point>::Ptr        Cloud;
   typename pcl::PointCloud<pcl::PointXYZ>::Ptr  PourPoints;
-  typename pcl::PointCloud<pcl::PointXYZ>::Ptr  GrabPoints;
+  /*DEPRECATED*/typename pcl::PointCloud<pcl::PointXYZ>::Ptr  GrabPoints;
+  std::vector<TGrabPrimitive>  GrabPrimitives;
   pcl::PointIndices::Ptr  CylInliers;
   Eigen::Vector3d  CylCenter;
   Eigen::Vector3d  CylAxis;
   double  CylRadius;
   double  CylLength;
   double  Length;
-  double  GrabWidth;
+  /*DEPRECATED*/double  GrabWidth;
   int     RefMarkerID;  // Reference AR marker on the container
   double  RefMarkerPose[7];  // Its pose
 
@@ -679,13 +692,13 @@ struct TContainerAnalyzer1
         pass_z.filter(*PourPoints);
       }
 
-      /*Getting GrabPoints...*/{
+      /*DEPRECATED Getting GrabPoints...*/{
         // Rotate the cloud along with CylAxis
         Eigen::Vector3d rot_axis= CylAxis.cross(Eigen::Vector3d::UnitZ());
         rot_axis.normalize();
         double rot_angle= std::acos(CylAxis.transpose()*Eigen::Vector3d::UnitZ());
         Eigen::Affine3d Tcyl;
-        Tcyl= Eigen::AngleAxisd(rot_angle,rot_axis);
+        Tcyl= Eigen::AngleAxisd(rot_angle,rot_axis) * Eigen::Translation3d(-CylCenter);
         pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_cyl(new pcl::PointCloud<pcl::PointXYZ>());
         pcl::transformPointCloud(*cloud_gray, *cloud_cyl, Tcyl.matrix().cast<float>());
 
@@ -721,9 +734,71 @@ struct TContainerAnalyzer1
         // Inv transform the grabbable points onto the base frame
         GrabPoints= pcl::PointCloud<pcl::PointXYZ>::Ptr(new pcl::PointCloud<pcl::PointXYZ>());
         pcl::transformPointCloud(*grab_points_cyl, *GrabPoints, Tcyl.inverse().matrix().cast<float>());
-      }  // Getting GrabPoints
+      }  // Getting GrabPoints */
 
-      GrabWidth= 2.0*CylRadius*g_width_margin;
+      double grab_width= 2.0*CylRadius*g_width_margin;
+      /*DEPRECATED*/GrabWidth= grab_width;
+
+      /*Getting GrabPrimitives*/{
+        GrabPrimitives.clear();
+        bool flag(false);
+
+        // Rotate the cloud along with CylAxis
+        Eigen::Vector3d rot_axis= CylAxis.cross(Eigen::Vector3d::UnitZ());
+        rot_axis.normalize();
+        double rot_angle= std::acos(CylAxis.transpose()*Eigen::Vector3d::UnitZ());
+        Eigen::Affine3d Tcyl;
+        Tcyl= Eigen::AngleAxisd(rot_angle,rot_axis) * Eigen::Translation3d(-CylCenter);
+        pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_cyl(new pcl::PointCloud<pcl::PointXYZ>());
+        pcl::transformPointCloud(*cloud_gray, *cloud_cyl, Tcyl.matrix().cast<float>());
+
+        // Get z-min/z-max property
+        pcl::PointXYZ pt_min, pt_max;
+        pcl::getMinMax3D(*cloud_cyl, pt_min, pt_max);
+        pcl::PassThrough<pcl::PointXYZ>  pass_z;
+        pass_z.setInputCloud(cloud_cyl);
+        pass_z.setFilterFieldName("z");
+        double g_len(pt_max.z-pt_min.z);
+
+        // Extract grabbable points along with CylAxis
+        pcl::PointCloud<pcl::PointXYZ>::Ptr  cloud_grabed(new pcl::PointCloud<pcl::PointXYZ>());
+        for(double z(pt_min.z+0.5*grab_height); z<pt_max.z-0.5*grab_height; z+= grab_z_step_ratio*(g_len-grab_height))
+        {
+          pass_z.setFilterLimits(z-0.5*grab_height, z+0.5*grab_height);
+          pass_z.filter(*cloud_grabed);
+          double r_err_sd(0.0);
+          for(int i(0); i<cloud_grabed->points.size(); ++i)
+          {
+            double r= std::sqrt(Sq(cloud_grabed->points[i].x)+Sq(cloud_grabed->points[i].y));
+            r_err_sd+= Sq(r-CylRadius);
+          }
+          r_err_sd= std::sqrt(r_err_sd/static_cast<double>(cloud_grabed->points.size()));
+          // If true, z is grabbable
+          if(r_err_sd < grab_radius_sd_thresh_ratio*CylRadius)
+          {
+            Eigen::Vector3d p= (Tcyl.inverse() * Eigen::Translation3d(0,0,z)).translation();
+            if(flag)
+              GrabPrimitives.back().P2= p;
+            else
+            {
+              GrabPrimitives.push_back(TGrabPrimitive());
+              GrabPrimitives.back().Kind= gpkCylinder;
+              GrabPrimitives.back().P1= p;
+              GrabPrimitives.back().P2= p;
+              GrabPrimitives.back().Width= grab_width;
+              flag= true;
+            }
+          }
+          else  // z is not grabbable
+          {
+            if(flag && GrabPrimitives.back().P1==GrabPrimitives.back().P2)
+              GrabPrimitives.pop_back();
+            flag= false;
+          }
+        }
+        if(flag && GrabPrimitives.back().P1==GrabPrimitives.back().P2)
+          GrabPrimitives.pop_back();
+      }
     }
 
   void Visualize(
@@ -760,7 +835,33 @@ struct TContainerAnalyzer1
       coefficients_ext->values[1]= cyl_center[1];
       coefficients_ext->values[2]= cyl_center[2];
       coefficients_ext->values[3]= CylLength;
-      viewer.AddCylinder(coefficients_std, coefficients_ext, name+"_cyl", 3, rgb);
+      viewer.AddCylinder(coefficients_std, coefficients_ext, name+"_cyl", 2, rgb);
+
+      for(size_t i(0); i<GrabPrimitives.size(); ++i)
+      {
+        const TGrabPrimitive &prm(GrabPrimitives[i]);
+        if(prm.Kind==gpkCylinder)
+        {
+          Eigen::Vector3d p1= (Tbase * Eigen::Translation3d(prm.P1)).translation();
+          Eigen::Vector3d p2= (Tbase * Eigen::Translation3d(prm.P2)).translation();
+          Eigen::Vector3d center= 0.5*(p1+p2);
+          Eigen::Vector3d axis= p2-p1;
+          double length= axis.norm();
+          axis.normalize();
+          coefficients_std->values[0]= center[0];
+          coefficients_std->values[1]= center[1];
+          coefficients_std->values[2]= center[2];
+          coefficients_std->values[3]= axis[0];
+          coefficients_std->values[4]= axis[1];
+          coefficients_std->values[5]= axis[2];
+          coefficients_std->values[6]= prm.Width/2.0;
+          coefficients_ext->values[0]= center[0];
+          coefficients_ext->values[1]= center[1];
+          coefficients_ext->values[2]= center[2];
+          coefficients_ext->values[3]= length;
+          viewer.AddCylinder(coefficients_std, coefficients_ext, GetID(name+"_gcyl",i), 4, rgb);
+        }
+      }
 
       pcl::ModelCoefficients::Ptr sq_coefficients(new pcl::ModelCoefficients);
       sq_coefficients->values.resize(8);
@@ -800,6 +901,7 @@ struct TContainerAnalyzer1
       // #Pouring edge point:
       // t.attributes['b1']['l_x_pour_e']= [0.0, -0.04, 0.11, 0.0,0.0,0.0,1.0]
 
+      os<<"help: Container model created by TContainerAnalyzer1."<<std::endl;
       os<<"#Reference AR marker ID and pose:"<<std::endl;
       os<<"ref_marker_id: "<<RefMarkerID<<std::endl;
       os<<"ref_marker_pose: ["
@@ -807,30 +909,42 @@ struct TContainerAnalyzer1
           <<RefMarkerPose[3]<<", "<<RefMarkerPose[4]<<", "<<RefMarkerPose[5]<<", "<<RefMarkerPose[6]
           <<"]"<<std::endl;
 
-      os<<"#Gripper width to grab:"<<std::endl;
-      os<<"g_width: "<<GrabWidth<<std::endl;
+      // os<<"#Gripper width to grab:"<<std::endl;
+      // os<<"g_width: "<<GrabWidth<<std::endl;
+
+      os<<"#Set of grab primitives:"<<std::endl;
+      os<<"grab_primitives:"<<std::endl;
+      for(size_t i(0); i<GrabPrimitives.size(); ++i)
+      {
+        const TGrabPrimitive &prm(GrabPrimitives[i]);
+        if(prm.Kind==gpkCylinder)
+        {
+          os<<"- kind: "<<"gpkCylinder"<<std::endl;
+          os<<"  p1: "<<"["<<prm.P1[0]<<", "<<prm.P1[1]<<", "<<prm.P1[2]<<"]"<<std::endl;
+          os<<"  p2: "<<"["<<prm.P2[0]<<", "<<prm.P2[1]<<", "<<prm.P2[2]<<"]"<<std::endl;
+          os<<"  width: "<<prm.Width<<std::endl;
+        }
+      }
 
       os<<"#Pouring edge point candidates:"<<std::endl;
-      os<<"l_x_pour_e_set:"<<std::endl;
+      os<<"l_p_pour_e_set:"<<std::endl;
       for(size_t i(0); i<PourPoints->points.size(); ++i)
       {
         os<<"- [" <<PourPoints->points[i].x<<", "
                   <<PourPoints->points[i].y<<", "
-                  <<PourPoints->points[i].z<<",  "
-                  <<" 0.0,0.0,0.0,1.0]"
-                  <<std::endl;
+                  <<PourPoints->points[i].z<<"]"<<std::endl;
       }
 
-      os<<"#Grab pose candidates:"<<std::endl;
-      os<<"l_x_grab_set:"<<std::endl;
-      for(size_t i(0); i<GrabPoints->points.size(); ++i)
-      {
-        os<<"- [" <<GrabPoints->points[i].x<<", "
-                  <<GrabPoints->points[i].y<<", "
-                  <<GrabPoints->points[i].z<<",  "
-                  <<q_cyl.x()<<", "<<q_cyl.y()<<", "<<q_cyl.z()<<", "<<q_cyl.w()<<"]"
-                  <<std::endl;
-      }
+      // os<<"#Grab pose candidates:"<<std::endl;
+      // os<<"l_x_grab_set:"<<std::endl;
+      // for(size_t i(0); i<GrabPoints->points.size(); ++i)
+      // {
+        // os<<"- [" <<GrabPoints->points[i].x<<", "
+                  // <<GrabPoints->points[i].y<<", "
+                  // <<GrabPoints->points[i].z<<",  "
+                  // <<q_cyl.x()<<", "<<q_cyl.y()<<", "<<q_cyl.z()<<", "<<q_cyl.w()<<"]"
+                  // <<std::endl;
+      // }
     }
 
 };
