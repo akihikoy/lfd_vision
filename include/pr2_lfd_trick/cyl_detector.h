@@ -23,6 +23,9 @@
 #include <pcl/segmentation/extract_clusters.h>
 #include <pcl/common/transforms.h>
 #include <pcl/visualization/cloud_viewer.h>
+#include <pcl/surface/concave_hull.h>
+// #include <pcl/surface/convex_hull.h>
+#include <pcl/common/pca.h>
 #include <map>
 //-------------------------------------------------------------------------------------------
 namespace trick
@@ -319,9 +322,17 @@ public:
       AddPointCloud(cloud_sq, name, point_size);
     }
 
+  void AddPolygon(
+      const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr &cloud,
+      const std::string &name, const float rgb[3]=ColorWhite)
+    {
+      viewer_->addPolygon<pcl::PointXYZRGB>(cloud, rgb[0], rgb[1], rgb[2], name);
+    }
+
   void RemoveAll()
     {
       viewer_->removeAllPointClouds();
+      viewer_->removeAllShapes();
     }
 
 private:
@@ -376,13 +387,13 @@ bool RemovePlains(
   seg.setMaxIterations(ransac_max_iterations);
   seg.setDistanceThreshold(ransac_dist_thresh);
 
-  int nr_points = cloud_io->points.size ();
-  while (cloud_io->points.size() > non_planar_points_ratio*nr_points)
+  int nr_points= cloud_io->points.size();
+  while(cloud_io->points.size() > non_planar_points_ratio*nr_points)
   {
     // Segment the largest planar component from the remaining cloud
     seg.setInputCloud(cloud_io);
     seg.segment (*inliers, *coefficients); //*
-    if (inliers->indices.size () == 0)
+    if(inliers->indices.size() == 0)
     {
       std::cerr<<"Error: Could not estimate a planar model for the given dataset."<<std::endl;
       return false;
@@ -390,12 +401,12 @@ bool RemovePlains(
 
     // Extract the planar inliers from the input cloud
     pcl::ExtractIndices<t_point> extract;
-    extract.setInputCloud (cloud_io);
-    extract.setIndices (inliers);
+    extract.setInputCloud(cloud_io);
+    extract.setIndices(inliers);
 
     // Remove the planar inliers, extract the rest
-    extract.setNegative (true);
-    extract.filter (*cloud_io);
+    extract.setNegative(true);
+    extract.filter(*cloud_io);
   }
   return true;
 }
@@ -636,10 +647,10 @@ struct TContainerAnalyzer1
       const pcl::ModelCoefficients::Ptr &coefficients_ext,
       const double base_frame[7],
       const double &pour_edge_ratio,
+      const double &pour_hull_alpha,
       const double &grab_height,
       const double &grab_z_step_ratio,
       const double &grab_radius_sd_thresh_ratio,
-      const double &g_width_margin,
       const double ref_marker_id=-1,
       const double *ref_marker_pose=NULL)
     {
@@ -684,12 +695,28 @@ struct TContainerAnalyzer1
         pcl::getMinMax3D(*cloud_gray, pt_min, pt_max);
         Length= pt_max.z - pt_min.z;
 
-        PourPoints= pcl::PointCloud<pcl::PointXYZ>::Ptr(new pcl::PointCloud<pcl::PointXYZ>());
+        pcl::PointCloud<pcl::PointXYZ>::Ptr edge_points(new pcl::PointCloud<pcl::PointXYZ>());
         pcl::PassThrough<pcl::PointXYZ>  pass_z;
         pass_z.setInputCloud(cloud_gray);
         pass_z.setFilterFieldName("z");
         pass_z.setFilterLimits(pt_max.z-pour_edge_ratio*Length, pt_max.z);
-        pass_z.filter(*PourPoints);
+        pass_z.filter(*edge_points);
+
+        pcl::PointCloud<pcl::PointXYZ>::Ptr  proj(new pcl::PointCloud<pcl::PointXYZ>()),
+            cloud_projected(new pcl::PointCloud<pcl::PointXYZ>());
+        pcl::PCA<pcl::PointXYZ> pca;
+        pca.setInputCloud(edge_points);
+        pca.project(*edge_points, *proj);
+        for(size_t i(0); i<proj->points.size(); ++i)  proj->points[i].z= 0.0;
+        pca.reconstruct (*proj, *cloud_projected);
+
+        const float pour_ps2_color[3]= {0,255,255};
+        // Get PourPoints as a Concave Hull
+        PourPoints= pcl::PointCloud<pcl::PointXYZ>::Ptr(new pcl::PointCloud<pcl::PointXYZ>());
+        pcl::ConcaveHull<pcl::PointXYZ> chull;
+        chull.setInputCloud(cloud_projected);
+        chull.setAlpha (pour_hull_alpha);
+        chull.reconstruct (*PourPoints);
       }
 
       /*DEPRECATED Getting GrabPoints...*/{
@@ -736,7 +763,7 @@ struct TContainerAnalyzer1
         pcl::transformPointCloud(*grab_points_cyl, *GrabPoints, Tcyl.inverse().matrix().cast<float>());
       }  // Getting GrabPoints */
 
-      double grab_width= 2.0*CylRadius*g_width_margin;
+      double grab_width= 2.0*CylRadius;
       /*DEPRECATED*/GrabWidth= grab_width;
 
       /*Getting GrabPrimitives*/{
@@ -816,7 +843,29 @@ struct TContainerAnalyzer1
       const float grab_ps_color[3]= {0,255,0};
       viewer.AddPointCloud(tfpc(Cloud), name+"_cloud", 2);
       viewer.AddPointCloud(tfpc(ColorPointCloud(PourPoints,pour_ps_color)), name+"_pour", 3);
+      viewer.AddPolygon(tfpc(ColorPointCloud(PourPoints,pour_ps_color)), name+"_pourl", pour_ps_color);
       viewer.AddPointCloud(tfpc(ColorPointCloud(GrabPoints,grab_ps_color)), name+"_grab", 5);
+
+      /*>>>>>TEST*-/{
+        pcl::PointCloud<pcl::PointXYZ>::Ptr  proj(new pcl::PointCloud<pcl::PointXYZ>),
+            cloud_projected(new pcl::PointCloud<pcl::PointXYZ>);
+        pcl::PCA<pcl::PointXYZ> pca;
+        pca.setInputCloud(PourPoints);
+        pca.project(*PourPoints, *proj);
+        for(size_t i(0); i<proj->points.size(); ++i)  proj->points[i].z= 0.0;
+        pca.reconstruct (*proj, *cloud_projected);
+
+        const float pour_ps2_color[3]= {0,255,255};
+        // Create a Concave Hull representation of the projected inliers
+        pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_hull(new pcl::PointCloud<pcl::PointXYZ>);
+        pcl::ConcaveHull<pcl::PointXYZ> chull;
+        chull.setInputCloud(cloud_projected);
+        chull.setAlpha (0.2);
+        chull.reconstruct (*cloud_hull);
+        viewer.AddPointCloud(tfpc(ColorPointCloud(cloud_hull,pour_ps2_color)), name+"_conv", 5);
+        viewer.AddPolygon(tfpc(ColorPointCloud(cloud_hull,pour_ps2_color)), name+"_convl", pour_ps2_color);
+      }//<<<<<TEST*/
+
 
       pcl::ModelCoefficients::Ptr  coefficients_std(new pcl::ModelCoefficients);
       pcl::ModelCoefficients::Ptr  coefficients_ext(new pcl::ModelCoefficients);

@@ -488,17 +488,17 @@ void AnalyzeObjectVer1(
         cyl_coefficients_ext,
         base_frame,
         /*pour_edge_ratio=*/0.1,
+        /*pour_hull_alpha=*/0.2,
         /*grab_height=*/0.02,  // 2cm
         /*grab_z_step_ratio=*/0.01,
         /*grab_radius_sd_thresh_ratio=*/0.2,
-        /*g_width_margin=*/0.9,
         ref_ar_marker_id,
         ref_ar_marker_pose);
     container_property.Visualize(
         pcl_viewer,
         GetID("container",j),
         base_frame /*IdentityTransform*/,    // Visualiza at the base_frame position or the origin
-        IndexedColors[j%NumIndexedColors]);
+        IndexedColors[5]);  // IndexedColors[j%NumIndexedColors]
     // container_property.PrintAsYAML(std::cout);
     std::string file_name("/tmp/cyl_info.yaml");
     std::string file_name_pcd("/tmp/cyl_info.pcd");
@@ -507,6 +507,7 @@ void AnalyzeObjectVer1(
     std::cerr<<"Saved cylinder info into: "<<file_name<<std::endl;
     pcl::io::savePCDFile(file_name_pcd, *cloud_obj, /*binary_mode=*/true);
     std::cerr<<"Saved cylinder point cloud into: "<<file_name_pcd<<std::endl;
+    pcl::io::savePCDFile("/tmp/cyl_info_pour.pcd", *container_property.PourPoints, /*binary_mode=*/true);
 
   }
 }
