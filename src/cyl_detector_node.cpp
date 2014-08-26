@@ -83,7 +83,24 @@ int main(int argc, char**argv)
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_org(new pcl::PointCloud<pcl::PointXYZRGB>);
     pcl::io::loadPCDFile(pcd_in, *cloud_org);
     PCLViewer.AutoCamera(cloud_org);
-    ExecuteDetection(PCLViewer, cloud_org);
+    // ExecuteDetection(PCLViewer, cloud_org);
+
+    double base_frame[7]= {0,0,0, 0,0,0,1};
+    TARMarker  base_ar_marker;
+    XToARMarker(base_frame, base_ar_marker);
+    base_ar_marker.Size= MarkerSize;
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr  base_point_cloud(new pcl::PointCloud<pcl::PointXYZRGB>);
+
+    DetectCylinder(
+        PCLViewer,
+        cloud_org,
+        /*focused_analysis=*/true,
+        base_ar_marker,
+        /*ref_ar_marker_id=*/-1,
+        /*ref_ar_marker=*/base_ar_marker,
+        base_point_cloud,
+        /*add_to_base_point_cloud=*/false);
+
     while(!PCLViewer.IsStopped()) PCLViewer.SpinOnce(100);
     return 0;
   }

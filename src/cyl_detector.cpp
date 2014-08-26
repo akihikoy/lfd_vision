@@ -25,7 +25,9 @@ enum TDetectorMode {dmRunning=0, dmVisualizingCurrCloud, dmPause};
 // static TDetectorMode  DetectorMode(dmRunning);
 static TDetectorMode  DetectorMode(dmVisualizingCurrCloud);
 static bool  VisInitRequired(false);
+static bool  AddToBasePointCloudRequired(false);
 static bool  FocusingOnSingleCylinder(false);
+static bool  PointCloudChanged(false);
 // 3D point for selecting a base AR marker:
 static Eigen::Vector3d  PickedPoint(0.0,0.0,0.0);
 static int  BaseARMarkerID(-1);
@@ -35,10 +37,10 @@ static const int   MaxCloudSequence(10);
 static std::list<pcl::PointCloud<pcl::PointXYZRGB>::Ptr>  CloudSequence;
 static std::list<TARMarker>                               BaseARMarkerSequence;
 static std::list<TARMarker>                               RefARMarkerSequence;
-static bool                                                         PlayingItrChanged(false);
 static std::list<pcl::PointCloud<pcl::PointXYZRGB>::Ptr>::iterator  PlayingCloudItr;
 static std::list<TARMarker>::iterator                               PlayingBaseARMarkerItr;
 static std::list<TARMarker>::iterator                               PlayingRefARMarkerItr;
+static pcl::PointCloud<pcl::PointXYZRGB>::Ptr  BasePointCloud(new pcl::PointCloud<pcl::PointXYZRGB>);
 }  // detail
 //-------------------------------------------------------------------------------------------
 static bool  VerbosePrint(false);
@@ -60,7 +62,7 @@ void KeyboardEventCallback(
       if(DetectorMode==dmPause)
       {
         std::cerr<<"Cylinder detection: pause (press ' ' to resume)"<<std::endl;
-        PlayingItrChanged= false;
+        PointCloudChanged= false;
         PlayingCloudItr= CloudSequence.end();
         PlayingBaseARMarkerItr= BaseARMarkerSequence.end();
         PlayingRefARMarkerItr= RefARMarkerSequence.end();
@@ -98,7 +100,7 @@ void KeyboardEventCallback(
         else
         {
           std::cerr<<"Next snapshot"<<std::endl;
-          PlayingItrChanged= true;
+          PointCloudChanged= true;
         }
       }
     }
@@ -110,7 +112,7 @@ void KeyboardEventCallback(
         --PlayingBaseARMarkerItr;
         --PlayingRefARMarkerItr;
         std::cerr<<"Previous snapshot"<<std::endl;
-        PlayingItrChanged= true;
+        PointCloudChanged= true;
       }
     }
     else if(event.getKeySym()=="i")
@@ -125,12 +127,25 @@ void KeyboardEventCallback(
     {
       VerbosePrint= !VerbosePrint;
     }
-    else if(event.getKeySym()=="b")
+    else if(event.getKeySym()=="B")
     {
       std::cerr<<"Type base AR marker ID: "<<std::flush;
       std::cin>>BaseARMarkerID;
       std::cerr<<"Type reference AR marker ID: "<<std::flush;
       std::cin>>RefARMarkerID;
+    }
+    else if(event.getKeySym()=="a")
+    {
+      AddToBasePointCloudRequired= true;
+      PointCloudChanged= true;
+      std::cerr<<"Requested to add a point cloud to BasePointCloud"<<std::endl;
+    }
+    else if(event.getKeySym()=="A")
+    {
+      BasePointCloud= pcl::PointCloud<pcl::PointXYZRGB>::Ptr(new pcl::PointCloud<pcl::PointXYZRGB>);
+      AddToBasePointCloudRequired= false;
+      PointCloudChanged= true;
+      std::cerr<<"Cleared BasePointCloud"<<std::endl;
     }
     else
     {
@@ -200,7 +215,7 @@ void ExecuteDetection(
 
   if(DetectorMode==dmPause)
   {
-    if(PlayingItrChanged)
+    if(PointCloudChanged)
     {
       DetectCylinder(
           pcl_viewer,
@@ -208,8 +223,11 @@ void ExecuteDetection(
           FocusingOnSingleCylinder,
           *PlayingBaseARMarkerItr,
           RefARMarkerID,  // TODO: Store the ref marker IDs
-          *PlayingRefARMarkerItr);
-      PlayingItrChanged= false;
+          *PlayingRefARMarkerItr,
+          BasePointCloud,
+          AddToBasePointCloudRequired);
+      PointCloudChanged= false;
+      AddToBasePointCloudRequired= false;
     }
     return;
   }
@@ -264,7 +282,10 @@ void ExecuteDetection(
         FocusingOnSingleCylinder,
         base_ar_marker,
         RefARMarkerID,
-        ref_ar_marker);
+        ref_ar_marker,
+        BasePointCloud,
+        AddToBasePointCloudRequired);
+    AddToBasePointCloudRequired= false;
   }
 
   // Draw AR markers:
@@ -293,7 +314,9 @@ void DetectCylinder(
     bool focused_analysis,
     const TARMarker &base_ar_marker,
     int ref_ar_marker_id,
-    const TARMarker &ref_ar_marker)
+    const TARMarker &ref_ar_marker,
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr &base_point_cloud,
+    bool add_to_base_point_cloud)
 {
   pcl::PointCloud<pcl::PointXYZ>::Ptr  cloud(new pcl::PointCloud<pcl::PointXYZ>);
   pcl::copyPointCloud(*cloud_org,*cloud);
@@ -374,88 +397,110 @@ void DetectCylinder(
       continue;
     }
 
+    double base_frame[7], ref_marker_pose[7], ref_marker_pose_l[7];
+    ARMarkerToX(base_ar_marker, base_frame);
+    ARMarkerToX(ref_ar_marker, ref_marker_pose);
+    // Transform ref_marker_pose to base_frame's local frame
+    {
+      Eigen::Affine3d Tbase, Tf, Tref;
+      Tbase= XToEigMat(base_frame);
+      Tf= Tbase.inverse();
+      Tref= Tf * XToEigMat(ref_marker_pose);
+      EigMatToX(Tref, ref_marker_pose_l);
+    }
+
+    // Transform cloud_obj to base_frame's local frame
+    pcl::PointCloud<PointT>::Ptr  cloud_obj_l(new pcl::PointCloud<PointT>);
+    {
+      Eigen::Affine3d Tbase, Tf;
+      Tbase= XToEigMat(base_frame);
+      Tf= Tbase.inverse();
+      pcl::transformPointCloud(*cloud_obj, *cloud_obj_l, Tf.matrix().cast<float>());
+    }
+
+    if(add_to_base_point_cloud && j==nearest_cluster)
+    {
+      (*base_point_cloud)+= (*cloud_obj_l);
+      std::cerr<<"Added to BasePointCloud: "<<base_point_cloud->points.size()-cloud_obj_l->points.size()<<" --> "<<base_point_cloud->points.size()<<std::endl;
+    }
+
     if(focused_analysis)
     {
       if(j==nearest_cluster)
-        AnalyzeObjectVer1(pcl_viewer, cloud_obj, j, focused_analysis,
-            base_ar_marker, ref_ar_marker_id, ref_ar_marker);
+      {
+        if(add_to_base_point_cloud)
+          cloud_obj_l= base_point_cloud;
+        else
+          (*cloud_obj_l)+= (*base_point_cloud);
+        AnalyzeObjectVer2(pcl_viewer, cloud_obj_l, j,
+            base_frame, ref_ar_marker_id, ref_marker_pose_l);
+      }
     }
     else
     {
-      AnalyzeObjectVer1(pcl_viewer, cloud_obj, j, /*focused_analysis=*/false,
-          base_ar_marker, ref_ar_marker_id, ref_ar_marker);
+      pcl_viewer.AddPointCloud(cloud_obj,GetID("cloud_obj",j),2);
     }
   }  // for each cluster j
 }
 //-------------------------------------------------------------------------------------------
 
 
-// Analyzing an object's point cloud by detecting a single cylinder
-void AnalyzeObjectVer1(
+// Analyzing an object's point cloud by detecting multiple cylinders
+void AnalyzeObjectVer2(
     TPCLViewer &pcl_viewer,
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr &cloud_obj,
     int obj_id,
-    bool focused_analysis,
-    const TARMarker &base_ar_marker,
+    const double base_frame[7],
     int ref_ar_marker_id,
-    const TARMarker &ref_ar_marker)
+    const double ref_marker_pose[7])
 {
   int j= obj_id;
 
-  // Apply RANSAC for each cluster to get cylinder
-  pcl::PointIndices::Ptr inliers_cylinder(new pcl::PointIndices);
-  pcl::ModelCoefficients::Ptr cyl_coefficients_std(new pcl::ModelCoefficients);
-  pcl::ModelCoefficients::Ptr cyl_coefficients_ext(new pcl::ModelCoefficients);
-  double cratio, cylinder_ratio_thresh;
-  cratio= ExtractCylinder<pcl::PointXYZRGB>(
-      cloud_obj,
-      inliers_cylinder,
-      cyl_coefficients_std,
-      cyl_coefficients_ext,
-      /*normal_est_k=*/50,
-      /*ransac_normal_dist_w=*/0.1,
-      /*ransac_dist_thresh=*/0.05,
-      /*ransac_radius_min=*/0.0,
-      /*ransac_radius_max=*/0.5,
-      /*ransac_max_iterations=*/1000,
-      cylinder_ratio_thresh=0.5);
+  // // Apply RANSAC for each cluster to get cylinder
+  // pcl::PointIndices::Ptr inliers_cylinder(new pcl::PointIndices);
+  // pcl::ModelCoefficients::Ptr cyl_coefficients_std(new pcl::ModelCoefficients);
+  // pcl::ModelCoefficients::Ptr cyl_coefficients_ext(new pcl::ModelCoefficients);
+  // double cratio, cylinder_ratio_thresh;
+  // cratio= ExtractCylinder<pcl::PointXYZRGB>(
+      // cloud_obj,
+      // inliers_cylinder,
+      // cyl_coefficients_std,
+      // cyl_coefficients_ext,
+      // /*normal_est_k=*/50,
+      // /*ransac_normal_dist_w=*/0.1,
+      // /*ransac_dist_thresh=*/0.05,
+      // /*ransac_radius_min=*/0.0,
+      // /*ransac_radius_max=*/0.5,
+      // /*ransac_max_iterations=*/1000,
+      // cylinder_ratio_thresh=0.5);
 
-  if(VerbosePrint)  std::cerr<<"Cylinder ratio: "<<cratio<<std::endl;
-  if(cratio < cylinder_ratio_thresh)
-  {
-    pcl_viewer.AddPointCloud(cloud_obj,GetID("cloud_obj",j),2);
-    return;
-  }
+  // if(VerbosePrint)  std::cerr<<"Cylinder ratio: "<<cratio<<std::endl;
+  // if(cratio < cylinder_ratio_thresh)
+  // {
+    // pcl_viewer.AddPointCloud(cloud_obj,GetID("cloud_obj",j),2);
+    // return;
+  // }
 
-  if(VerbosePrint)  std::cerr<<"Cylinder detected"<<std::endl;
-  if(VerbosePrint)  std::cerr<<"Cylinder coefficients_std: "<<*cyl_coefficients_std<<std::endl;
-  if(VerbosePrint)  std::cerr<<"Cylinder coefficients_ext: "<<*cyl_coefficients_ext<<std::endl;
+  // if(VerbosePrint)  std::cerr<<"Cylinder detected"<<std::endl;
+  // if(VerbosePrint)  std::cerr<<"Cylinder coefficients_std: "<<*cyl_coefficients_std<<std::endl;
+  // if(VerbosePrint)  std::cerr<<"Cylinder coefficients_ext: "<<*cyl_coefficients_ext<<std::endl;
 
   // Color the cylinder inliers
-  double orig_col_ratio=0.9;
-  for (int i(0); i<inliers_cylinder->indices.size(); ++i)
-  {
-    cloud_obj->points[inliers_cylinder->indices[i]].r
-        = orig_col_ratio*cloud_obj->points[inliers_cylinder->indices[i]].r
-            + (1.0-orig_col_ratio)*IndexedColors[j%NumIndexedColors][0];
-    cloud_obj->points[inliers_cylinder->indices[i]].g
-        = orig_col_ratio*cloud_obj->points[inliers_cylinder->indices[i]].g
-            + (1.0-orig_col_ratio)*IndexedColors[j%NumIndexedColors][1];
-    cloud_obj->points[inliers_cylinder->indices[i]].b
-        = orig_col_ratio*cloud_obj->points[inliers_cylinder->indices[i]].b
-            + (1.0-orig_col_ratio)*IndexedColors[j%NumIndexedColors][2];
-  }
+  // double orig_col_ratio=0.9;
+  // for (int i(0); i<inliers_cylinder->indices.size(); ++i)
+  // {
+    // cloud_obj->points[inliers_cylinder->indices[i]].r
+        // = orig_col_ratio*cloud_obj->points[inliers_cylinder->indices[i]].r
+            // + (1.0-orig_col_ratio)*IndexedColors[j%NumIndexedColors][0];
+    // cloud_obj->points[inliers_cylinder->indices[i]].g
+        // = orig_col_ratio*cloud_obj->points[inliers_cylinder->indices[i]].g
+            // + (1.0-orig_col_ratio)*IndexedColors[j%NumIndexedColors][1];
+    // cloud_obj->points[inliers_cylinder->indices[i]].b
+        // = orig_col_ratio*cloud_obj->points[inliers_cylinder->indices[i]].b
+            // + (1.0-orig_col_ratio)*IndexedColors[j%NumIndexedColors][2];
+  // }
 
-  if(!focused_analysis)
-  {
-    pcl_viewer.AddPointCloud(cloud_obj,GetID("cloud_obj",j),2);
-    pcl_viewer.AddCylinder(cyl_coefficients_std,cyl_coefficients_ext,GetID("cloud_obj_cyl",j));
-    return;
-  }
-
-  // Detailed analysis on a focused cylinder
-  if(focused_analysis)
-  {
+  /*Detailed analysis on a focused cylinder*/{
     /*Show the original cloud, base_ar_marker, cylinder*-/{
       pcl_viewer.AddPointCloud(cloud_obj,GetID("cloud_obj",j),2);
 
@@ -477,23 +522,30 @@ void AnalyzeObjectVer1(
           3, IndexedColors[j%NumIndexedColors]);
     }//*/
 
-    double base_frame[7], ref_ar_marker_pose[7];
-    ARMarkerToX(base_ar_marker, base_frame);
-    ARMarkerToX(ref_ar_marker, ref_ar_marker_pose);
-    TContainerAnalyzer1<pcl::PointXYZRGB>
-      container_property(
+    TContainerAnalyzer2<pcl::PointXYZRGB>  container_property;
+    bool res= container_property.Analyze(
         cloud_obj,
-        inliers_cylinder,
-        cyl_coefficients_std,
-        cyl_coefficients_ext,
-        base_frame,
-        /*pour_edge_ratio=*/0.1,
+
+        /*cyl_normal_est_k=*/20,  // 50
+        /*cyl_ransac_normal_dist_w=*/0.1,
+        /*cyl_ransac_dist_thresh=*/0.01,  // 0.05
+        /*cyl_ransac_radius_min=*/0.0,
+        /*cyl_ransac_radius_max=*/0.5,
+        /*cyl_ransac_max_iterations=*/100,
+        /*cyl_ratio_thresh=*/0.5,
+
+        /*pour_edge_ratio=*/0.05,  // 0.1
         /*pour_hull_alpha=*/0.2,
         /*grab_height=*/0.02,  // 2cm
         /*grab_z_step_ratio=*/0.01,
         /*grab_radius_sd_thresh_ratio=*/0.2,
         ref_ar_marker_id,
-        ref_ar_marker_pose);
+        ref_marker_pose);
+    if(!res)
+    {
+      pcl_viewer.AddPointCloud(cloud_obj,GetID("cloud_obj",j),2);
+      return;
+    }
     container_property.Visualize(
         pcl_viewer,
         GetID("container",j),
@@ -507,21 +559,13 @@ void AnalyzeObjectVer1(
     std::cerr<<"Saved cylinder info into: "<<file_name<<std::endl;
     pcl::io::savePCDFile(file_name_pcd, *cloud_obj, /*binary_mode=*/true);
     std::cerr<<"Saved cylinder point cloud into: "<<file_name_pcd<<std::endl;
-    pcl::io::savePCDFile("/tmp/cyl_info_pour.pcd", *container_property.PourPoints, /*binary_mode=*/true);
+    if(container_property.PourPoints->points.size()>0)
+      pcl::io::savePCDFile("/tmp/cyl_info_pour.pcd", *container_property.PourPoints, /*binary_mode=*/true);
 
   }
 }
 //-------------------------------------------------------------------------------------------
 
-
-// Analyzing an object's point cloud by detecting multiple cylinders
-// void AnalyzeObjectVer2(
-    // TPCLViewer &pcl_viewer,
-    // pcl::PointCloud<pcl::PointXYZRGB>::Ptr &cloud_obj,
-    // int obj_id,
-    // bool focused_analysis,
-    // const TARMarker &base_ar_marker)
-//-------------------------------------------------------------------------------------------
 
 
 //-------------------------------------------------------------------------------------------
