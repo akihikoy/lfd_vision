@@ -6,7 +6,7 @@
     \date    Jul.28, 2014
 */
 //-------------------------------------------------------------------------------------------
-#include "pr2_lfd_trick/cyl_detector.h"
+#include "pr2_lfd_vision/cyl_detector.h"
 //-------------------------------------------------------------------------------------------
 #include <ros/ros.h>
 #include <sensor_msgs/PointCloud2.h>
@@ -71,7 +71,7 @@ void ARMarkersCallback(const ar_track_alvar::AlvarMarkers &msg)
 int main(int argc, char**argv)
 {
   using namespace trick::detail;
-  ros::init(argc, argv, "pcd_write_node");
+  ros::init(argc, argv, "cyl_detector");
   ros::NodeHandle node("~");
 
   std::string pcd_in;

@@ -23,5 +23,7 @@ data/
 msg_gen
 srv_gen
 src/pr2_lfd_utils
+src/pr2_lfd_trick
+src/pr2_lfd_vision
 
 logIK.pickle

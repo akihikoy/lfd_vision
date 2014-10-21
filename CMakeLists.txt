@@ -17,9 +17,9 @@ set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin)
 set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib)
 
 #uncomment if you have defined messages
-#rosbuild_genmsg()
+rosbuild_genmsg()
 #uncomment if you have defined services
-#rosbuild_gensrv()
+rosbuild_gensrv()
 
 #common commands for building c++ executables and libraries
 #rosbuild_add_library(${PROJECT_NAME} src/example.cpp)
@@ -39,3 +39,6 @@ rosbuild_add_executable(cyl_detector_node
 include_directories(/home/akihiko/install/boost1.49/include)
 target_link_libraries(cyl_detector_node vtkCommon vtkFiltering vtkRendering vtkGraphics)
 
+rosbuild_add_executable(flow_analyzer_node
+      src/flow_analyzer.cpp
+      src/flow_analyzer_node.cpp)
