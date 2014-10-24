@@ -1,0 +1,11 @@
+<!--Launch flow_analyzer_node to use Sentis ToF m100.
+    We do NOT use the sentis_tof_m100 package. -->
+<launch>
+  <node name="flow_analyzer" pkg="pr2_lfd_vision" type="flow_analyzer_node">
+    <param name="init_fps" value="1" />
+    <param name="tcp_ip" value="192.168.111.21" />
+    <param name="udp_ip" value="224.0.0.1" />
+    <param name="tcp_port" value="10001" />
+    <param name="udp_port" value="10002" />
+  </node>
+</launch>

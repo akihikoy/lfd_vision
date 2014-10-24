@@ -59,6 +59,7 @@ inline double GetCurrentTime(void)
   struct timeval time;
   gettimeofday (&time, NULL);
   return static_cast<double>(time.tv_sec) + static_cast<double>(time.tv_usec)*1.0e-6;
+  // return ros::Time::now().toSec();
 }
 
 /*! \brief check the filename exists */

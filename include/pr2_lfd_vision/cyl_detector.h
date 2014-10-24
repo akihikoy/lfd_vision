@@ -631,7 +631,7 @@ void GetCylinderInliers(
 
   // Add a point to inliers if it is inside the cylinder
   inliers_out->indices.clear();
-  double tmin(1.0e10), tmax(-1.0e10);
+  // double tmin(1.0e10), tmax(-1.0e10);
   for(size_t i(0); i<cloud_in->points.size(); ++i)
   {
     // Project the point on the cylinder axis
@@ -916,7 +916,7 @@ struct TContainerAnalyzer2
           for(size_t i(0); i<proj->points.size(); ++i)  proj->points[i].z= 0.0;
           pca.reconstruct(*proj, *cloud_projected);
 
-          const float pour_ps2_color[3]= {0,255,255};
+          // const float pour_ps2_color[3]= {0,255,255};
           // Get PourPoints as a Concave Hull
           pcl::ConcaveHull<pcl::PointXYZ> chull;
           chull.setInputCloud(cloud_projected);

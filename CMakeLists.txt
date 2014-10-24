@@ -40,5 +40,8 @@ include_directories(/home/akihiko/install/boost1.49/include)
 target_link_libraries(cyl_detector_node vtkCommon vtkFiltering vtkRendering vtkGraphics)
 
 rosbuild_add_executable(flow_analyzer_node
+      src/sentis_m100.cpp
       src/flow_analyzer.cpp
       src/flow_analyzer_node.cpp)
+include_directories(/usr/include/libm100)
+target_link_libraries(flow_analyzer_node m100)

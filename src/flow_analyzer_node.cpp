@@ -7,9 +7,14 @@
 */
 //-------------------------------------------------------------------------------------------
 #include "pr2_lfd_vision/flow_analyzer.h"
+#include "pr2_lfd_vision/sentis_m100.h"
+//-------------------------------------------------------------------------------------------
 #include "pr2_lfd_vision/Int32Array.h"
 #include "pr2_lfd_vision/IndexedBoundingBox.h"
 #include "pr2_lfd_vision/SetBoundingBox.h"
+#include "pr2_lfd_vision/ReadRegister.h"
+#include "pr2_lfd_vision/WriteRegister.h"
+#include "pr2_lfd_vision/SetFrameRate.h"
 //-------------------------------------------------------------------------------------------
 #include <ros/ros.h>
 #include <sensor_msgs/PointCloud2.h>
@@ -20,21 +25,18 @@
 namespace trick
 {
 
-  // TFlowAnalyzer();
-
-  // void InitBoundingBoxes(int n)  {bounding_boxes_.resize(n);}
-  // void SetBoundingBox(int idx, const TBoundingBox &bb)  {bounding_boxes_[idx]= bb;}
-  // TBoundingBox& RefBoundingBox(int idx)  {return bounding_boxes_[idx];}
-
-  // void AnalyzeBBs(
-      // pcl::PointCloud<pcl::PointXYZ>::Ptr &cloud_orig,
-      // std::vector<int> &out_counts);
-
+inline double GetCurrentTime(void)
+{
+  struct timeval time;
+  gettimeofday (&time, NULL);
+  return static_cast<double>(time.tv_sec) + static_cast<double>(time.tv_usec)*1.0e-6;
+  // return ros::Time::now().toSec();
+}
 
 class TFlowAnalyzerNode
 {
 public:
-  TFlowAnalyzerNode(ros::NodeHandle &node)
+  TFlowAnalyzerNode(ros::NodeHandle &node, bool activate_callback=true)
       :
         node_(node)
     {
@@ -44,8 +46,9 @@ public:
 
       srv_set_bb_= node_.advertiseService("set_bb", &TFlowAnalyzerNode::SetBoundingBox, this);
 
-      sub_depth_= node_.subscribe("/depth_non_filtered", 1, &TFlowAnalyzerNode::PointCloudCallback, this);
-      sub_indexed_bb_= node_.subscribe("indexed_bb", 1, &TFlowAnalyzerNode::IndexedBBCallback, this);
+      if(activate_callback)
+        sub_depth_= node_.subscribe("/depth_non_filtered", 1, &TFlowAnalyzerNode::PointCloudCallback, this);
+      sub_indexed_bb_= node_.subscribe("indexed_bb", /*queue_size=*/10, &TFlowAnalyzerNode::IndexedBBCallback, this);
     }
 
   bool SetBoundingBox(pr2_lfd_vision::SetBoundingBox::Request &req, pr2_lfd_vision::SetBoundingBox::Response &res)
@@ -72,6 +75,12 @@ public:
       pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_orig(new pcl::PointCloud<pcl::PointXYZ>);
       pcl::fromROSMsg(*msg, *cloud_orig);
 
+      AnalyzePointCloud(cloud_orig);
+    }
+
+  //! cloud_orig may change
+  void AnalyzePointCloud(pcl::PointCloud<pcl::PointXYZ>::Ptr &cloud_orig)
+    {
       // Pre-process
       // for(int i(0);i<19200;i+=45)  {std::cerr<<"p:"<<cloud_src->points[i].x<<"  "<<cloud_src->points[i].y<<"  "<<cloud_src->points[i].z<<"  "<<cloud_src->points[i].intensity<<std::endl;}
       // std::cerr<<"cloud_src->points.size():"<<cloud_src->points.size()<<std::endl;
@@ -121,6 +130,49 @@ private:
 };
 //-------------------------------------------------------------------------------------------
 
+
+class TSentisM100Node : public TSentisM100
+{
+public:
+  TSentisM100Node(ros::NodeHandle &node)
+      :
+        TSentisM100(),
+        node_(node)
+    {
+      srv_write_register_= node_.advertiseService("write_register", &TSentisM100Node::SrvWriteRegister, this);
+      srv_read_register_= node_.advertiseService("read_register", &TSentisM100Node::SrvReadRegister, this);
+      srv_set_frame_rate_= node_.advertiseService("set_frame_rate", &TSentisM100Node::SrvSetFrameRate, this);
+    }
+
+  bool SrvWriteRegister(pr2_lfd_vision::WriteRegister::Request &req, pr2_lfd_vision::WriteRegister::Response &res)
+    {
+      res.success= WriteRegister(req.address, req.value);
+      return true;
+    }
+
+  bool SrvReadRegister(pr2_lfd_vision::ReadRegister::Request &req, pr2_lfd_vision::ReadRegister::Response &res)
+    {
+      res.value= ReadRegister(req.address);
+      res.success= IsNoError("");
+      return true;
+    }
+
+  bool SrvSetFrameRate(pr2_lfd_vision::SetFrameRate::Request &req, pr2_lfd_vision::SetFrameRate::Response &res)
+    {
+      res.success= SetFrameRate(req.frame_rate);
+      return true;
+    }
+
+private:
+  ros::NodeHandle     &node_;
+  ros::ServiceServer  srv_write_register_;
+  ros::ServiceServer  srv_read_register_;
+  ros::ServiceServer  srv_set_frame_rate_;
+
+};
+//-------------------------------------------------------------------------------------------
+
+
 }
 //-------------------------------------------------------------------------------------------
 using namespace std;
@@ -137,9 +189,54 @@ int main(int argc, char**argv)
   ros::init(argc, argv, "flow_analyzer");
   ros::NodeHandle node("~");
 
-  TFlowAnalyzerNode analyzer_node(node);
+  int init_fps, tcp_port, udp_port;
+  std::string tcp_ip, udp_ip;
+  node.param("init_fps",init_fps,1);
+  node.param("tcp_ip",tcp_ip,std::string("192.168.0.10"));
+  node.param("udp_ip",udp_ip,std::string("224.0.0.1"));
+  node.param("tcp_port",tcp_port,10001);
+  node.param("udp_port",udp_port,10002);
 
-  ros::spin();
+  /* Note: we set activate_callback because we do not use sentis_tof_m100 node,
+    but use our own routine written below to observe using m100. */
+  TFlowAnalyzerNode analyzer_node(node, /*activate_callback=*/false);
+  // TFlowAnalyzerNode analyzer_node(node, /*activate_callback=*/true);
+
+
+  ros::Publisher pub_cloud= node.advertise<sensor_msgs::PointCloud2>("/depth_non_filtered", 1);
+  // ros::Publisher pub_cloud= node.advertise<pcl::PointCloud<pcl::PointXYZ> >("/depth_non_filtered", 1);
+  TSentisM100Node tof_sensor(node);
+  tof_sensor.Init(init_fps, /*data_format=*/XYZ_COORDS_DATA, tcp_ip.c_str(), udp_ip.c_str(), tcp_port, udp_port);
+  // tof_sensor.PrintRegisters(0);
+  // tof_sensor.PrintRegisters(1);
+  // tof_sensor.SetFrameRate(40);
+  double t_start= GetCurrentTime();
+  ros::Rate loop_rate(40);  // 40 Hz
+  for(int i(0); ros::ok(); ++i)
+  {
+    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>());
+    if(!tof_sensor.GetDataAsPointCloud(cloud))  continue;
+    sensor_msgs::PointCloud2 cloud_msg;
+    pcl::toROSMsg(*cloud,cloud_msg);
+    cloud_msg.header.frame_id= "tf_sentis_tof";
+    cloud_msg.header.stamp= ros::Time::now();
+    pub_cloud.publish(cloud_msg);
+    analyzer_node.AnalyzePointCloud(cloud);  // Note: cloud may change
+
+    if(i%100==0)
+    {
+      double duration= GetCurrentTime()-t_start;
+      std::cerr<<"Duration: "<<duration<<std::endl;
+      std::cerr<<"FPS: "<<double(100)/duration<<std::endl;
+      t_start= GetCurrentTime();
+    }
+    ros::spinOnce();
+    loop_rate.sleep();
+  }
+  tof_sensor.Sleep();
+
+
+  // ros::spin();
   return 0;
 }
 //-------------------------------------------------------------------------------------------
