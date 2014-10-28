@@ -50,13 +50,29 @@ inline void GPoseToX(const geometry_msgs::Pose &pose, double x[7])
 }
 //-------------------------------------------------------------------------------------------
 
+// Operation kind, should be the same as the definition in IndexedBBEquation.msg
+enum TBBOperationKind
+{
+  okUnion=0,  //l | r
+  okIntersection=1,  //l & r
+  okDifference=2  //l - r
+};
+struct TBBEquation
+{
+  TBBOperationKind Op;
+  int IdxL;  // Left hand side
+  int IdxR;  // Right hand side
+};
+//-------------------------------------------------------------------------------------------
 
 struct TBoundingBox
 {
   bool Active;
+  bool IsEquation;
   double X[7];  // x,y,z, qx,qy,qz,qw
   double Size[3];  // x-size,y-size,z-size
-  TBoundingBox() : Active(false) {}
+  TBBEquation Eq;
+  TBoundingBox() : Active(false), IsEquation(false) {}
 };
 //-------------------------------------------------------------------------------------------
 
@@ -77,6 +93,7 @@ public:
 
 private:
   std::vector<TBoundingBox>  bounding_boxes_;
+  std::vector<std::vector<int> > bb_clipped_;
 
 };
 //-------------------------------------------------------------------------------------------

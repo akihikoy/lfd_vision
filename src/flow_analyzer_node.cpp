@@ -12,6 +12,7 @@
 #include "pr2_lfd_vision/Int32Array.h"
 #include "pr2_lfd_vision/IndexedBoundingBox.h"
 #include "pr2_lfd_vision/SetBoundingBox.h"
+#include "pr2_lfd_vision/SetBBEquation.h"
 #include "pr2_lfd_vision/ReadRegister.h"
 #include "pr2_lfd_vision/WriteRegister.h"
 #include "pr2_lfd_vision/SetFrameRate.h"
@@ -45,6 +46,7 @@ public:
       pub_count_= node_.advertise<pr2_lfd_vision::Int32Array>("bb_counts", 1);
 
       srv_set_bb_= node_.advertiseService("set_bb", &TFlowAnalyzerNode::SetBoundingBox, this);
+      srv_set_bbeq_= node_.advertiseService("set_bbeq", &TFlowAnalyzerNode::SetBBEquation, this);
 
       if(activate_callback)
         sub_depth_= node_.subscribe("/depth_non_filtered", 1, &TFlowAnalyzerNode::PointCloudCallback, this);
@@ -55,12 +57,26 @@ public:
     {
       TBoundingBox bb;
       bb.Active= req.indexed_bb.active;
+      bb.IsEquation= false;
       GPoseToX(req.indexed_bb.pose, bb.X);
       if(req.indexed_bb.dimensions.size()==3)
       {
         for(int d(0);d<3;++d)  bb.Size[d]= req.indexed_bb.dimensions[d];
       }
       analyzer_.SetBoundingBox(req.indexed_bb.index, bb);
+      res.success= true;  // TODO: check error
+      return true;
+    }
+
+  bool SetBBEquation(pr2_lfd_vision::SetBBEquation::Request &req, pr2_lfd_vision::SetBBEquation::Response &res)
+    {
+      TBoundingBox bb;
+      bb.Active= req.indexed_bbeq.active;
+      bb.IsEquation= true;
+      bb.Eq.Op= static_cast<trick::TBBOperationKind>(req.indexed_bbeq.op);
+      bb.Eq.IdxL= req.indexed_bbeq.idx_l;
+      bb.Eq.IdxR= req.indexed_bbeq.idx_r;
+      analyzer_.SetBoundingBox(req.indexed_bbeq.index, bb);
       res.success= true;  // TODO: check error
       return true;
     }
@@ -110,6 +126,7 @@ public:
     {
       TBoundingBox bb;
       bb.Active= msg->active;
+      bb.IsEquation= false;
       GPoseToX(msg->pose, bb.X);
       // std::cerr<<"msg->dimensions:"<<msg->dimensions.size()<<std::endl;
       if(msg->dimensions.size()==3)
@@ -127,6 +144,7 @@ private:
   ros::Subscriber     sub_depth_;
   ros::Subscriber     sub_indexed_bb_;
   ros::ServiceServer  srv_set_bb_;
+  ros::ServiceServer  srv_set_bbeq_;
 };
 //-------------------------------------------------------------------------------------------
 
