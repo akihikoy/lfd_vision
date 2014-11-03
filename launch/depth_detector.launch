@@ -1,0 +1,11 @@
+<launch>
+  <node type="depth_detector_node" pkg="pr2_lfd_vision" name="depth_detector_node" output="screen">
+    <param name="init_fps" value="1" />
+    <param name="tcp_ip" value="192.168.111.21" />
+    <!--<param name="tcp_ip" value="192.168.1.147" />-->
+    <param name="udp_ip" value="224.0.0.1" />
+    <param name="tcp_port" value="10001" />
+    <param name="udp_port" value="10002" />
+    <param name="rotate90n" value="0" />
+  </node>
+</launch>

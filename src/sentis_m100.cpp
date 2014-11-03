@@ -7,6 +7,7 @@
 */
 //-------------------------------------------------------------------------------------------
 #include "pr2_lfd_vision/sentis_m100.h"
+#include <cassert>
 #include <fstream>  // for DEBUG
 //-------------------------------------------------------------------------------------------
 namespace trick
@@ -79,6 +80,13 @@ bool TSentisM100::SetDHCP(bool using_dhcp)
 }
 //-------------------------------------------------------------------------------------------
 
+bool TSentisM100::GetFrameRate(unsigned short &frame_rate)
+{
+  frame_rate= ReadRegister(FrameRate);
+  return IsNoError();
+}
+//-------------------------------------------------------------------------------------------
+
 //! Set the frame rate (1-40 Hz)
 bool TSentisM100::SetFrameRate(unsigned short frame_rate)
 {
@@ -111,12 +119,21 @@ bool TSentisM100::GetDataAsPointCloud(pcl::PointCloud<pcl::PointXYZ>::Ptr &cloud
 {
   if(data_format_!=XYZ_COORDS_DATA)
   {
-    std::cerr<<"bool TSentisM100::GetDataAsPointCloud(pcl::PointCloud<pcl::PointXYZ>::Ptr &)"
-        " works with data_format_==XYZ_COORDS_DATA"<<std::endl;
+    std::cerr<<"In TSentisM100::GetDataAsPointCloud, error: data_format_!=XYZ_COORDS_DATA"<<std::endl;
     return false;
   }
   if(!GetData())  return false;
-
+  BufferToPointCloud(cloud_out);
+  return true;
+}
+//-------------------------------------------------------------------------------------------
+void TSentisM100::BufferToPointCloud(pcl::PointCloud<pcl::PointXYZ>::Ptr &cloud_out)
+{
+  if(data_format_!=XYZ_COORDS_DATA)
+  {
+    std::cerr<<"In TSentisM100::BufferToPointCloud, error: data_format_!=XYZ_COORDS_DATA"<<std::endl;
+    return;
+  }
   cloud_out->height= header_.imageHeight;
   cloud_out->width= header_.imageWidth;
   cloud_out->is_dense= true;
@@ -133,10 +150,68 @@ bool TSentisM100::GetDataAsPointCloud(pcl::PointCloud<pcl::PointXYZ>::Ptr &cloud
     if((*bx)>=0.0)  point.z= double(*bx)/1000.0;
     else            point.z= nanf("");
   }
-  return true;
 }
 //-------------------------------------------------------------------------------------------
 #endif
+
+#if SENTIS_M100_USING_CV==1
+bool TSentisM100::GetDataAsCVMat(cv::Mat *img_depth, cv::Mat *img_amp)
+{
+  if(!GetData())  return false;
+  BufferToCVMat(img_depth, img_amp);
+  return true;
+}
+//-------------------------------------------------------------------------------------------
+void TSentisM100::BufferToCVMat(cv::Mat *img_depth, cv::Mat *img_amp)
+{
+  if(img_depth!=NULL)
+  {
+    if(img_depth->size()!=cv::Size(M100_IMAGE_WIDTH,M100_IMAGE_HEIGHT)
+        || img_depth->type()!=CV_32FC1)
+      img_depth->create(cv::Size(M100_IMAGE_WIDTH,M100_IMAGE_HEIGHT), CV_32FC1);
+  }
+  if(img_amp!=NULL)
+  {
+    if(img_amp->size()!=cv::Size(M100_IMAGE_WIDTH,M100_IMAGE_HEIGHT)
+        || img_amp->type()!=CV_32FC1)
+      img_amp->create(cv::Size(M100_IMAGE_WIDTH,M100_IMAGE_HEIGHT), CV_32FC1);
+  }
+
+  if(data_format_==DEPTH_AMP_DATA || data_format_==XYZ_AMP_DATA)
+  {
+    assert(img_depth!=NULL);
+    assert(img_amp!=NULL);
+    cv::MatIterator_<float> itr_depth(img_depth->begin<float>());
+    cv::MatIterator_<float> itr_amp(img_amp->begin<float>());
+    short *buffer(reinterpret_cast<short*>(buffer_));
+    short *bx(buffer);
+    short *ba(NULL);
+    if(data_format_==DEPTH_AMP_DATA)     ba= buffer+M100_IMAGE_SIZE;
+    else if(data_format_==XYZ_AMP_DATA)  ba= buffer+3*M100_IMAGE_SIZE;
+    for(int i(0); i<M100_IMAGE_SIZE; ++bx,++ba,++itr_depth,++itr_amp,++i)
+    {
+      if((*bx)>=0.0)  (*itr_depth)= double(*bx)/1000.0;
+      else            (*itr_depth)= 0;
+      (*itr_amp)= (*ba);
+    }
+  }
+  else if(data_format_==XYZ_COORDS_DATA)
+  {
+    assert(img_depth!=NULL);
+    assert(img_amp==NULL);
+    cv::MatIterator_<float> itr_depth(img_depth->begin<float>());
+    short *buffer(reinterpret_cast<short*>(buffer_));
+    short *bx(buffer);
+    for(int i(0); i<M100_IMAGE_SIZE; ++bx,++itr_depth,++i)
+    {
+      if((*bx)>=0.0)  (*itr_depth)= double(*bx)/1000.0;
+      else            (*itr_depth)= 0;
+    }
+  }
+}
+//-------------------------------------------------------------------------------------------
+#endif
+
 
 //! Save RegMap to flash
 bool TSentisM100::SaveToFlash()

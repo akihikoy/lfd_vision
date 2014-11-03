@@ -12,6 +12,9 @@
 #ifndef SENTIS_M100_USING_PCL
   #define SENTIS_M100_USING_PCL 1
 #endif
+#ifndef SENTIS_M100_USING_CV
+  #define SENTIS_M100_USING_CV 1
+#endif
 //-------------------------------------------------------------------------------------------
 #include <m100api.h>
 #include <iostream>
@@ -81,6 +84,9 @@
 #if SENTIS_M100_USING_PCL==1
 #include <pcl/point_types.h>
 #endif
+#if SENTIS_M100_USING_CV==1
+#include <opencv2/core/core.hpp>
+#endif
 //-------------------------------------------------------------------------------------------
 namespace trick
 {
@@ -113,6 +119,8 @@ public:
 
   bool SetDHCP(bool using_dhcp);
 
+  bool GetFrameRate(unsigned short &frame_rate);
+
   //! Set the frame rate (1-40 Hz; 45 Hz seems to work)
   bool SetFrameRate(unsigned short frame_rate);
 
@@ -125,7 +133,12 @@ public:
   bool GetData();
 
   #if SENTIS_M100_USING_PCL==1
-  bool GetDataAsPointCloud(typename pcl::PointCloud<pcl::PointXYZ>::Ptr &cloud_out);
+  bool GetDataAsPointCloud(pcl::PointCloud<pcl::PointXYZ>::Ptr &cloud_out);
+  void BufferToPointCloud(pcl::PointCloud<pcl::PointXYZ>::Ptr &cloud_out);
+  #endif
+  #if SENTIS_M100_USING_CV==1
+  bool GetDataAsCVMat(cv::Mat *img_depth=NULL, cv::Mat *img_amp=NULL);
+  void BufferToCVMat(cv::Mat *img_depth=NULL, cv::Mat *img_amp=NULL);
   #endif
 
   //! Print a part of registers.

@@ -96,6 +96,49 @@ protected:
 //-------------------------------------------------------------------------------------------
 
 
+//===========================================================================================
+/* Multiple color detector. */
+class TMultipleColorDetector
+//===========================================================================================
+{
+public:
+  TMultipleColorDetector();
+
+  void Setup(int num_detectors);
+
+  void Reset();
+
+  int Size() const {return col_detectors_.size();}
+  const double& Ratio(int index) const {return data_ratio_[index];}
+  const double& MedianX(int index) const {return data_median_x_[index];}
+  const double& MedianY(int index) const {return data_median_y_[index];}
+
+  void Detect(const cv::Mat &frame, int mode, bool verbose=true);
+  void Draw(cv::Mat &img_draw);
+
+  // Set camera window for mouse event
+  void SetCameraWindow(cv::Mat &camera_frame)  {camera_window_= &camera_frame;}
+
+  void CameraWindowMouseCallback(int active_col_index, int event, int x, int y, int flags);
+  void MaskWindowMouseCallback(int active_col_index, int event, int x, int y, int flags);
+
+  void LoadColors(int index, const std::string &file_name);
+  void SaveColors(int index, const std::string &file_name);
+
+private:
+  std::vector<TColorDetector>  col_detectors_;
+  std::vector<std::vector<cv::Vec3b> >  detect_colors_;
+  std::vector<int> nonzero_base_;
+  std::vector<cv::Mat>  mask_imgs_;
+
+  std::vector<double> data_ratio_;
+  std::vector<double> data_median_x_, data_median_y_;
+
+  cv::Mat  *camera_window_;
+  cv::Vec3s  col_radius_;
+
+};
+//-------------------------------------------------------------------------------------------
 
 
 //-------------------------------------------------------------------------------------------

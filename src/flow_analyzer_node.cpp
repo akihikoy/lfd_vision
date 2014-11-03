@@ -8,6 +8,7 @@
 //-------------------------------------------------------------------------------------------
 #include "pr2_lfd_vision/flow_analyzer.h"
 #include "pr2_lfd_vision/sentis_m100.h"
+#include "pr2_lfd_vision/flow_finder.h"
 //-------------------------------------------------------------------------------------------
 #include "pr2_lfd_vision/Int32Array.h"
 #include "pr2_lfd_vision/IndexedBoundingBox.h"
@@ -22,6 +23,10 @@
 #include <pcl/ros/conversions.h>
 #include <pcl/filters/passthrough.h>
 #include <vector>
+#include <opencv2/core/core.hpp>
+#include <opencv2/imgproc/imgproc.hpp>  // cvtColor
+#include <opencv2/highgui/highgui.hpp>
+// #include <opencv2/video/background_segm.hpp>
 //-------------------------------------------------------------------------------------------
 namespace trick
 {
@@ -220,6 +225,17 @@ int main(int argc, char**argv)
   TFlowAnalyzerNode analyzer_node(node, /*activate_callback=*/false);
   // TFlowAnalyzerNode analyzer_node(node, /*activate_callback=*/true);
 
+  TFlowFinder flow_finder;
+  flow_finder.SetOptFlowWinSize(cv::Size(3,3));
+  flow_finder.SetOptFlowSpdThreshold(3.0);
+  flow_finder.SetErodeDilate(1);
+  flow_finder.SetAmountRange(/*min=*/-1.0, /*max=*/-1.0);
+  flow_finder.SetSpeedRange(/*min=*/-1.0, /*max=*/-1.0);
+  // cv::BackgroundSubtractorMOG2 bkg_sbtr(/*int history=*/5, /*double varThreshold=*/5.0, /*bool detectShadows=*/true);
+
+  cv::namedWindow("depth",1);
+  cv::Mat img_depth, disp_img;
+  img_depth.create(cv::Size(M100_IMAGE_WIDTH,M100_IMAGE_HEIGHT), CV_32FC1);
 
   ros::Publisher pub_cloud= node.advertise<sensor_msgs::PointCloud2>("/depth_non_filtered", 1);
   // ros::Publisher pub_cloud= node.advertise<pcl::PointCloud<pcl::PointXYZ> >("/depth_non_filtered", 1);
@@ -230,10 +246,29 @@ int main(int argc, char**argv)
   // tof_sensor.SetFrameRate(40);
   double t_start= GetCurrentTime();
   ros::Rate loop_rate(40);  // 40 Hz
-  for(int i(0); ros::ok(); ++i)
+  for(int f(0); ros::ok(); ++f)
   {
     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>());
     if(!tof_sensor.GetDataAsPointCloud(cloud))  continue;
+
+    const double max_depth(0.5);
+    pcl::PassThrough<pcl::PointXYZ> pass;
+    pass.setInputCloud(cloud);
+    pass.setFilterFieldName("z");
+    pass.setFilterLimits(-100.0, max_depth);
+    pass.filter(*cloud);
+
+    //TEST:Visualize depth
+    tof_sensor.BufferToCVMat(&img_depth, /*img_amp=*/NULL);
+    // flow_finder.Update(img_depth);
+    // cv::cvtColor(img_depth,disp_img,CV_GRAY2RGB);
+    // flow_finder.DrawFlow(disp_img, CV_RGB(0,255,255), /*len=*/1.0, /*thickness=*/3);
+    // // for(int i(0);i<flow_finder.FlowElements().size();++i) std::cerr<<f<<" "<<flow_finder.FlowElements()[i]<<std::endl;
+    // cv::imshow("depth", disp_img);
+    // bkg_sbtr(img_depth,disp_img);
+    cv::threshold(img_depth, disp_img, /*thresh=*/0.3, /*maxval=*/255.0, cv::THRESH_TOZERO_INV);
+    cv::imshow("depth", disp_img);
+
     sensor_msgs::PointCloud2 cloud_msg;
     pcl::toROSMsg(*cloud,cloud_msg);
     cloud_msg.header.frame_id= "tf_sentis_tof";
@@ -241,13 +276,15 @@ int main(int argc, char**argv)
     pub_cloud.publish(cloud_msg);
     analyzer_node.AnalyzePointCloud(cloud);  // Note: cloud may change
 
-    if(i%100==0)
+    if(f%100==0)
     {
       double duration= GetCurrentTime()-t_start;
       std::cerr<<"Duration: "<<duration<<std::endl;
       std::cerr<<"FPS: "<<double(100)/duration<<std::endl;
       t_start= GetCurrentTime();
     }
+
+    cv::waitKey(1);  // To display cv::imshow
     ros::spinOnce();
     loop_rate.sleep();
   }

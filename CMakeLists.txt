@@ -31,7 +31,17 @@ rosbuild_gensrv()
 
 rosbuild_add_executable(color_detector_node
       src/color_detector_node.cpp
-      src/color_detector.cpp)
+      src/color_detector.cpp
+      src/flow_finder.cpp
+      src/vision_util.cpp)
+
+rosbuild_add_executable(depth_detector_node
+      src/depth_detector_node.cpp
+      src/flow_finder.cpp
+      src/sentis_m100.cpp
+      src/vision_util.cpp)
+include_directories(/usr/include/libm100)
+target_link_libraries(depth_detector_node m100)
 
 rosbuild_add_executable(cyl_detector_node
       src/cyl_detector.cpp
@@ -40,8 +50,9 @@ include_directories(/home/akihiko/install/boost1.49/include)
 target_link_libraries(cyl_detector_node vtkCommon vtkFiltering vtkRendering vtkGraphics)
 
 rosbuild_add_executable(flow_analyzer_node
+      src/flow_analyzer_node.cpp
       src/sentis_m100.cpp
-      src/flow_analyzer.cpp
-      src/flow_analyzer_node.cpp)
+      src/flow_finder.cpp
+      src/flow_analyzer.cpp)
 include_directories(/usr/include/libm100)
 target_link_libraries(flow_analyzer_node m100)

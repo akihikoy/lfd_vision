@@ -1,5 +1,5 @@
 #! /usr/bin/env python
-import roslib; roslib.load_manifest('pr2_lfd_trick')
+import roslib; roslib.load_manifest('pr2_lfd_vision')
 import rospy
 import std_msgs.msg
 import math,time

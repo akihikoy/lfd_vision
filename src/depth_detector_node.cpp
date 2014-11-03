@@ -1,16 +1,25 @@
 //-------------------------------------------------------------------------------------------
-/*! \file    color_detector_node.cpp
-    \brief   Color detector node.
+/*! \file    depth_detector_node.cpp
+    \brief   Depth detector node (TEST, copied from color_detector_node.cpp).
     \author  Akihiko Yamaguchi, xakiyam@gmail.com
     \version 0.1
     \date    Jun.05, 2014
 */
 //-------------------------------------------------------------------------------------------
-#include "pr2_lfd_vision/color_detector.h"
 #include "pr2_lfd_vision/flow_finder.h"
 #include "pr2_lfd_vision/vision_util.h"
+#include "pr2_lfd_vision/sentis_m100.h"
+//-------------------------------------------------------------------------------------------
+#include "pr2_lfd_vision/Int32Array.h"
+#include "pr2_lfd_vision/IndexedBoundingBox.h"
+#include "pr2_lfd_vision/SetBoundingBox.h"
+#include "pr2_lfd_vision/SetBBEquation.h"
+#include "pr2_lfd_vision/ReadRegister.h"
+#include "pr2_lfd_vision/WriteRegister.h"
+#include "pr2_lfd_vision/SetFrameRate.h"
 //-------------------------------------------------------------------------------------------
 #include <opencv2/highgui/highgui.hpp>
+#include <opencv2/imgproc/imgproc.hpp>
 #include <ros/ros.h>
 #include <std_msgs/Float64.h>
 #include <std_msgs/Int32MultiArray.h>
@@ -22,15 +31,48 @@
 //-------------------------------------------------------------------------------------------
 namespace trick
 {
-const char *DefaultFileNames[]={
-    "default_colors1.dat",
-    "default_colors2.dat",
-    "default_colors3.dat",
-    "default_colors4.dat",
-    "default_colors5.dat",
-    "default_colors6.dat",
-    "default_colors7.dat"};
-std::string ColorFilesBase= "";
+
+class TSentisM100Node : public TSentisM100
+{
+public:
+  TSentisM100Node(ros::NodeHandle &node)
+      :
+        TSentisM100(),
+        node_(node)
+    {
+      srv_write_register_= node_.advertiseService("write_register", &TSentisM100Node::SrvWriteRegister, this);
+      srv_read_register_= node_.advertiseService("read_register", &TSentisM100Node::SrvReadRegister, this);
+      srv_set_frame_rate_= node_.advertiseService("set_frame_rate", &TSentisM100Node::SrvSetFrameRate, this);
+    }
+
+  bool SrvWriteRegister(pr2_lfd_vision::WriteRegister::Request &req, pr2_lfd_vision::WriteRegister::Response &res)
+    {
+      res.success= WriteRegister(req.address, req.value);
+      return true;
+    }
+
+  bool SrvReadRegister(pr2_lfd_vision::ReadRegister::Request &req, pr2_lfd_vision::ReadRegister::Response &res)
+    {
+      res.value= ReadRegister(req.address);
+      res.success= IsNoError("");
+      return true;
+    }
+
+  bool SrvSetFrameRate(pr2_lfd_vision::SetFrameRate::Request &req, pr2_lfd_vision::SetFrameRate::Response &res)
+    {
+      res.success= SetFrameRate(req.frame_rate);
+      return true;
+    }
+
+private:
+  ros::NodeHandle     &node_;
+  ros::ServiceServer  srv_write_register_;
+  ros::ServiceServer  srv_read_register_;
+  ros::ServiceServer  srv_set_frame_rate_;
+
+};
+//-------------------------------------------------------------------------------------------
+
 }
 //-------------------------------------------------------------------------------------------
 using namespace std;
@@ -41,21 +83,15 @@ using namespace trick;
 // #define print(var) std::cout<<#var"= "<<(var)<<std::endl
 //-------------------------------------------------------------------------------------------
 
-static int  cd_idx(0);
 static bool running(true);
 
-void OnMouseCamera(int event, int x, int y, int flags, void *p_col_detector)
+void OnMouseCamera(int event, int x, int y, int flags, void *)
 {
-  TMultipleColorDetector *col_detector(reinterpret_cast<TMultipleColorDetector*>(p_col_detector));
-  col_detector->CameraWindowMouseCallback(cd_idx, event, x, y, flags);
 }
 //-------------------------------------------------------------------------------------------
 
-void OnMouseMask(int event, int x, int y, int flags, void *p_col_detector)
+void OnMouseMask(int event, int x, int y, int flags, void *)
 {
-  TMultipleColorDetector *col_detector(reinterpret_cast<TMultipleColorDetector*>(p_col_detector));
-  col_detector->MaskWindowMouseCallback(cd_idx, event, x, y, flags);
-
   if(event == cv::EVENT_RBUTTONDOWN)
   {
     running=!running;
@@ -66,96 +102,88 @@ void OnMouseMask(int event, int x, int y, int flags, void *p_col_detector)
 
 int main(int argc, char**argv)
 {
-  ros::init(argc, argv, "color_detector_node");
+  ros::init(argc, argv, "depth_detector_node");
   ros::NodeHandle node("~");
-  int camera(0);
-  int mode(1);
-  int num_detectors(1);
   int rotate90n(0);
   std::string vout_base;
-  node.param("camera",camera,0);
-  node.param("mode",mode,2);
-  node.param("num_detectors",num_detectors,1);
-  node.param("color_files_base",ColorFilesBase,std::string(""));
   node.param("rotate90n",rotate90n,0);
   node.param("vout_base",vout_base,std::string("/tmp/vout_"));
 
-  TMultipleColorDetector col_detector;
+  int init_fps, tcp_port, udp_port;
+  std::string tcp_ip, udp_ip;
+  node.param("init_fps",init_fps,1);
+  node.param("tcp_ip",tcp_ip,std::string("192.168.0.10"));
+  node.param("udp_ip",udp_ip,std::string("224.0.0.1"));
+  node.param("tcp_port",tcp_port,10001);
+  node.param("udp_port",udp_port,10002);
 
-  cv::VideoCapture cap(camera); // open the default camera
-  if(!cap.isOpened())  // check if we succeeded
-  {
-    std::cerr<<"Cannot open: "<<camera<<std::endl;
-    return -1;
-  }
-  std::cerr<<"Camera opened"<<std::endl;
+  double dist_thresh(0.5);
+  node.param("dist_thresh",dist_thresh,0.5);
 
-  col_detector.Setup(num_detectors);
-  for(int i(0); i<num_detectors; ++i)
-    col_detector.LoadColors(i, ColorFilesBase+DefaultFileNames[i]);
-  cd_idx= 0;
+  TSentisM100Node tof_sensor(node);
+  tof_sensor.Init(init_fps, /*data_format=*/DEPTH_AMP_DATA, tcp_ip.c_str(), udp_ip.c_str(), tcp_port, udp_port);
+  // tof_sensor.PrintRegisters(0);
+  // tof_sensor.PrintRegisters(1);
+  // tof_sensor.SetFrameRate(40);
+  int sentis_fps(1);
+
 
   TFlowFinder flow_finder;
   flow_finder.SetOptFlowWinSize(cv::Size(3,3));
-  flow_finder.SetOptFlowSpdThreshold(5.0);
+  flow_finder.SetOptFlowSpdThreshold(3.0);
   flow_finder.SetErodeDilate(1);
-  flow_finder.SetAmountRange(/*min=*/3.0, /*max=*/3000.0);
-  flow_finder.SetSpeedRange(/*min=*/3.0, /*max=*/-1.0);
+  flow_finder.SetAmountRange(/*min=*/-1.0, /*max=*/-1.0);
+  flow_finder.SetSpeedRange(/*min=*/-1.0, /*max=*/-1.0);
+  // cv::BackgroundSubtractorMOG2 bkg_sbtr(/*int history=*/5, /*double varThreshold=*/5.0, /*bool detectShadows=*/true);
 
-  // ros::Publisher ratio_pub= node.advertise<std_msgs::Float64>("/color_occupied_ratio", 1);
-  std::vector<ros::Publisher> ratio_pubs(num_detectors);
-  ratio_pubs[0]= node.advertise<std_msgs::Float64>("/color_occupied_ratio", 1);
-  for(int i(1); i<num_detectors; ++i)
-    ratio_pubs[i]= node.advertise<std_msgs::Float64>(ToString("/color_occupied_ratio", i+1), 1);
-
-  std::vector<ros::Publisher> mxy_pubs(num_detectors);
-  mxy_pubs[0]= node.advertise<std_msgs::Int32MultiArray>("/color_middle_xy", 1);
-  for(int i(1); i<num_detectors; ++i)
-    mxy_pubs[i]= node.advertise<std_msgs::Int32MultiArray>(ToString("/color_middle_xy", i+1), 1);
 
   ros::Publisher flow_pub;
   flow_pub= node.advertise<std_msgs::Float64MultiArray>("/flow_speed_angle", 1);
 
   cv::namedWindow("camera",1);
   cv::namedWindow("mask_img",1);
-  cv::Mat frame, disp_img;
-  col_detector.SetCameraWindow(frame);
+  cv::Mat frame, frame_tmp, disp_img;
 
-  cv::setMouseCallback("camera", OnMouseCamera, &col_detector);
-  cv::setMouseCallback("mask_img", OnMouseMask, &col_detector);
+  cv::setMouseCallback("camera", OnMouseCamera, NULL);
+  cv::setMouseCallback("mask_img", OnMouseMask, NULL);
 
   cv::VideoWriter vout_camera, vout_mask;
   double time_prev= GetCurrentTime(), fps(10.0), fps_alpha(0.05);
   int    show_fps(0);
 
-  // ros::Rate loop_rate(5);  // 5 Hz
+  ros::Rate loop_rate(40);  // 40 Hz
   for(int f(0);ros::ok();++f)
   {
     if(running)
     {
-      cap >> frame; // get a new frame from camera
+      if(!tof_sensor.GetDataAsCVMat(&frame,&frame_tmp))  continue;
+      // if(!tof_sensor.GetDataAsCVMat(&frame_tmp,&frame))  continue;
       if(rotate90n!=0)  Rotate90N(frame,frame,rotate90n);
+
+      cv::threshold(frame, disp_img, /*thresh=*/dist_thresh, /*maxval=*/255.0, cv::THRESH_TOZERO_INV);
+
+      frame*= 255.0;
+      frame.convertTo(frame,CV_8UC1);
+      cv::cvtColor(frame,frame,CV_GRAY2RGB);
       cv::imshow("camera", frame);
 
-      col_detector.Detect(frame, mode, /*verbose=*/true);
-      col_detector.Draw(disp_img);
+      disp_img= 255.0*(1.0-disp_img/dist_thresh);
+      disp_img.convertTo(disp_img,CV_8UC1);
+      cv::threshold(disp_img, disp_img, /*thresh=*/254, /*maxval=*/0, cv::THRESH_TOZERO_INV);
+      cv::threshold(disp_img, disp_img, /*thresh=*/200, /*maxval=*/0, cv::THRESH_TOZERO);
+      cv::dilate(disp_img,disp_img,cv::Mat(),cv::Point(-1,-1), 2);
+      cv::erode(disp_img,disp_img,cv::Mat(),cv::Point(-1,-1), 1);
+      // cv::imshow("mask_img", disp_img);
 
-      flow_finder.Update(frame);
+      // flow_finder.Update(frame);
+      // flow_finder.DrawFlow(disp_img, CV_RGB(0,255,255), /*len=*/1.0, /*thickness=*/3);
+      // // for(int i(0);i<flow_finder.FlowElements().size();++i) std::cerr<<f<<" "<<flow_finder.FlowElements()[i]<<std::endl;
+
+      flow_finder.UpdateProc2_ContourAnalysis(disp_img);
+      cv::cvtColor(disp_img,disp_img,CV_GRAY2RGB);
       flow_finder.DrawFlow(disp_img, CV_RGB(0,255,255), /*len=*/1.0, /*thickness=*/3);
       // for(int i(0);i<flow_finder.FlowElements().size();++i) std::cerr<<f<<" "<<flow_finder.FlowElements()[i]<<std::endl;
 
-      std_msgs::Float64  ratio_msg;
-      std_msgs::Int32MultiArray mxy_msg;
-      for(int i(0); i<col_detector.Size(); ++i)
-      {
-        ratio_msg.data= col_detector.Ratio(i);
-        ratio_pubs[i].publish(ratio_msg);
-
-        mxy_msg.data.resize(2);
-        mxy_msg.data[0]= col_detector.MedianX(i);
-        mxy_msg.data[1]= col_detector.MedianY(i);
-        mxy_pubs[i].publish(mxy_msg);
-      }
 
       // TEST: Compute average speed, angle
       double sum_amt(0.0);
@@ -180,9 +208,10 @@ int main(int argc, char**argv)
         avr_pvel= cv::Vec2d(0.0,0.0);
       }
       avr_vel= cv::Point2d(avr_pvel[0]*std::cos(avr_pvel[1]), avr_pvel[0]*std::sin(avr_pvel[1]));
-      if(avr_pvel[0]>20.0)
-        cv::line(disp_img, cv::Point2d(avr_xy-0.5*avr_vel), cv::Point2d(avr_xy+0.5*avr_vel), CV_RGB(255,128,0), 5);
-      std::cerr<<"spd,angle: "<<avr_pvel<<std::endl;
+      const double len(2.0);
+      if(avr_pvel[0]>3.0)
+        cv::line(disp_img, cv::Point2d(avr_xy-0.5*len*avr_vel), cv::Point2d(avr_xy+0.5*len*avr_vel), CV_RGB(255,128,0), 3);
+      // std::cerr<<"spd,angle: "<<avr_pvel<<std::endl;
       std_msgs::Float64MultiArray flow_msg;
       flow_msg.data.resize(2);
       flow_msg.data[0]= avr_pvel[0];
@@ -205,41 +234,17 @@ int main(int argc, char**argv)
     else
     {
       usleep(200*1000);
+      // unsigned short fps(1);
+      // if(tof_sensor.GetFrameRate(fps))
+      // {
+        // sentis_fps...
+      // }
+      // tof_sensor.Sleep();
     }
 
     // keyboard interface:
     int c(cv::waitKey(1));
     if(c=='\x1b'||c=='q') break;
-    else if(c=='r')
-    {
-      col_detector.Reset();
-    }
-    else if(c=='l')
-    {
-      col_detector.LoadColors(cd_idx, ColorFilesBase+DefaultFileNames[cd_idx]);
-    }
-    else if(c=='s')
-    {
-      col_detector.SaveColors(cd_idx, ColorFilesBase+DefaultFileNames[cd_idx]);
-    }
-    else if(c>='1' && c<='7')
-    {
-      int old_cd_idx(cd_idx);
-      switch(c)
-      {
-      case '1':  cd_idx= 0; break;
-      case '2':  cd_idx= 1; break;
-      case '3':  cd_idx= 2; break;
-      case '4':  cd_idx= 3; break;
-      case '5':  cd_idx= 4; break;
-      case '6':  cd_idx= 5; break;
-      case '7':  cd_idx= 6; break;
-      }
-      if(cd_idx>=num_detectors)
-        cd_idx= old_cd_idx;
-      else
-        std::cerr<<"###Selected: "<<(cd_idx+1)<<std::endl;
-    }
     else if(c=='w')
     {
       if(vout_camera.isOpened() || vout_mask.isOpened())
@@ -273,8 +278,10 @@ int main(int argc, char**argv)
     }
 
     ros::spinOnce();
+    loop_rate.sleep();
   }
 
+  tof_sensor.Sleep();
 
   usleep(500*1000);
 
