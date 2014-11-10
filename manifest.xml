@@ -11,6 +11,7 @@
   <depend package="rospy"/>
   <depend package="roscpp"/>
   <depend package="std_msgs"/>
+  <depend package="std_srvs"/>
   <depend package="opencv2"/>
   <depend package="pcl"/>
   <depend package="pcl_ros"/>

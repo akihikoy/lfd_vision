@@ -137,7 +137,7 @@ int main(int argc, char**argv)
       if(rotate90n!=0)  Rotate90N(frame,frame,rotate90n);
       cv::imshow("camera", frame);
 
-      col_detector.Detect(frame, mode, /*verbose=*/true);
+      col_detector.Detect(frame, mode, /*verbose=*/false);
       col_detector.Draw(disp_img);
 
       flow_finder.Update(frame);
@@ -182,13 +182,17 @@ int main(int argc, char**argv)
       avr_vel= cv::Point2d(avr_pvel[0]*std::cos(avr_pvel[1]), avr_pvel[0]*std::sin(avr_pvel[1]));
       if(avr_pvel[0]>20.0)
         cv::line(disp_img, cv::Point2d(avr_xy-0.5*avr_vel), cv::Point2d(avr_xy+0.5*avr_vel), CV_RGB(255,128,0), 5);
-      std::cerr<<"spd,angle: "<<avr_pvel<<std::endl;
+      // std::cerr<<"spd,angle: "<<avr_pvel<<std::endl;
       std_msgs::Float64MultiArray flow_msg;
       flow_msg.data.resize(2);
       flow_msg.data[0]= avr_pvel[0];
       flow_msg.data[1]= avr_pvel[1];
       flow_pub.publish(flow_msg);
 
+      std::cerr<<"ratio:";
+      for(int i(0); i<col_detector.Size(); ++i)
+        std::cerr<<" "<<col_detector.Ratio(i);
+      std::cerr<<"\t spd,angle: "<<avr_pvel<<std::endl;
 
       cv::imshow("mask_img", disp_img);
 
@@ -210,6 +214,8 @@ int main(int argc, char**argv)
     // keyboard interface:
     int c(cv::waitKey(1));
     if(c=='\x1b'||c=='q') break;
+    if(c=='[') {--rotate90n; std::cerr<<"rotate90n= "<<rotate90n<<std::endl;}
+    if(c==']') {++rotate90n; std::cerr<<"rotate90n= "<<rotate90n<<std::endl;}
     else if(c=='r')
     {
       col_detector.Reset();
