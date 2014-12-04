@@ -38,7 +38,10 @@ namespace ode_pour
 extern int MAX_CONTACTS;  // maximum number of contact points per body
 extern double VIZ_JOINT_LEN;
 extern double VIZ_JOINT_RAD;
+extern int    BALL_NUM;
+extern int    BALL_TYPE;  // 0: Sphere, 1: Box
 extern double BALL_RAD;
+extern double BALL_BOX_RATIO;  // If BALL_TYPE is box, its size = BALL_RAD*this value
 extern double BOX_THICKNESS;
 extern double TargetAngle;
 extern double TimeStep;
@@ -176,8 +179,27 @@ class TBalls1 : public TDynRobot
 {
 public:
   override void Create(dWorldID world, dSpaceID space);
-  std::vector<TNCSphere>& BallsG()  {return link_sp_;}
-  const std::vector<TNCSphere>& BallsG() const {return link_sp_;}
+  // std::vector<TNCSphere>& BallsG()  {return link_sp_;}
+  // const std::vector<TNCSphere>& BallsG() const {return link_sp_;}
+  // std::vector<TNCBox>& BallsG()  {return link_b_;}
+  // const std::vector<TNCBox>& BallsG() const {return link_b_;}
+  int BallCol(int idx) const
+    {
+      switch(BALL_TYPE)
+      {
+      case 0: return link_sp_[idx].ColorCode;
+      case 1: return link_b_[idx].ColorCode;
+      }
+      return -1;
+    }
+  void SetBallCol(int idx, int col)
+    {
+      switch(BALL_TYPE)
+      {
+      case 0: link_sp_[idx].ColorCode= col;  break;
+      case 1: link_b_[idx].ColorCode= col;  break;
+      }
+    }
   std::vector<TNCBody>& BallsB()  {return body_;}
   const std::vector<TNCBody>& BallsB() const {return body_;}
 };

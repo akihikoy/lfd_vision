@@ -27,7 +27,10 @@ namespace ode_pour
 int MAX_CONTACTS(1);  // maximum number of contact points per body
 double VIZ_JOINT_LEN(0.1);
 double VIZ_JOINT_RAD(0.02);
+int    BALL_NUM(100);
+int    BALL_TYPE(0);  // 0: Sphere, 1: Box
 double BALL_RAD(0.025);
+double BALL_BOX_RATIO(1.7);  // If BALL_TYPE is box, its size = BALL_RAD*this value
 double BOX_THICKNESS(0.02);
 double TargetAngle(0.0);
 double TimeStep(0.04);
@@ -228,26 +231,43 @@ void TDynRobot::Draw()
 
   // dReal side(0.2),mass(1.0);
 
-  int N(100);
+  int N(BALL_NUM);
   double rad(BALL_RAD);
   double init_z(0.30);
 
   body_.resize(N);
-  link_sp_.resize(N);
+  switch(BALL_TYPE)
+  {
+  case 0: link_sp_.resize(N);  break;
+  case 1: link_b_.resize(N);  break;
+  }
 
   for(int i(0); i<N; ++i)
   {
     double z= init_z + 0.3*rad*double(i);
     double xy_rad= 3.0*rad;
     double th= 0.73*M_PI*double(i);
-    link_sp_[i].create(space, rad);
+    switch(BALL_TYPE)
+    {
+    case 0: link_sp_[i].create(space, rad);  break;
+    case 1: link_b_[i].create(space, BALL_BOX_RATIO*rad,BALL_BOX_RATIO*rad,BALL_BOX_RATIO*rad);  break;
+    }
     body_[i].create(world);
     body_[i].setPosition(xy_rad*std::cos(th), xy_rad*std::sin(th), z);
     dMass m;
     m.setSphere(1.0, rad);
     body_[i].setMass(&m);
-    link_sp_[i].setBody(body_[i]);
-    link_sp_[i].ColorCode= 1;
+    switch(BALL_TYPE)
+    {
+    case 0:
+      link_sp_[i].setBody(body_[i]);
+      link_sp_[i].ColorCode= 1;
+      break;
+    case 1:
+      link_b_[i].setBody(body_[i]);
+      link_b_[i].ColorCode= 1;
+      break;
+    }
   }
 }
 //-------------------------------------------------------------------------------------------
@@ -317,7 +337,7 @@ void TEnvironment::ControlCallback(const double &time_step)
 void TEnvironment::DrawCallback()
 {
   std::vector<TNCBody> &balls_b(balls_.BallsB());
-  std::vector<TNCSphere> &balls_g(balls_.BallsG());
+  // std::vector<TNCSphere> &balls_g(balls_.BallsG());
   int num_src(0), num_rcv(0), num_flow(0);
   double speed;
   std::list<double> z_rcv_data;
@@ -329,23 +349,23 @@ void TEnvironment::DrawCallback()
     speed= std::sqrt(vel[0]*vel[0]+vel[1]*vel[1]+vel[2]*vel[2]);
     if(angle<0.0)  angle+= 2.0*M_PI;
     dReal angle_base= TargetAngle+0.5*M_PI;
-    if(pos[0]>0.15 && pos[2]<0.4 && speed<0.2)
+    if(pos[0]>0.15 && pos[2]<0.4 && speed<0.5)
     {
-      balls_g[i].ColorCode= 0;
+      balls_.SetBallCol(i,0);
       ++num_rcv;
       if(speed<0.02)  InsertDescending(z_rcv_data, pos[2]-(BOX_THICKNESS+0.5*BALL_RAD));
     }
     else if(angle>angle_base)
     {
-      balls_g[i].ColorCode= 2;
+      balls_.SetBallCol(i,2);
       ++num_flow;
     }
     else
     {
-      balls_g[i].ColorCode= 1;
+      balls_.SetBallCol(i,1);
       ++num_src;
     }
-    if(speed>0.1)  balls_g[i].ColorCode+= 6;
+    if(speed>0.1)  balls_.SetBallCol(i, balls_.BallCol(i)+6);
   }
   // std::cerr<<"angle= "<<angle<<"  ";
   double z_rcv(0.0);
@@ -429,6 +449,16 @@ static void SimKeyevent (int command)
   case ' ': Running= !Running; break;
   case 'z': TargetAngle+= 0.01; std::cerr<<"TargetAngle= "<<TargetAngle<<std::endl; break;
   case 'x': TargetAngle-= 0.01; std::cerr<<"TargetAngle= "<<TargetAngle<<std::endl; break;
+  case 'n':
+    std::cerr<<"Input number of balls > ";
+    std::cin>>BALL_NUM;
+    std::cerr<<"New number ("<<BALL_NUM<<") is effective after reset"<<std::endl;
+    break;
+  case 'b':
+    ++BALL_TYPE;
+    if(BALL_TYPE>1)  BALL_TYPE= 0;
+    Create();
+    break;
   }
 }
 //-------------------------------------------------------------------------------------------

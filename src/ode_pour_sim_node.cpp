@@ -23,7 +23,8 @@ void OnFlowCallback(int num_src, int num_rcv, int num_flow, const double &z_rcv)
 {
   NumSrc= num_src;
   std_msgs::Float64 ratio_msg;
-  ratio_msg.data= 5.0*z_rcv;
+  // ratio_msg.data= 5.0*z_rcv;
+  /*TEST*/ratio_msg.data= 0.0055*static_cast<double>(num_rcv);
   PRatioPub->publish(ratio_msg);
   // std::cerr<<"#src, #flow, #rcv, amount= "<<num_src<<", "<<num_flow<<", "<<num_rcv<<", "<<z_rcv<<std::endl;
   std_msgs::Float64MultiArray flow_msg;
