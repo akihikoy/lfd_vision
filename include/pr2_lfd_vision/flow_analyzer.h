@@ -15,39 +15,9 @@
 #include <pcl/io/pcd_io.h>
 #include <vector>
 #include <valarray>
-#include <geometry_msgs/Pose.h>
 //-------------------------------------------------------------------------------------------
 namespace trick
 {
-//-------------------------------------------------------------------------------------------
-
-
-// Convert x to geometry_msgs/Pose
-inline geometry_msgs::Pose XToGPose(const double x[7])
-{
-  geometry_msgs::Pose pose;
-  pose.position.x= x[0];
-  pose.position.y= x[1];
-  pose.position.z= x[2];
-  pose.orientation.x= x[3];
-  pose.orientation.y= x[4];
-  pose.orientation.z= x[5];
-  pose.orientation.w= x[6];
-  return pose;
-}
-//-------------------------------------------------------------------------------------------
-
-// Convert geometry_msgs/Pose to x
-inline void GPoseToX(const geometry_msgs::Pose &pose, double x[7])
-{
-  x[0]= pose.position.x;
-  x[1]= pose.position.y;
-  x[2]= pose.position.z;
-  x[3]= pose.orientation.x;
-  x[4]= pose.orientation.y;
-  x[5]= pose.orientation.z;
-  x[6]= pose.orientation.w;
-}
 //-------------------------------------------------------------------------------------------
 
 // Operation kind, should be the same as the definition in IndexedBBEquation.msg

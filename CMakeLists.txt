@@ -68,3 +68,16 @@ target_link_libraries(ode_pour_sim_node
       SM ICE GL Xext X11 GLU)
 
 # -L/usr/X11R6/lib -ldl  -lpthread
+
+
+file(GLOB raytrace_srcs1 "include/pr2_lfd_vision/raytrace/doncross/*.cpp")
+file(GLOB raytrace_srcs2 "include/pr2_lfd_vision/raytrace/lodepng/*.cpp")
+rosbuild_add_library(ray_trace ${raytrace_srcs1} ${raytrace_srcs2})
+
+rosbuild_add_executable(rt_pose_estimator_node
+      src/rt_pose_estimator_node.cpp
+      src/raytrace/pose_estimator.cpp
+      src/raytrace/depthscene.cpp
+      src/pcl_util.cpp)
+target_link_libraries(rt_pose_estimator_node ray_trace)
+
