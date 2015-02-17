@@ -118,9 +118,18 @@ public:
       cv::Mat &depth_img, cv::Mat &normal_img,
       int step_xp=2, int step_yp=2);
 
+  /*Get a distance between the ray traced model image and actual images.
+    depth_img, normal_img : depth and normal images.
+    sqdiff_depth, sqdiff_normal : square errors of valid depth and normal points.
+    n_invalid_depth : number of invalid depth pixels in depth_img on the model image.
+    n_invalid_normal : number of invalid normal pixels in normal_img on the model image.
+    n_invalid_range : number of invalid pixels that is out of range of the camera.
+    step_xp, step_yp : step size to compute the model image.  Greater is faster but bigger error.
+  */
   void GetDistance(
       cv::Mat &depth_img, cv::Mat &normal_img,
       double &sqdiff_depth, double &sqdiff_normal,
+      int &n_invalid_depth, int &n_invalid_normal, int &n_invalid_range,
       int step_xp=2, int step_yp=2);
 
   void OptimizeXY(

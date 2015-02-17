@@ -46,7 +46,7 @@ void CallbackPointCloud(const sensor_msgs::PointCloud2ConstPtr &msg)
 
   cv::Mat rgb_img, depth_img, normal_img;
   ConvertPointCloudToRGBDImages(cloud, rgb_img, depth_img);
-  ConvertPointCloudToNormalImage(cloud, normal_img);
+  ConvertPointCloudToNormalImage(cloud, normal_img, /*FS=*/9);
 
   // cv::medianBlur(normal_img, normal_img, 5);
   // cv::medianBlur(normal_img, normal_img, 5);
