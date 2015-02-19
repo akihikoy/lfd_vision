@@ -197,7 +197,7 @@ void DepthScene::Render2(
 // Output images are cropped.
 void DepthScene::Render3(
     const TCameraInfo &cam,
-    const TROI &roi,
+    const TROI2D<int> &roi,
     cv::Mat *depth_img,
     cv::Mat *normal_img) const
 {
@@ -205,19 +205,7 @@ void DepthScene::Render3(
   Vector camera(0.0, 0.0, 0.0);
   Vector direction(0.0, 0.0, 1.0);
 
-  int roi_x1(0), roi_y1(0), roi_x2(0), roi_y2(0);
-  cam.Project(roi.Cx-1.4142136*roi.Radius, roi.Cy-1.4142136*roi.Radius, roi.Cz, roi_x1, roi_y1);
-  cam.Project(roi.Cx+1.4142136*roi.Radius, roi.Cy+1.4142136*roi.Radius, roi.Cz, roi_x2, roi_y2);
-  if(roi_x2<roi_x1)  std::swap(roi_x1,roi_x2);
-  if(roi_y2<roi_y1)  std::swap(roi_y1,roi_y2);
-  // if(roi_x1>=cam.Width)  roi_x1= cam.Width;
-  // if(roi_x1<0)           roi_x1= 0;
-  // if(roi_x2>=cam.Width)  roi_x2= cam.Width;
-  // if(roi_x2<0)           roi_x2= 0;
-  // if(roi_y1>=cam.Height) roi_y1= cam.Height;
-  // if(roi_y1<0)           roi_y1= 0;
-  // if(roi_y2>=cam.Height) roi_y2= cam.Height;
-  // if(roi_y2<0)           roi_y2= 0;
+  int roi_x1(roi.Min[0]), roi_y1(roi.Min[1]), roi_x2(roi.Max[0]), roi_y2(roi.Max[1]);
   if(roi_x1==roi_x2)  ++roi_x2;
   if(roi_y1==roi_y2)  ++roi_y2;
 
@@ -273,7 +261,7 @@ void DepthScene::Render3(
 // where we generate a raw intersection information.
 void DepthScene::Render4(
     const TCameraInfo &cam,
-    const TROI &roi,
+    const TROI2D<int> &roi,
     std::list<Intersection> &intersection_list,
     int step_xp, int step_yp) const
 {
@@ -281,11 +269,7 @@ void DepthScene::Render4(
   Vector camera(0.0, 0.0, 0.0);
   Vector direction(0.0, 0.0, 1.0);
 
-  int roi_x1(0), roi_y1(0), roi_x2(0), roi_y2(0);
-  cam.Project(roi.Cx-1.4142136*roi.Radius, roi.Cy-1.4142136*roi.Radius, roi.Cz, roi_x1, roi_y1);
-  cam.Project(roi.Cx+1.4142136*roi.Radius, roi.Cy+1.4142136*roi.Radius, roi.Cz, roi_x2, roi_y2);
-  if(roi_x2<roi_x1)  std::swap(roi_x1,roi_x2);
-  if(roi_y2<roi_y1)  std::swap(roi_y1,roi_y2);
+  int roi_x1(roi.Min[0]), roi_y1(roi.Min[1]), roi_x2(roi.Max[0]), roi_y2(roi.Max[1]);
   if(roi_x1==roi_x2)  ++roi_x2;
   if(roi_y1==roi_y2)  ++roi_y2;
 

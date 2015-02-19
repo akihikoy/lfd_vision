@@ -10,9 +10,11 @@
 #define pose_estimator_h
 //-------------------------------------------------------------------------------------------
 #include "depthscene.h"
-#include "pr2_lfd_vision/pcl_util.h"
+#include "../geom_util.h"
 //-------------------------------------------------------------------------------------------
+#include <map>
 #include <cmath>
+#include <iostream>
 #include <opencv2/core/core.hpp>
 //-------------------------------------------------------------------------------------------
 namespace trick
@@ -55,11 +57,12 @@ inline void QuaternionToYZXEuler(
 
 
 enum TRayTracePrimitiveKind{
+  rtpkInvalid   =-1,
   rtpkSphere    =0,  // Param={radius}
   rtpkSpheroid    ,  // Param={radius_x,radius_y,radius_z}
   rtpkCuboid      ,  // Param={len_x,len_y,len_z}
   rtpkCylinder    ,  // Param={radius,height}
-  rtpkTube        ,  // Param={radius_out,radius_in,height}
+  rtpkTube        ,  // Param={radius_out,radius_in,height,dx,dy}, dx,dy: displacement of hole position
   rtpkTorus       ,
   rtpkPolyhedra   };
 
@@ -68,14 +71,40 @@ struct TRayTraceModel
   struct TPrimitive
   {
     TRayTracePrimitiveKind Kind;
-    double Param[3];
+    double Param[5];
     double Pose[7];  // x,y,z, qx,qy,qz,qw
   };
   std::vector<TPrimitive> Primitives;
-  double BoundingRadius;  // If positive, BoundingRadius is automatically computed
 
-  TRayTraceModel() : Primitives(), BoundingRadius(-1.0)  {}
+  TRayTraceModel() : Primitives()  {}
 };
+//-------------------------------------------------------------------------------------------
+
+inline TRayTracePrimitiveKind StrToRTPrimitiveKind(const std::string &kind)
+{
+  if(kind=="rtpkSphere"   )  return rtpkSphere    ;
+  if(kind=="rtpkSpheroid" )  return rtpkSpheroid  ;
+  if(kind=="rtpkCuboid"   )  return rtpkCuboid    ;
+  if(kind=="rtpkCylinder" )  return rtpkCylinder  ;
+  if(kind=="rtpkTube"     )  return rtpkTube      ;
+  if(kind=="rtpkTorus"    )  return rtpkTorus     ;
+  if(kind=="rtpkPolyhedra")  return rtpkPolyhedra ;
+  return rtpkInvalid;
+}
+inline std::string RTPrimitiveKindToStr(const TRayTracePrimitiveKind &kind)
+{
+  switch(kind)
+  {
+  case rtpkSphere    :  return "rtpkSphere"   ;
+  case rtpkSpheroid  :  return "rtpkSpheroid" ;
+  case rtpkCuboid    :  return "rtpkCuboid"   ;
+  case rtpkCylinder  :  return "rtpkCylinder" ;
+  case rtpkTube      :  return "rtpkTube"     ;
+  case rtpkTorus     :  return "rtpkTorus"    ;
+  case rtpkPolyhedra :  return "rtpkPolyhedra";
+  }
+  return "";
+}
 //-------------------------------------------------------------------------------------------
 
 
@@ -84,6 +113,8 @@ class TRayTracePoseEstimator
 //===========================================================================================
 {
 public:
+  struct TPose {double X[7]; /*[0-2]: position x,y,z, [3-6]: orientation x,y,z,w.*/};
+
   // Rotation of an object in YZX-Euler angles in DEGREE.
   struct TDegRotation {double Y,Z,X;  TDegRotation():Y(0.0),Z(0.0),X(0.0){}};
   struct TRadRotation {double Y,Z,X;  TRadRotation():Y(0.0),Z(0.0),X(0.0){}};
@@ -104,21 +135,23 @@ public:
   int AddObject(const TRayTraceModel &model, const double pose[7]);
 
   // Set x,y,z of the object
-  void SetXYZ(int index, const double xyz[3]);
-  // Set rotation ex,ey,ez(in radian) of the object
-  void SetRotation(int index, const double &ex, const double &ey, const double &ez);
+  inline void SetXYZ(int index, const double &x, const double &y, const double &z);
+  // Set x,y,z of the object
+  inline void SetXYZ(int index, const double xyz[3]);
   // Set quaternion qx,qy,qz,qw of the object
-  void SetQ(int index, const double q[4]);
+  inline void SetQ(int index, const double q[4]);
   // Set pose=x,y,z,quaternion of the object
-  void SetPose(int index, const double pose[7]);
+  inline void SetPose(int index, const double pose[7]);
 
-  void UpdateROI();
+  Imager::TROI2D<int> GetImageROI() const;
 
   void Render(
       cv::Mat &depth_img, cv::Mat &normal_img,
       int step_xp=2, int step_yp=2);
 
   /*Get a distance between the ray traced model image and actual images.
+    index : if -1, all rendered intersections are considered,
+        if >=0, only intersections whose solid is mapped to index are considered.
     depth_img, normal_img : depth and normal images.
     sqdiff_depth, sqdiff_normal : square errors of valid depth and normal points.
     n_invalid_depth : number of invalid depth pixels in depth_img on the model image.
@@ -127,6 +160,7 @@ public:
     step_xp, step_yp : step size to compute the model image.  Greater is faster but bigger error.
   */
   void GetDistance(
+      int index,
       cv::Mat &depth_img, cv::Mat &normal_img,
       double &sqdiff_depth, double &sqdiff_normal,
       int &n_invalid_depth, int &n_invalid_normal, int &n_invalid_range,
@@ -154,16 +188,76 @@ public:
   void SetCameraInfo(const Imager::TCameraInfo &cam)  {camera_= cam;}
   const Imager::TCameraInfo& CameraInfo() const {return camera_;}
 
-  void SetROI(const Imager::TROI &roi)  {roi_= roi;}
-  const Imager::TROI& ROI() const {return roi_;}
-
 private:
   Imager::DepthScene scene_;
-  std::vector<TDegRotation>  rotations_;
+  std::vector<TPose>  poses_;  // [index]= pose; current poses
+  std::vector<TDegRotation>  rotations_;  // [index]= rotation; having current Euler rotation since objects in scene_ does not have it.
+  std::vector<Imager::TROI3D>  local_roi_;  // [index]= local ROI
+  std::map<const Imager::SolidObject*,int>  solid_to_index_;  // [*solid]= index; to know the object index of given solid pointer (of an intersection)
   Imager::TCameraInfo camera_;
-  Imager::TROI roi_;
+
+  // Set rotation ex,ey,ez(in radian) of the object
+  // WARNING: this function does not update poses_; use: SetPose, SetQ, SetXYZ
+  inline void set_rotation(int index, const double &ex, const double &ey, const double &ez);
 
 };
+//-------------------------------------------------------------------------------------------
+
+
+// Set x,y,z of the object
+inline void TRayTracePoseEstimator::SetXYZ(int index, const double &x, const double &y, const double &z)
+{
+  Imager::SolidObject *obj= scene_.RefSolidObject(index);
+  obj->Move(x,y,z);
+  poses_[index].X[0]= x;
+  poses_[index].X[1]= y;
+  poses_[index].X[2]= z;
+}
+//-------------------------------------------------------------------------------------------
+
+// Set x,y,z of the object
+inline void TRayTracePoseEstimator::SetXYZ(int index, const double xyz[3])
+{
+  SetXYZ(index, xyz[0], xyz[1], xyz[2]);
+}
+//-------------------------------------------------------------------------------------------
+
+// Set rotation ex,ey,ez(in radian) of the object
+// WARNING: this function does not update poses_; use: SetPose, SetQ, SetXYZ
+inline void TRayTracePoseEstimator::set_rotation(int index, const double &ex, const double &ey, const double &ez)
+{
+  Imager::SolidObject *obj= scene_.RefSolidObject(index);
+  TDegRotation &rot(rotations_[index]);
+  // Reset rotation (inverse YZX):
+  obj->RotateY(-rot.Y);
+  obj->RotateZ(-rot.Z);
+  obj->RotateX(-rot.X);
+  // Rotate YZX:
+  rot.X= Rad2Deg(ex);
+  rot.Z= Rad2Deg(ez);
+  rot.Y= Rad2Deg(ey);
+  obj->RotateX(rot.X);
+  obj->RotateZ(rot.Z);
+  obj->RotateY(rot.Y);
+}
+//-------------------------------------------------------------------------------------------
+
+// Set quaternion qx,qy,qz,qw of the object
+inline void TRayTracePoseEstimator::SetQ(int index, const double q[4])
+{
+  double ey(0.0),ez(0.0),ex(0.0);
+  QuaternionToYZXEuler(q[0],q[1],q[2],q[3], ey,ez,ex);
+  set_rotation(index, ex,ey,ez);
+  for(int d(0);d<4;++d)  poses_[index].X[3+d]= q[d];
+}
+//-------------------------------------------------------------------------------------------
+
+// Set pose=x,y,z,quaternion of the object
+inline void TRayTracePoseEstimator::SetPose(int index, const double pose[7])
+{
+  SetXYZ(index, pose);
+  SetQ(index, pose+3);
+}
 //-------------------------------------------------------------------------------------------
 
 

@@ -10,6 +10,7 @@
 #define depthscene_h
 //-------------------------------------------------------------------------------------------
 #include "doncross/imager.h"
+#include "../geom_util.h"
 //-------------------------------------------------------------------------------------------
 #include <list>
 #include <opencv2/core/core.hpp>
@@ -141,7 +142,6 @@ private:
 //-------------------------------------------------------------------------------------------
 
 
-
 /* Camera information.
   We assume a simple projection model.
   Let
@@ -182,11 +182,144 @@ struct TCameraInfo
 };
 //-------------------------------------------------------------------------------------------
 
-// Region of interest in 3D.
-struct TROI
+// Region of interest in 2D (bounding box model).
+template <typename t_value>
+struct TROI2D
 {
-  double Cx, Cy, Cz;  // Center
-  double Radius;  // Radius
+  t_value Min[2];  // [x,y]
+  t_value Max[2];  // [x,y]
+
+  void SetMin(const t_value &x, const t_value &y)
+    {Min[0]= x; Min[1]= y;}
+  void SetMax(const t_value &x, const t_value &y)
+    {Max[0]= x; Max[1]= y;}
+
+  // Initialize with a point [x,y]
+  void Init(const t_value &x, const t_value &y)
+    {
+      SetMin(x,y);
+      SetMax(x,y);
+    }
+  // Add a point [x,y] to the ROI
+  void Add(const t_value &x, const t_value &y)
+    {
+      if(x<Min[0]) Min[0]= x;  if(x>Max[0]) Max[0]= x;
+      if(y<Min[1]) Min[1]= y;  if(y>Max[1]) Max[1]= y;
+    }
+  // Add a ROI to the ROI
+  void Add(const TROI2D<t_value> &roi)
+    {
+      Add(roi.Min[0], roi.Min[1]);
+      Add(roi.Max[0], roi.Max[1]);
+    }
+};
+//-------------------------------------------------------------------------------------------
+
+// Region of interest in 3D (bounding box model).
+struct TROI3D
+{
+  typedef double t_value;
+  t_value Min[3];  // [x,y,z]
+  t_value Max[3];  // [x,y,z]
+
+  void SetMin(const t_value &x, const t_value &y, const t_value &z)
+    {Min[0]= x; Min[1]= y; Min[2]= z;}
+  void SetMax(const t_value &x, const t_value &y, const t_value &z)
+    {Max[0]= x; Max[1]= y; Max[2]= z;}
+
+  // Initialize with a point [x,y,z]
+  void Init(const t_value &x, const t_value &y, const t_value &z)
+    {
+      SetMin(x,y,z);
+      SetMax(x,y,z);
+    }
+  // Add a point [x,y,z] to the ROI
+  void Add(const t_value &x, const t_value &y, const t_value &z)
+    {
+      if(x<Min[0]) Min[0]= x;  if(x>Max[0]) Max[0]= x;
+      if(y<Min[1]) Min[1]= y;  if(y>Max[1]) Max[1]= y;
+      if(z<Min[2]) Min[2]= z;  if(z>Max[2]) Max[2]= z;
+    }
+  // Add a ROI to the ROI
+  void Add(const TROI3D &roi)
+    {
+      Add(roi.Min[0], roi.Min[1], roi.Min[2]);
+      Add(roi.Max[0], roi.Max[1], roi.Max[2]);
+    }
+
+  // Transform the ROI and compute its new ROI
+  // xbase: [0-2]: position x,y,z, [3-6]: orientation x,y,z,w.
+  TROI3D Transform(const double xbase[7]) const
+    {
+      TROI3D roi;
+      double points[8][3]= {
+          {Min[0], Min[1], Min[2]},
+          {Max[0], Min[1], Min[2]},
+          {Max[0], Max[1], Min[2]},
+          {Min[0], Max[1], Min[2]},
+          {Min[0], Min[1], Max[2]},
+          {Max[0], Min[1], Max[2]},
+          {Max[0], Max[1], Max[2]},
+          {Min[0], Max[1], Max[2]} };
+      bool init(true);
+      double pt[3];
+      for(int ip(0); ip<8; ++ip)
+      {
+        double *p(points[ip]);
+        trick::TransformP(xbase, p, pt);  // pt= xbase * p
+        if(init)  {roi.Init(pt[0],pt[1],pt[2]);  init= false;}
+        else      {roi.Add(pt[0],pt[1],pt[2]);}
+      }
+      return roi;
+    }
+
+  // Convert 3D ROI to 2D ROI on an image plane (bounding box).
+  void ToImageROI(const TCameraInfo &cam, TROI2D<int> &roi2d) const
+    {
+      double points[8][3]= {
+          {Min[0], Min[1], Min[2]},
+          {Max[0], Min[1], Min[2]},
+          {Max[0], Max[1], Min[2]},
+          {Min[0], Max[1], Min[2]},
+          {Min[0], Min[1], Max[2]},
+          {Max[0], Min[1], Max[2]},
+          {Max[0], Max[1], Max[2]},
+          {Min[0], Max[1], Max[2]} };
+      int xp,yp;
+      bool init(true);
+      for(int ip(0); ip<8; ++ip)
+      {
+        double *p(points[ip]);
+        cam.Project(p[0], p[1], p[2], xp,yp);
+        if(init)  {roi2d.Init(xp,yp);  init= false;}
+        else      {roi2d.Add(xp,yp);}
+      }
+    }
+  // Convert 3D ROI transformed with xbase to 2D ROI on an image plane (bounding box).
+  // xbase: [0-2]: position x,y,z, [3-6]: orientation x,y,z,w.
+  void ToImageROI(const TCameraInfo &cam, const double xbase[7], TROI2D<int> &roi2d) const
+    {
+      double points[8][3]= {
+          {Min[0], Min[1], Min[2]},
+          {Max[0], Min[1], Min[2]},
+          {Max[0], Max[1], Min[2]},
+          {Min[0], Max[1], Min[2]},
+          {Min[0], Min[1], Max[2]},
+          {Max[0], Min[1], Max[2]},
+          {Max[0], Max[1], Max[2]},
+          {Min[0], Max[1], Max[2]} };
+      int xp,yp;
+      bool init(true);
+      double pt[3];
+      for(int ip(0); ip<8; ++ip)
+      {
+        double *p(points[ip]);
+        trick::TransformP(xbase, p, pt);  // pt= xbase * p
+        cam.Project(pt[0], pt[1], pt[2], xp,yp);
+        if(init)  {roi2d.Init(xp,yp);  init= false;}
+        else      {roi2d.Add(xp,yp);}
+      }
+    }
 };
 //-------------------------------------------------------------------------------------------
 
@@ -242,7 +375,7 @@ public:
   // Output images are cropped.
   void Render3(
       const TCameraInfo &cam,
-      const TROI &roi,
+      const TROI2D<int> &roi,
       cv::Mat *depth_img=NULL,
       cv::Mat *normal_img=NULL) const;
 
@@ -250,7 +383,7 @@ public:
   // where we generate a raw intersection information.
   void Render4(
       const TCameraInfo &cam,
-      const TROI &roi,
+      const TROI2D<int> &roi,
       std::list<Intersection> &intersection_list,
       int step_xp=1, int step_yp=1) const;
 

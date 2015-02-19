@@ -10,6 +10,7 @@
 #define cyl_detector_h
 //-------------------------------------------------------------------------------------------
 #include "pr2_lfd_vision/pcl_util.h"
+#include "pr2_lfd_vision/geom_util.h"
 //-------------------------------------------------------------------------------------------
 #include <pcl/ModelCoefficients.h>
 #include <pcl/point_types.h>

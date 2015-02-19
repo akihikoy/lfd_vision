@@ -9,6 +9,7 @@
 #include "pr2_lfd_vision/flow_analyzer.h"
 #include "pr2_lfd_vision/sentis_m100.h"
 #include "pr2_lfd_vision/flow_finder.h"
+#include "pr2_lfd_vision/geom_util.h"
 //-------------------------------------------------------------------------------------------
 #include "pr2_lfd_vision/Int32Array.h"
 #include "pr2_lfd_vision/IndexedBoundingBox.h"

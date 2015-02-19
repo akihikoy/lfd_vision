@@ -22,49 +22,112 @@ namespace trick
 // template<typename T>
 // inline T Sq(const T &x)  {return x*x;}
 
-Imager::SolidObject* CreateRayTracePrimitive(const TRayTraceModel::TPrimitive &prim)
+// Set pose of object; pose={x,y,z, qx,qy,qz,qw}
+Imager::SolidObject* SolidObject_SetPose(Imager::SolidObject *obj, const double pose[7])
+{
+  const double *q(pose+3);
+  double ey(0.0),ez(0.0),ex(0.0);
+  QuaternionToYZXEuler(q[0],q[1],q[2],q[3], ey,ez,ex);
+  obj->RotateX(Rad2Deg(ex));
+  obj->RotateZ(Rad2Deg(ez));
+  obj->RotateY(Rad2Deg(ey));
+  obj->Move(pose[0],pose[1],pose[2]);
+  return obj;
+}
+//-------------------------------------------------------------------------------------------
+
+/* Create a primitive ray tracing model of given model.
+    elements : internal solid objects are stored including the returned one. */
+Imager::SolidObject* CreateRayTracePrimitive(
+    const TRayTraceModel::TPrimitive &prim,
+    std::list<const Imager::SolidObject*>  &elements)
 {
   using namespace Imager;
+  SolidObject *obj(NULL), *sub_obj1(NULL), *sub_obj2(NULL);
   switch(prim.Kind)
   {
   case rtpkSphere   :
-    return new Sphere(Vector(prim.Pose[0], prim.Pose[1], prim.Pose[2]), prim.Param[0]);
+    obj= new Sphere(Vector(0.0, 0.0, 0.0), prim.Param[0]);
+    break;
   case rtpkSpheroid :
-    // FIXME: Implement from here to the end of this function
-    // Spheroid* spheroid = new Spheroid(4.0, 2.0, 1.0);
+    obj= new Spheroid(prim.Param[0], prim.Param[1], prim.Param[2]);
     break;
   case rtpkCuboid   :
+    obj= new Cuboid(prim.Param[0], prim.Param[1], prim.Param[2]);
     break;
   case rtpkCylinder :
+    obj= new Cylinder(prim.Param[0], prim.Param[1]);
     break;
   case rtpkTube     :
+    /*cylinder_out:*/sub_obj1= new Cylinder(prim.Param[0], prim.Param[2]);
+    /*cylinder_in: */sub_obj2= new Cylinder(prim.Param[1], prim.Param[2]*1.05);  // 1.05 means height expansion needed for better modeling
+    sub_obj2->Move(prim.Param[3],prim.Param[4],0.0);
+    obj= new SetDifference(Vector(0.0, 0.0, 0.0),
+        /*cylinder_out=*/sub_obj1,
+        /*cylinder_in= */sub_obj2);
     break;
   case rtpkTorus    :
+    // TODO: Implement from here to the end of this function
     break;
   case rtpkPolyhedra:
     break;
   default :
+    std::cerr<<"Unknown primitive kind: "<<(int)prim.Kind<<std::endl;
     return NULL;
   }
-  // NOTE: translation and rotation are common, other than sphere.
-  // spheroid->Move(0.0, 0.0, -50.0);
-  // spheroid->RotateX(-12.0);
-  // spheroid->RotateY(-60.0);
-  // TODO: We need to add a method to Imager::SolidObject_Reorientable that resets the rotation.
-  return NULL;
+  if(obj==NULL)
+  {
+    std::cerr<<"Not implemented primitive kind: "<<(int)prim.Kind<<std::endl;
+    return NULL;
+  }
+  else
+  {
+    elements.push_back(obj);
+    if(sub_obj1)  elements.push_back(sub_obj1);
+    if(sub_obj2)  elements.push_back(sub_obj2);
+    return obj;
+  }
 }
 //-------------------------------------------------------------------------------------------
 
-Imager::SolidObject* CreateRayTraceModel(const TRayTraceModel &model)
+/* Create a ray tracing model of given model.
+    elements : internal solid objects are stored including the returned one. */
+Imager::SolidObject* CreateRayTraceModel(
+    const TRayTraceModel &model,
+    std::list<const Imager::SolidObject*>  &elements)
 {
   using namespace Imager;
-  // FIXME: implement from here
-  // if(model.Primitives.size()==0)  return NULL;
-  // const TRayTraceModel::TPrimitive &prim(model.Primitives[0]);
-  // CreateRayTracePrimitive...
+  #if 1
+  if(model.Primitives.size()==0)
+  {
+    std::cerr<<"No primitives are given."<<std::endl;
+    return NULL;
+  }
 
-  // FIXME: For TEST:
+  if(model.Primitives.size()==1)
+  {
+    SolidObject *object_1= CreateRayTracePrimitive(model.Primitives[0], elements);
+    SolidObject_SetPose(object_1, model.Primitives[0].Pose);
+    SolidObject *res= new SolidObject_Wrapper(Vector(0.0, 0.0, 0.0), object_1);
+    elements.push_back(res);
+    return res;
+  }
 
+  // model.Primitives.size() >= 2
+  SolidObject *unified= CreateRayTracePrimitive(model.Primitives[0], elements);
+  SolidObject_SetPose(unified, model.Primitives[0].Pose);
+  for(int i(1),i_end(model.Primitives.size()); i<i_end; ++i)
+  {
+    SolidObject *obj_next= CreateRayTracePrimitive(model.Primitives[i], elements);
+    SolidObject_SetPose(obj_next, model.Primitives[i].Pose);
+    unified= new SetUnion(Vector(0.0, 0.0, 0.0), unified, obj_next);
+    elements.push_back(unified);
+  }
+  return unified;
+  #endif
+
+  // For TEST:
+  #if 0
   // Coke can test:
   Cylinder* cylinder_in= new Cylinder(0.033, 0.12);
   SolidObject_Wrapper *cylinder= new SolidObject_Wrapper(Vector(0.0, 0.0, -0.06), cylinder_in);
@@ -76,17 +139,68 @@ Imager::SolidObject* CreateRayTraceModel(const TRayTraceModel &model)
   // SetIntersection *cylinder= new SetDifference(Vector(0.0, 0.0, -0.05), cylinder_out, cylinder_in);
 
   return cylinder;
+  #endif
 }
 //-------------------------------------------------------------------------------------------
 
-// Radius of the bounding sphere (automatically computed).
-double GetBoundingRadius(const TRayTraceModel &model)
-{
-  if(model.BoundingRadius>0.0)  return model.BoundingRadius;
-  // FIXME: implement this function
 
-  // FIXME: For TEST:
-  return std::sqrt(0.1*0.1+0.04*0.04)*1.1/*margin*/;
+// Region of interest in 3D (primitive).
+Imager::TROI3D GetROI3DPrimitive(const TRayTraceModel::TPrimitive &prim)
+{
+  using namespace Imager;
+  TROI3D roi;
+  switch(prim.Kind)
+  {
+  case rtpkSphere   :
+    roi.SetMin(-prim.Param[0],-prim.Param[0],-prim.Param[0]);
+    roi.SetMax(+prim.Param[0],+prim.Param[0],+prim.Param[0]);
+    break;
+  case rtpkSpheroid :
+    roi.SetMin(-prim.Param[0],-prim.Param[1],-prim.Param[2]);
+    roi.SetMax(+prim.Param[0],+prim.Param[1],+prim.Param[2]);
+    break;
+  case rtpkCuboid   :
+    roi.SetMin(-prim.Param[0],-prim.Param[1],-prim.Param[2]);
+    roi.SetMax(+prim.Param[0],+prim.Param[1],+prim.Param[2]);
+    break;
+  case rtpkCylinder :
+    roi.SetMin(-prim.Param[0],-prim.Param[0],-prim.Param[1]);
+    roi.SetMax(+prim.Param[0],+prim.Param[0],+prim.Param[1]);
+    break;
+  case rtpkTube     :
+    roi.SetMin(-prim.Param[0],-prim.Param[0],-prim.Param[2]);
+    roi.SetMax(+prim.Param[0],+prim.Param[0],+prim.Param[2]);
+    break;
+  case rtpkTorus    :
+    // TODO: Implement from here to the end of this function
+    std::cerr<<"Not implemented primitive kind: "<<(int)prim.Kind<<std::endl;
+    break;
+  case rtpkPolyhedra:
+    std::cerr<<"Not implemented primitive kind: "<<(int)prim.Kind<<std::endl;
+    break;
+  default :
+    std::cerr<<"Unknown primitive kind: "<<(int)prim.Kind<<std::endl;
+    return TROI3D();
+  }
+  return roi;
+}
+//-------------------------------------------------------------------------------------------
+
+// Region of interest in 3D (automatically computed).
+Imager::TROI3D GetROI3D(const TRayTraceModel &model)
+{
+  if(model.Primitives.size()==0)  return Imager::TROI3D();
+
+  Imager::TROI3D roi;
+  bool init(true);
+  for(int i(0),i_end(model.Primitives.size()); i<i_end; ++i)
+  {
+    Imager::TROI3D roi2= GetROI3DPrimitive(model.Primitives[i]);
+    roi2= roi2.Transform(model.Primitives[i].Pose);
+    if(init)  {roi= roi2;  init= false;}
+    else      {roi.Add(roi2);}
+  }
+  return roi;
 }
 //-------------------------------------------------------------------------------------------
 
@@ -98,76 +212,35 @@ double GetBoundingRadius(const TRayTraceModel &model)
 // Add an object to the scene and return its index
 int TRayTracePoseEstimator::AddObject(const TRayTraceModel &model, const double pose[7])
 {
-  Imager::SolidObject *obj= CreateRayTraceModel(model);
+  std::list<const Imager::SolidObject*> elements;
+  Imager::SolidObject *obj= CreateRayTraceModel(model, elements);
+  if(obj==NULL)  return -1;
   scene_.AddSolidObject(obj);
   int index= scene_.NumSolidObjects()-1;
+  for(std::list<const Imager::SolidObject*>::const_iterator itr(elements.begin()),itr_end(elements.end()); itr!=itr_end; ++itr)
+    solid_to_index_[*itr]= index;
+  poses_.push_back(TPose());
+  local_roi_.push_back(GetROI3D(model));
   rotations_.push_back(TDegRotation());
-  double rad= GetBoundingRadius(model);
 
   SetPose(index, pose);
-
-  // Create region of interest
-  // FIXME:TODO:We need to consider every object
-  roi_.Cx= obj->Center().x;
-  roi_.Cy= obj->Center().y;
-  roi_.Cz= obj->Center().z;
-  roi_.Radius= rad;
 
   return index;
 }
 //-------------------------------------------------------------------------------------------
 
-// Set x,y,z of the object
-void TRayTracePoseEstimator::SetXYZ(int index, const double xyz[3])
+Imager::TROI2D<int> TRayTracePoseEstimator::GetImageROI() const
 {
-  Imager::SolidObject *obj= scene_.RefSolidObject(index);
-  obj->Move(xyz[0],xyz[1],xyz[2]);
-}
-//-------------------------------------------------------------------------------------------
-
-// Set rotation ex,ey,ez(in radian) of the object
-void TRayTracePoseEstimator::SetRotation(int index, const double &ex, const double &ey, const double &ez)
-{
-  Imager::SolidObject *obj= scene_.RefSolidObject(index);
-  TDegRotation &rot(rotations_[index]);
-  // Reset rotation (inverse YZX):
-  obj->RotateY(-rot.Y);
-  obj->RotateZ(-rot.Z);
-  obj->RotateX(-rot.X);
-  // Rotate YZX:
-  rot.X= Rad2Deg(ex);
-  rot.Z= Rad2Deg(ez);
-  rot.Y= Rad2Deg(ey);
-  obj->RotateX(rot.X);
-  obj->RotateZ(rot.Z);
-  obj->RotateY(rot.Y);
-}
-//-------------------------------------------------------------------------------------------
-
-// Set quaternion qx,qy,qz,qw of the object
-void TRayTracePoseEstimator::SetQ(int index, const double q[4])
-{
-  double ey(0.0),ez(0.0),ex(0.0);
-  QuaternionToYZXEuler(q[0],q[1],q[2],q[3], ey,ez,ex);
-  SetRotation(index, ex,ey,ez);
-}
-//-------------------------------------------------------------------------------------------
-
-// Set pose=x,y,z,quaternion of the object
-void TRayTracePoseEstimator::SetPose(int index, const double pose[7])
-{
-  SetXYZ(index, pose);
-  SetQ(index, pose+3);
-}
-//-------------------------------------------------------------------------------------------
-
-void TRayTracePoseEstimator::UpdateROI()
-{
-  // FIXME:TODO: consider every index
-  Imager::SolidObject *obj= scene_.RefSolidObject(0);
-  roi_.Cx= obj->Center().x;
-  roi_.Cy= obj->Center().y;
-  roi_.Cz= obj->Center().z;
+  Imager::TROI2D<int> img_roi;
+  bool init(true);
+  for(int i(0),i_end(poses_.size()); i<i_end; ++i)
+  {
+    Imager::TROI2D<int> img_roi2;
+    local_roi_[i].ToImageROI(camera_, poses_[i].X, img_roi2);
+    if(init)  {img_roi= img_roi2;  init= false;}
+    else      {img_roi.Add(img_roi2);}
+  }
+  return img_roi;
 }
 //-------------------------------------------------------------------------------------------
 
@@ -175,9 +248,8 @@ void TRayTracePoseEstimator::Render(
     cv::Mat &depth_img, cv::Mat &normal_img,
     int step_xp, int step_yp)
 {
-  UpdateROI();
   std::list<Imager::Intersection> intersections;
-  scene_.Render4(camera_, roi_, intersections, step_xp, step_yp);
+  scene_.Render4(camera_, GetImageROI(), intersections, step_xp, step_yp);
 
   for(std::list<Imager::Intersection>::const_iterator itr(intersections.begin()),last(intersections.end());
       itr!=last; ++itr)
@@ -194,6 +266,8 @@ void TRayTracePoseEstimator::Render(
 //-------------------------------------------------------------------------------------------
 
 /*Get a distance between the ray traced model image and actual images.
+  index : if -1, all rendered intersections are considered,
+      if >=0, only intersections whose solid is mapped to index are considered.
   depth_img, normal_img : depth and normal images.
   sqdiff_depth, sqdiff_normal : square errors of valid depth and normal points.
   n_invalid_depth : number of invalid depth pixels in depth_img on the model image.
@@ -202,14 +276,14 @@ void TRayTracePoseEstimator::Render(
   step_xp, step_yp : step size to compute the model image.  Greater is faster but bigger error.
 */
 void TRayTracePoseEstimator::GetDistance(
+    int index,
     cv::Mat &depth_img, cv::Mat &normal_img,
     double &sqdiff_depth, double &sqdiff_normal,
     int &n_invalid_depth, int &n_invalid_normal, int &n_invalid_range,
     int step_xp, int step_yp)
 {
-  UpdateROI();
   std::list<Imager::Intersection> intersections;
-  scene_.Render4(camera_, roi_, intersections, step_xp, step_yp);
+  scene_.Render4(camera_, GetImageROI(), intersections, step_xp, step_yp);
 
   cv::Vec3f invalid_normal(0.0,0.0,0.0);
   sqdiff_depth= 0.0;
@@ -221,6 +295,8 @@ void TRayTracePoseEstimator::GetDistance(
   for(std::list<Imager::Intersection>::const_iterator itr(intersections.begin()),last(intersections.end());
       itr!=last; ++itr)
   {
+    //*DEBUG*/std::cerr<<index<<"\t"<<solid_to_index_[itr->solid]<<std::endl;
+    if(index>=0 && solid_to_index_[itr->solid]!=index)  continue;
     int px(0), py(0);
     camera_.Project(itr->point.x, itr->point.y, itr->point.z, px, py);
     if(camera_.IsInvalid(px,py))  {++n_invalid_range;  continue;}
@@ -252,8 +328,8 @@ void TRayTracePoseEstimator::GetDistance(
   else                  sqdiff_depth= 1.0;
   if(n_valid_normal>0)  sqdiff_normal/= static_cast<double>(n_valid_normal);
   else                  sqdiff_normal= 1.0;
-  // if(!no_render)
-    // std::cerr<<sqdiff_depth<<"\t"<<sqdiff_normal<<std::endl;
+  //*DEBUG*/std::cerr<<sqdiff_depth<<"\t"<<sqdiff_normal<<"\t"<<n_valid_depth<<", "<<n_valid_normal<<std::endl;
+  //*DEBUG*/std::cerr<<sqdiff_depth<<"\t"<<sqdiff_normal<<"\t"<<n_invalid_depth<<", "<<n_invalid_normal<<", "<<n_invalid_range<<std::endl;
 }
 //-------------------------------------------------------------------------------------------
 
@@ -263,18 +339,17 @@ void TRayTracePoseEstimator::OptimizeXY(
     int step_xp, int step_yp,
     double xy_opt[2], double eval_opt[1])
 {
-  Imager::SolidObject *obj= scene_.RefSolidObject(index);
-  double x0(obj->Center().x), y0(obj->Center().y), z0(obj->Center().z);
+  double x0(poses_[index].X[0]), y0(poses_[index].X[1]), z0(poses_[index].X[2]);
   double rx(0.10), ry(0.10);
   double x_best(x0), y_best(y0), eval_best(100.0);
   for(double x(x0-rx); x<x0+rx; x+= 2.0*rx/20.0)
   {
     for(double y(y0-ry); y<y0+ry; y+= 2.0*ry/80.0)
     {
-      obj->Move(x,y,z0);
+      SetXYZ(index, x,y,z0);
       double sqdiff_depth(0.0), sqdiff_normal(0.0), eval(0.0);
       int n_invalid_depth(0), n_invalid_normal(0), n_invalid_range(0);
-      GetDistance(depth_img, normal_img,
+      GetDistance(index, depth_img, normal_img,
           sqdiff_depth, sqdiff_normal,
           n_invalid_depth, n_invalid_normal, n_invalid_range,
           step_xp, step_yp);
@@ -289,7 +364,7 @@ void TRayTracePoseEstimator::OptimizeXY(
       }
     }
   }
-  obj->Move(x_best,y_best,z0);
+  SetXYZ(index, x_best,y_best,z0);
   if(xy_opt)
   {
     xy_opt[0]= x_best;
@@ -305,16 +380,15 @@ void TRayTracePoseEstimator::OptimizeZ(
     int step_xp, int step_yp,
     double z_opt[1], double eval_opt[1])
 {
-  Imager::SolidObject *obj= scene_.RefSolidObject(0);
-  double x0(obj->Center().x), y0(obj->Center().y), z0(obj->Center().z);
+  double x0(poses_[index].X[0]), y0(poses_[index].X[1]), z0(poses_[index].X[2]);
   double rz(0.10);
   double z_best(z0), eval_best(100.0);
   for(double z(z0-rz); z<z0+rz; z+= 2.0*rz/80.0)
   {
-    obj->Move(x0,y0,z);
+    SetXYZ(index, x0,y0,z);
     double sqdiff_depth(0.0), sqdiff_normal(0.0), eval(0.0);
     int n_invalid_depth(0), n_invalid_normal(0), n_invalid_range(0);
-    GetDistance(depth_img, normal_img,
+    GetDistance(index, depth_img, normal_img,
         sqdiff_depth, sqdiff_normal,
         n_invalid_depth, n_invalid_normal, n_invalid_range,
         step_xp, step_yp);
@@ -327,7 +401,7 @@ void TRayTracePoseEstimator::OptimizeZ(
       // std::cerr<<eval_best<<"\t"<<z_best<<std::endl;
     }
   }
-  obj->Move(x0,y0,z_best);
+  SetXYZ(index, x0,y0,z_best);
   if(z_opt)  z_opt[0]= z_best;
   if(eval_opt)  eval_opt[0]= eval_best;
 }
@@ -361,23 +435,24 @@ bool TRayTracePoseEstimator::HandleKeyEvent(int index, int c)
   if((65360<=c && c<=65364) || c==65367
     || (130896<=c && c<=130900) || c==130903)
   {
-    Imager::SolidObject *obj= scene_.RefSolidObject(index);
-    TRadRotation rot;  Deg2Rad3(rotations_[index],rot);
     double astep(0.1), cstep(0.01);
+    const double axis[3][3]= { {1.0,0.0,0.0}, {0.0,1.0,0.0}, {0.0,0.0,1.0} };
+    const double *x(poses_[index].X);
+    double q[4], xyz[3]={x[0],x[1],x[2]};
     switch(c)
     {
-    case 65361/*LEFT*/:   SetRotation(index, rot.X, rot.Y, rot.Z-astep);   break;
-    case 65363/*RIGHT*/:  SetRotation(index, rot.X, rot.Y, rot.Z+astep);   break;
-    case 65362/*UP*/:     SetRotation(index, rot.X-astep, rot.Y, rot.Z);   break;
-    case 65364/*DOWN*/:   SetRotation(index, rot.X+astep, rot.Y, rot.Z);   break;
-    case 65360/*HOME*/:   SetRotation(index, rot.X, rot.Y-astep, rot.Z);   break;
-    case 65367/*END*/:    SetRotation(index, rot.X, rot.Y+astep, rot.Z);   break;
-    case 130897/*SHIFT+LEFT*/:   obj->Translate(-cstep,0.0,0.0);   break;
-    case 130899/*SHIFT+RIGHT*/:  obj->Translate(+cstep,0.0,0.0);   break;
-    case 130898/*SHIFT+UP*/:     obj->Translate(0.0,-cstep,0.0);   break;
-    case 130900/*SHIFT+DOWN*/:   obj->Translate(0.0,+cstep,0.0);   break;
-    case 130896/*SHIFT+HOME*/:   obj->Translate(0.0,0.0,-cstep);   break;
-    case 130903/*SHIFT+END*/:    obj->Translate(0.0,0.0,+cstep);   break;
+    case 65361/*LEFT*/:   RotateAngleAxis(-astep, axis[2], x+3, q); SetQ(index,q);   break;
+    case 65363/*RIGHT*/:  RotateAngleAxis(+astep, axis[2], x+3, q); SetQ(index,q);   break;
+    case 65362/*UP*/:     RotateAngleAxis(-astep, axis[0], x+3, q); SetQ(index,q);   break;
+    case 65364/*DOWN*/:   RotateAngleAxis(+astep, axis[0], x+3, q); SetQ(index,q);   break;
+    case 65360/*HOME*/:   RotateAngleAxis(-astep, axis[1], x+3, q); SetQ(index,q);   break;
+    case 65367/*END*/:    RotateAngleAxis(+astep, axis[1], x+3, q); SetQ(index,q);   break;
+    case 130897/*SHIFT+LEFT*/:   xyz[0]-=cstep; SetXYZ(index,xyz);   break;
+    case 130899/*SHIFT+RIGHT*/:  xyz[0]+=cstep; SetXYZ(index,xyz);   break;
+    case 130898/*SHIFT+UP*/:     xyz[1]-=cstep; SetXYZ(index,xyz);   break;
+    case 130900/*SHIFT+DOWN*/:   xyz[1]+=cstep; SetXYZ(index,xyz);   break;
+    case 130896/*SHIFT+HOME*/:   xyz[2]-=cstep; SetXYZ(index,xyz);   break;
+    case 130903/*SHIFT+END*/:    xyz[2]+=cstep; SetXYZ(index,xyz);   break;
     }
     return true;
   }

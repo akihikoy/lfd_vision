@@ -7,6 +7,7 @@
 */
 //-------------------------------------------------------------------------------------------
 #include "pr2_lfd_vision/flow_analyzer.h"
+#include "pr2_lfd_vision/geom_util.h"
 //-------------------------------------------------------------------------------------------
 // #include <pcl/filters/box_clipper3D.h>
 #include <pcl/filters/crop_box.h>
