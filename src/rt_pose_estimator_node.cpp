@@ -12,6 +12,7 @@
 #include "pr2_lfd_vision/CreateScene.h"
 #include "pr2_lfd_vision/RemoveScene.h"
 #include "pr2_lfd_vision/LabeledPose.h"
+#include "pr2_lfd_vision/LabeledPoseOptReq.h"
 #include "pr2_lfd_vision/LabeledPoseRevision.h"
 //-------------------------------------------------------------------------------------------
 #include <string>
@@ -131,7 +132,7 @@ void CallbackPointCloud(const sensor_msgs::PointCloud2ConstPtr &msg)
 
   cv::Mat rgb_img, depth_img, normal_img;
   ConvertPointCloudToRGBDImages(cloud, rgb_img, depth_img);
-  ConvertPointCloudToNormalImage(cloud, normal_img, /*FS=*/9);
+  ConvertPointCloudToNormalImage(cloud, normal_img, /*FS=*/7);
 
   // cv::medianBlur(normal_img, normal_img, 5);
   // cv::medianBlur(normal_img, normal_img, 5);
@@ -233,6 +234,51 @@ void CallbackLabeledPose(const pr2_lfd_vision::LabeledPoseConstPtr &msg)
 }
 //-------------------------------------------------------------------------------------------
 
+void CallbackLabeledPoseOptReq(const pr2_lfd_vision::LabeledPoseOptReqConstPtr &msg)
+{
+  // Read the message:
+  std::pair<std::string, int> scene_idx= LabelToSceneIdx[msg->lpose.label];
+  double pose[7];
+  GPoseToX(msg->lpose.pose, pose);
+
+  double axis_1[3], axis_2[3];
+  GPointToP(msg->axis1, axis_1);
+  GPointToP(msg->axis2, axis_2);
+  double range_1(msg->range[0]), range_2(msg->range[1]), n_div(msg->num_div);
+  double weight_depth(msg->weight_depth), weight_normal(msg->weight_normal);
+
+  // Improve pose by ray tracing pose estimation:
+  RayTracePoseEstimators[scene_idx.first].SetPose(scene_idx.second, pose);
+  double position_revised[3], eval_revised[2];
+  RayTracePoseEstimators[scene_idx.first].OptimizeLin2D(
+      scene_idx.second, DepthImg, NormalImg, 7, 7,
+      axis_1, axis_2,
+      range_1, range_2, n_div,
+      weight_depth, weight_normal,
+      position_revised, eval_revised);
+
+  std::cerr<<"Revised ("<<msg->lpose.label<<" in "<<scene_idx.first<<"):";
+  for(int d(0); d<3; ++d)
+  {
+    std::cerr<<" "<<pose[d]-position_revised[d];
+    pose[d]= position_revised[d];
+  }
+  std::cerr<<" # "<<eval_revised[0]<<" "<<eval_revised[1]<<std::endl;
+
+  // Publish the revised pose:
+  pr2_lfd_vision::LabeledPoseRevision msg_pose_revision;
+  msg_pose_revision.lpose.header.seq= Sequence;  ++Sequence;
+  msg_pose_revision.lpose.header.stamp= PointCloudHeader.stamp;
+  msg_pose_revision.lpose.header.frame_id= PointCloudHeader.frame_id;
+  msg_pose_revision.lpose.label= msg->lpose.label;
+  XToGPose(pose, msg_pose_revision.lpose.pose);
+  msg_pose_revision.errors.resize(2);
+  msg_pose_revision.errors[0]= eval_revised[0];
+  msg_pose_revision.errors[1]= eval_revised[1];
+  PubLabeledPoseRevision.publish(msg_pose_revision);
+}
+//-------------------------------------------------------------------------------------------
+
 
 int main(int argc, char**argv)
 {
@@ -241,8 +287,9 @@ int main(int argc, char**argv)
 
   std::string point_cloud_in;
   node.param("in_points", point_cloud_in, std::string("/camera/depth/points_xyzrgb"));
-  std::string labeled_pose_in, labeled_pose_out;
+  std::string labeled_pose_in, labeled_pose_optreq_in, labeled_pose_out;
   node.param("in_pose", labeled_pose_in, std::string("labeled_pose"));
+  node.param("in_poseoptreq", labeled_pose_optreq_in, std::string("labeled_pose_optreq"));
   node.param("out_pose", labeled_pose_out, std::string("labeled_pose_revision"));
 
   // cv::namedWindow("rgb",1);
@@ -331,6 +378,7 @@ RayTracePoseEstimators["test"].AddObject(container,pose);
 
   ros::Subscriber sub_point_cloud= node.subscribe(point_cloud_in, 1, &CallbackPointCloud);
   ros::Subscriber sub_labeled_pose= node.subscribe(labeled_pose_in, 1, &CallbackLabeledPose);
+  ros::Subscriber sub_labeled_pose_optreq= node.subscribe(labeled_pose_optreq_in, 1, &CallbackLabeledPoseOptReq);
   ros::spin();
 
   return 0;

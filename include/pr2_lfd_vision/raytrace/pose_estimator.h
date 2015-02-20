@@ -60,9 +60,11 @@ enum TRayTracePrimitiveKind{
   rtpkInvalid   =-1,
   rtpkSphere    =0,  // Param={radius}
   rtpkSpheroid    ,  // Param={radius_x,radius_y,radius_z}
-  rtpkCuboid      ,  // Param={len_x,len_y,len_z}
+  rtpkCuboid      ,  // Param={half_len_x,half_len_y,half_len_z}
   rtpkCylinder    ,  // Param={radius,height}
+  rtpkHalfCylinder,  // Param={radius,height}; Only y>=0 part.
   rtpkTube        ,  // Param={radius_out,radius_in,height,dx,dy}, dx,dy: displacement of hole position
+  rtpkHalfTube    ,  // Param={radius_out,radius_in,height,dx,dy}, dx,dy: displacement of hole position; Only y>=0 part.
   rtpkTorus       ,
   rtpkPolyhedra   };
 
@@ -82,26 +84,30 @@ struct TRayTraceModel
 
 inline TRayTracePrimitiveKind StrToRTPrimitiveKind(const std::string &kind)
 {
-  if(kind=="rtpkSphere"   )  return rtpkSphere    ;
-  if(kind=="rtpkSpheroid" )  return rtpkSpheroid  ;
-  if(kind=="rtpkCuboid"   )  return rtpkCuboid    ;
-  if(kind=="rtpkCylinder" )  return rtpkCylinder  ;
-  if(kind=="rtpkTube"     )  return rtpkTube      ;
-  if(kind=="rtpkTorus"    )  return rtpkTorus     ;
-  if(kind=="rtpkPolyhedra")  return rtpkPolyhedra ;
+  if(kind=="rtpkSphere"       )   return rtpkSphere        ;
+  if(kind=="rtpkSpheroid"     )   return rtpkSpheroid      ;
+  if(kind=="rtpkCuboid"       )   return rtpkCuboid        ;
+  if(kind=="rtpkCylinder"     )   return rtpkCylinder      ;
+  if(kind=="rtpkHalfCylinder" )   return rtpkHalfCylinder  ;
+  if(kind=="rtpkTube"         )   return rtpkTube          ;
+  if(kind=="rtpkHalfTube"     )   return rtpkHalfTube      ;
+  if(kind=="rtpkTorus"        )   return rtpkTorus         ;
+  if(kind=="rtpkPolyhedra"    )   return rtpkPolyhedra     ;
   return rtpkInvalid;
 }
 inline std::string RTPrimitiveKindToStr(const TRayTracePrimitiveKind &kind)
 {
   switch(kind)
   {
-  case rtpkSphere    :  return "rtpkSphere"   ;
-  case rtpkSpheroid  :  return "rtpkSpheroid" ;
-  case rtpkCuboid    :  return "rtpkCuboid"   ;
-  case rtpkCylinder  :  return "rtpkCylinder" ;
-  case rtpkTube      :  return "rtpkTube"     ;
-  case rtpkTorus     :  return "rtpkTorus"    ;
-  case rtpkPolyhedra :  return "rtpkPolyhedra";
+  case rtpkSphere        :  return "rtpkSphere"       ;
+  case rtpkSpheroid      :  return "rtpkSpheroid"     ;
+  case rtpkCuboid        :  return "rtpkCuboid"       ;
+  case rtpkCylinder      :  return "rtpkCylinder"     ;
+  case rtpkHalfCylinder  :  return "rtpkHalfCylinder" ;
+  case rtpkTube          :  return "rtpkTube"         ;
+  case rtpkHalfTube      :  return "rtpkHalfTube"     ;
+  case rtpkTorus         :  return "rtpkTorus"        ;
+  case rtpkPolyhedra     :  return "rtpkPolyhedra"    ;
   }
   return "";
 }
@@ -170,17 +176,30 @@ public:
       int index,
       cv::Mat &depth_img, cv::Mat &normal_img,
       int step_xp, int step_yp,
-      double xy_opt[2], double eval_opt[1]);
+      const double &range_x, const double &range_y, const double &n_div,
+      const double &w_depth, const double &w_normal,
+      double xy_opt[2], double eval_opt[2]);
   void OptimizeZ(
       int index,
       cv::Mat &depth_img, cv::Mat &normal_img,
       int step_xp, int step_yp,
-      double z_opt[1], double eval_opt[1]);
+      const double &range_z, const double &n_div,
+      const double &w_depth, const double &w_normal,
+      double z_opt[1], double eval_opt[2]);
   void OptimizeXYZ(
       int index,
       cv::Mat &depth_img, cv::Mat &normal_img,
       int step_xp=2, int step_yp=2,
       double position_opt[3]=NULL, double eval_opt[2]=NULL);
+
+  void OptimizeLin2D(
+      int index,
+      cv::Mat &depth_img, cv::Mat &normal_img,
+      int step_xp, int step_yp,
+      const double axis_1[3], const double axis_2[3],
+      const double &range_1, const double &range_2, const double &n_div,
+      const double &w_depth, const double &w_normal,
+      double opt[2], double eval_opt[2]);
 
   // Handle a key event where c is the output of cv::waitKey
   bool HandleKeyEvent(int index, int c);

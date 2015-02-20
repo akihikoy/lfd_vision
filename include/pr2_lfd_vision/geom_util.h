@@ -122,6 +122,17 @@ inline void RotateAngleAxis(const t_value &angle, const t_value axis[3], const t
 }
 //-------------------------------------------------------------------------------------------
 
+// Convert geometry_msgs/Point to p; usually, t_point==geometry_msgs::Point
+template <typename t_point, typename t_value>
+inline void GPointToP(const t_point &point, t_value p[7])
+{
+  p[0]= point.x;
+  p[1]= point.y;
+  p[2]= point.z;
+}
+//-------------------------------------------------------------------------------------------
+
+
 // Convert x to geometry_msgs/Pose; usually, t_pose==geometry_msgs::Pose
 template <typename t_value, typename t_pose>
 inline void XToGPose(const t_value x[7], t_pose &pose)

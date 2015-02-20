@@ -43,7 +43,7 @@ Imager::SolidObject* CreateRayTracePrimitive(
     std::list<const Imager::SolidObject*>  &elements)
 {
   using namespace Imager;
-  SolidObject *obj(NULL), *sub_obj1(NULL), *sub_obj2(NULL);
+  SolidObject *obj(NULL), *sub_obj1(NULL), *sub_obj2(NULL), *sub_obj3(NULL), *sub_obj4(NULL);
   switch(prim.Kind)
   {
   case rtpkSphere   :
@@ -58,6 +58,12 @@ Imager::SolidObject* CreateRayTracePrimitive(
   case rtpkCylinder :
     obj= new Cylinder(prim.Param[0], prim.Param[1]);
     break;
+  case rtpkHalfCylinder :
+    sub_obj1= new Cylinder(prim.Param[0], prim.Param[1]);
+    sub_obj2= new Cuboid(prim.Param[0]*1.05, prim.Param[0]*0.52, prim.Param[1]*1.05);
+    sub_obj2->Move(0.0, -prim.Param[0]*0.52, 0.0);
+    obj= new SetDifference(Vector(0.0, 0.0, 0.0), sub_obj1, sub_obj2);
+    break;
   case rtpkTube     :
     /*cylinder_out:*/sub_obj1= new Cylinder(prim.Param[0], prim.Param[2]);
     /*cylinder_in: */sub_obj2= new Cylinder(prim.Param[1], prim.Param[2]*1.05);  // 1.05 means height expansion needed for better modeling
@@ -65,6 +71,17 @@ Imager::SolidObject* CreateRayTracePrimitive(
     obj= new SetDifference(Vector(0.0, 0.0, 0.0),
         /*cylinder_out=*/sub_obj1,
         /*cylinder_in= */sub_obj2);
+    break;
+  case rtpkHalfTube     :
+    /*cylinder_out:*/sub_obj1= new Cylinder(prim.Param[0], prim.Param[2]);
+    /*cylinder_in: */sub_obj2= new Cylinder(prim.Param[1], prim.Param[2]*1.05);  // 1.05 means height expansion needed for better modeling
+    sub_obj2->Move(prim.Param[3],prim.Param[4],0.0);
+    /*tube:*/sub_obj3= new SetDifference(Vector(0.0, 0.0, 0.0),
+        /*cylinder_out=*/sub_obj1,
+        /*cylinder_in= */sub_obj2);
+    sub_obj4= new Cuboid(prim.Param[0]*1.05, prim.Param[0]*0.52, prim.Param[2]*1.05);
+    sub_obj4->Move(0.0, -prim.Param[0]*0.52, 0.0);
+    obj= new SetDifference(Vector(0.0, 0.0, 0.0), sub_obj3, sub_obj4);
     break;
   case rtpkTorus    :
     // TODO: Implement from here to the end of this function
@@ -85,6 +102,8 @@ Imager::SolidObject* CreateRayTracePrimitive(
     elements.push_back(obj);
     if(sub_obj1)  elements.push_back(sub_obj1);
     if(sub_obj2)  elements.push_back(sub_obj2);
+    if(sub_obj3)  elements.push_back(sub_obj3);
+    if(sub_obj4)  elements.push_back(sub_obj4);
     return obj;
   }
 }
@@ -167,8 +186,16 @@ Imager::TROI3D GetROI3DPrimitive(const TRayTraceModel::TPrimitive &prim)
     roi.SetMin(-prim.Param[0],-prim.Param[0],-prim.Param[1]);
     roi.SetMax(+prim.Param[0],+prim.Param[0],+prim.Param[1]);
     break;
+  case rtpkHalfCylinder :
+    roi.SetMin(-prim.Param[0],           0.0,-prim.Param[1]);
+    roi.SetMax(+prim.Param[0],+prim.Param[0],+prim.Param[1]);
+    break;
   case rtpkTube     :
     roi.SetMin(-prim.Param[0],-prim.Param[0],-prim.Param[2]);
+    roi.SetMax(+prim.Param[0],+prim.Param[0],+prim.Param[2]);
+    break;
+  case rtpkHalfTube     :
+    roi.SetMin(-prim.Param[0],           0.0,-prim.Param[2]);
     roi.SetMax(+prim.Param[0],+prim.Param[0],+prim.Param[2]);
     break;
   case rtpkTorus    :
@@ -337,14 +364,17 @@ void TRayTracePoseEstimator::OptimizeXY(
     int index,
     cv::Mat &depth_img, cv::Mat &normal_img,
     int step_xp, int step_yp,
-    double xy_opt[2], double eval_opt[1])
+    const double &range_x, const double &range_y, const double &n_div,
+    const double &w_depth, const double &w_normal,
+    double xy_opt[2], double eval_opt[2])
 {
   double x0(poses_[index].X[0]), y0(poses_[index].X[1]), z0(poses_[index].X[2]);
-  double rx(0.10), ry(0.10);
+  double rx(0.5*range_x), ry(0.5*range_y);
   double x_best(x0), y_best(y0), eval_best(100.0);
-  for(double x(x0-rx); x<x0+rx; x+= 2.0*rx/20.0)
+  double sqdiff_depth_best(100.0), sqdiff_normal_best(100.0);
+  for(double x(x0-rx); x<x0+rx; x+= 2.0*rx/n_div)
   {
-    for(double y(y0-ry); y<y0+ry; y+= 2.0*ry/80.0)
+    for(double y(y0-ry); y<y0+ry; y+= 2.0*ry/n_div)
     {
       SetXYZ(index, x,y,z0);
       double sqdiff_depth(0.0), sqdiff_normal(0.0), eval(0.0);
@@ -354,12 +384,14 @@ void TRayTracePoseEstimator::OptimizeXY(
           n_invalid_depth, n_invalid_normal, n_invalid_range,
           step_xp, step_yp);
       if(n_invalid_range>0)  continue;  // We do not use if some points are out of the range
-      eval= sqdiff_depth*1.0 + sqdiff_normal;
+      eval= sqdiff_depth*w_depth + sqdiff_normal*w_normal;
       if(eval<eval_best)
       {
         x_best= x;
         y_best= y;
         eval_best= eval;
+        sqdiff_depth_best= sqdiff_depth;
+        sqdiff_normal_best= sqdiff_normal;
         // std::cerr<<eval_best<<"\t"<<x_best<<"\t"<<y_best<<std::endl;
       }
     }
@@ -370,7 +402,11 @@ void TRayTracePoseEstimator::OptimizeXY(
     xy_opt[0]= x_best;
     xy_opt[1]= y_best;
   }
-  if(eval_opt)  eval_opt[0]= eval_best;
+  if(eval_opt)
+  {
+    eval_opt[0]= sqdiff_depth_best;
+    eval_opt[1]= sqdiff_normal_best;
+  }
 }
 //-------------------------------------------------------------------------------------------
 
@@ -378,12 +414,15 @@ void TRayTracePoseEstimator::OptimizeZ(
     int index,
     cv::Mat &depth_img, cv::Mat &normal_img,
     int step_xp, int step_yp,
-    double z_opt[1], double eval_opt[1])
+    const double &range_z, const double &n_div,
+    const double &w_depth, const double &w_normal,
+    double z_opt[1], double eval_opt[2])
 {
   double x0(poses_[index].X[0]), y0(poses_[index].X[1]), z0(poses_[index].X[2]);
-  double rz(0.10);
+  double rz(0.5*range_z);
   double z_best(z0), eval_best(100.0);
-  for(double z(z0-rz); z<z0+rz; z+= 2.0*rz/80.0)
+  double sqdiff_depth_best(100.0), sqdiff_normal_best(100.0);
+  for(double z(z0-rz); z<z0+rz; z+= 2.0*rz/n_div)
   {
     SetXYZ(index, x0,y0,z);
     double sqdiff_depth(0.0), sqdiff_normal(0.0), eval(0.0);
@@ -393,17 +432,23 @@ void TRayTracePoseEstimator::OptimizeZ(
         n_invalid_depth, n_invalid_normal, n_invalid_range,
         step_xp, step_yp);
     if(n_invalid_range>0)  continue;  // We do not use if some points are out of the range
-    eval= sqdiff_depth*10.0 + sqdiff_normal*0.1;
+    eval= sqdiff_depth*w_depth + sqdiff_normal*w_normal;
     if(eval<eval_best)
     {
       z_best= z;
       eval_best= eval;
+      sqdiff_depth_best= sqdiff_depth;
+      sqdiff_normal_best= sqdiff_normal;
       // std::cerr<<eval_best<<"\t"<<z_best<<std::endl;
     }
   }
   SetXYZ(index, x0,y0,z_best);
   if(z_opt)  z_opt[0]= z_best;
-  if(eval_opt)  eval_opt[0]= eval_best;
+  if(eval_opt)
+  {
+    eval_opt[0]= sqdiff_depth_best;
+    eval_opt[1]= sqdiff_normal_best;
+  }
 }
 //-------------------------------------------------------------------------------------------
 
@@ -413,19 +458,81 @@ void TRayTracePoseEstimator::OptimizeXYZ(
     int step_xp, int step_yp,
     double position_opt[3], double eval_opt[2])
 {
-  double *xy_opt(NULL), *z_opt(NULL), *xy_eval_opt(NULL), *z_eval_opt(NULL);
+  double *xy_opt(NULL), *z_opt(NULL);
   if(position_opt)
   {
     xy_opt= position_opt+0;
     z_opt= position_opt+2;
   }
+  OptimizeXY(index, depth_img, normal_img, step_xp, step_yp,
+      /*range_x=*/0.20, /*range_y=*/0.20, /*n_div=*/40.0,
+      /*w_depth=*/5.0, /*w_normal=*/1.0,
+      xy_opt, eval_opt);
+  OptimizeZ(index, depth_img, normal_img, step_xp, step_yp,
+      /*range_z=*/0.20, /*n_div=*/40.0,
+      /*w_depth=*/5.0, /*w_normal=*/0.5,
+      z_opt, eval_opt);
+  OptimizeXY(index, depth_img, normal_img, step_xp, step_yp,
+      /*range_x=*/0.05, /*range_y=*/0.05, /*n_div=*/20.0,
+      /*w_depth=*/5.0, /*w_normal=*/1.0,
+      xy_opt, eval_opt);
+  OptimizeZ(index, depth_img, normal_img, step_xp, step_yp,
+      /*range_z=*/0.05, /*n_div=*/20.0,
+      /*w_depth=*/5.0, /*w_normal=*/0.5,
+      z_opt, eval_opt);
+}
+//-------------------------------------------------------------------------------------------
+
+void TRayTracePoseEstimator::OptimizeLin2D(
+    int index,
+    cv::Mat &depth_img, cv::Mat &normal_img,
+    int step_xp, int step_yp,
+    const double axis_1[3], const double axis_2[3],
+    const double &range_1, const double &range_2, const double &n_div,
+    const double &w_depth, const double &w_normal,
+    double opt[2], double eval_opt[2])
+{
+  Eigen::Vector3d xyz0(poses_[index].X), a1(axis_1), a2(axis_2), xyz(0.0,0.0,0.0);
+  double r1(0.5*range_1), r2(0.5*range_2);
+  double t1_best(0.0), t2_best(0.0), eval_best(100.0);
+  double sqdiff_depth_best(100.0), sqdiff_normal_best(100.0);
+  for(double t1(-r1); t1<+r1; t1+= 2.0*r1/n_div)
+  {
+    for(double t2(-r2); t2<+r2; t2+= 2.0*r2/n_div)
+    {
+      xyz= xyz0 + t1*a1 + t2*a2;
+      SetXYZ(index, xyz[0],xyz[1],xyz[2]);
+      double sqdiff_depth(0.0), sqdiff_normal(0.0), eval(0.0);
+      int n_invalid_depth(0), n_invalid_normal(0), n_invalid_range(0);
+      GetDistance(index, depth_img, normal_img,
+          sqdiff_depth, sqdiff_normal,
+          n_invalid_depth, n_invalid_normal, n_invalid_range,
+          step_xp, step_yp);
+      if(n_invalid_range>0)  continue;  // We do not use if some points are out of the range
+      eval= sqdiff_depth*w_depth + sqdiff_normal*w_normal;
+      if(eval<eval_best)
+      {
+        t1_best= t1;
+        t2_best= t2;
+        eval_best= eval;
+        sqdiff_depth_best= sqdiff_depth;
+        sqdiff_normal_best= sqdiff_normal;
+        // std::cerr<<eval_best<<"\t"<<t1_best<<"\t"<<t2_best<<std::endl;
+      }
+    }
+  }
+  xyz= xyz0 + t1_best*a1 + t2_best*a2;
+  SetXYZ(index, xyz[0],xyz[1],xyz[2]);
+  if(opt)
+  {
+    opt[0]= t1_best;
+    opt[1]= t2_best;
+  }
   if(eval_opt)
   {
-    xy_eval_opt= eval_opt+0;
-    z_eval_opt= eval_opt+1;
+    eval_opt[0]= sqdiff_depth_best;
+    eval_opt[1]= sqdiff_normal_best;
   }
-  OptimizeXY(index, depth_img, normal_img, step_xp, step_yp, xy_opt, xy_eval_opt);
-  OptimizeZ(index, depth_img, normal_img, step_xp, step_yp, z_opt, z_eval_opt);
 }
 //-------------------------------------------------------------------------------------------
 
