@@ -241,29 +241,34 @@ void CallbackLabeledPoseOptReq(const pr2_lfd_vision::LabeledPoseOptReqConstPtr &
   double pose[7];
   GPoseToX(msg->lpose.pose, pose);
 
-  double axis_1[3], axis_2[3];
-  GPointToP(msg->axis1, axis_1);
-  GPointToP(msg->axis2, axis_2);
-  double range_1(msg->range[0]), range_2(msg->range[1]), n_div(msg->num_div);
-  double weight_depth(msg->weight_depth), weight_normal(msg->weight_normal);
-
-  // Improve pose by ray tracing pose estimation:
-  RayTracePoseEstimators[scene_idx.first].SetPose(scene_idx.second, pose);
   double position_revised[3], eval_revised[2];
-  RayTracePoseEstimators[scene_idx.first].OptimizeLin2D(
-      scene_idx.second, DepthImg, NormalImg, 7, 7,
-      axis_1, axis_2,
-      range_1, range_2, n_div,
-      weight_depth, weight_normal,
-      position_revised, eval_revised);
-
-  std::cerr<<"Revised ("<<msg->lpose.label<<" in "<<scene_idx.first<<"):";
-  for(int d(0); d<3; ++d)
+  if(msg->type=="lin2d")
   {
-    std::cerr<<" "<<pose[d]-position_revised[d];
-    pose[d]= position_revised[d];
+    double axis_1[3], axis_2[3];
+    GPointToP(msg->axis1, axis_1);
+    GPointToP(msg->axis2, axis_2);
+    double range_1(msg->range[0]), range_2(msg->range[1]), n_div(msg->num_div);
+    double weight_depth(msg->weight_depth), weight_normal(msg->weight_normal);
+    // std::cerr<<"axis_1:"<<axis_1[0]<<", "<<axis_1[1]<<", "<<axis_1[2]<<std::endl;
+    // std::cerr<<"axis_2:"<<axis_2[0]<<", "<<axis_2[1]<<", "<<axis_2[2]<<std::endl;
+
+    // Improve pose by ray tracing pose estimation:
+    RayTracePoseEstimators[scene_idx.first].SetPose(scene_idx.second, pose);
+    RayTracePoseEstimators[scene_idx.first].OptimizeLin2D(
+        scene_idx.second, DepthImg, NormalImg, 7, 7,
+        axis_1, axis_2,
+        range_1, range_2, n_div,
+        weight_depth, weight_normal,
+        /*opt_12=*/NULL, position_revised, eval_revised);
+
+    std::cerr<<"Revised lin2d ("<<msg->lpose.label<<" in "<<scene_idx.first<<"):";
+    for(int d(0); d<3; ++d)
+    {
+      std::cerr<<" "<<pose[d]-position_revised[d];
+      pose[d]= position_revised[d];
+    }
+    std::cerr<<" # "<<eval_revised[0]<<" "<<eval_revised[1]<<std::endl;
   }
-  std::cerr<<" # "<<eval_revised[0]<<" "<<eval_revised[1]<<std::endl;
 
   // Publish the revised pose:
   pr2_lfd_vision::LabeledPoseRevision msg_pose_revision;

@@ -124,7 +124,7 @@ inline void RotateAngleAxis(const t_value &angle, const t_value axis[3], const t
 
 // Convert geometry_msgs/Point to p; usually, t_point==geometry_msgs::Point
 template <typename t_point, typename t_value>
-inline void GPointToP(const t_point &point, t_value p[7])
+inline void GPointToP(const t_point &point, t_value p[3])
 {
   p[0]= point.x;
   p[1]= point.y;

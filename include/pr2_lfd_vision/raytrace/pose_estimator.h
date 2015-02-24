@@ -199,7 +199,7 @@ public:
       const double axis_1[3], const double axis_2[3],
       const double &range_1, const double &range_2, const double &n_div,
       const double &w_depth, const double &w_normal,
-      double opt[2], double eval_opt[2]);
+      double opt_12[2], double position_opt[3], double eval_opt[2]);
 
   // Handle a key event where c is the output of cv::waitKey
   bool HandleKeyEvent(int index, int c);

@@ -490,7 +490,7 @@ void TRayTracePoseEstimator::OptimizeLin2D(
     const double axis_1[3], const double axis_2[3],
     const double &range_1, const double &range_2, const double &n_div,
     const double &w_depth, const double &w_normal,
-    double opt[2], double eval_opt[2])
+    double opt_12[2], double position_opt[3], double eval_opt[2])
 {
   Eigen::Vector3d xyz0(poses_[index].X), a1(axis_1), a2(axis_2), xyz(0.0,0.0,0.0);
   double r1(0.5*range_1), r2(0.5*range_2);
@@ -523,10 +523,16 @@ void TRayTracePoseEstimator::OptimizeLin2D(
   }
   xyz= xyz0 + t1_best*a1 + t2_best*a2;
   SetXYZ(index, xyz[0],xyz[1],xyz[2]);
-  if(opt)
+  if(opt_12)
   {
-    opt[0]= t1_best;
-    opt[1]= t2_best;
+    opt_12[0]= t1_best;
+    opt_12[1]= t2_best;
+  }
+  if(position_opt)
+  {
+    position_opt[0]= xyz[0];
+    position_opt[1]= xyz[1];
+    position_opt[2]= xyz[2];
   }
   if(eval_opt)
   {
