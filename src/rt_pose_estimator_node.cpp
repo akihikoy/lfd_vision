@@ -190,10 +190,20 @@ void CallbackPointCloud(const sensor_msgs::PointCloud2ConstPtr &msg)
     }
   }
 
+  if(RayTracePoseEstimators.size()>0)
+  {
+    depth_img*= 0.5;
+    normal_img*= 0.5;
+  }
   for(std::map<std::string, TRayTracePoseEstimator>::iterator
         itr(RayTracePoseEstimators.begin()),itr_end(RayTracePoseEstimators.end());
           itr!=itr_end; ++itr)
+  {
+    Imager::TROI2D<int> roi(itr->second.GetImageROI());
+    cv::rectangle(depth_img,cv::Point(roi.Min[0],roi.Min[1]), cv::Point(roi.Max[0],roi.Max[1]), cv::Scalar(255), 1, 8, 0);
+    cv::rectangle(normal_img,cv::Point(roi.Min[0],roi.Min[1]), cv::Point(roi.Max[0],roi.Max[1]), cv::Scalar(255,255,255), 1, 8, 0);
     itr->second.Render(depth_img, normal_img);
+  }
 
   // cv::imshow("rgb", rgb_img);
   // cv::imshow("depth", depth_img);
@@ -201,8 +211,84 @@ void CallbackPointCloud(const sensor_msgs::PointCloud2ConstPtr &msg)
 }
 //-------------------------------------------------------------------------------------------
 
+void ExecLabeledPoseOptReq(const pr2_lfd_vision::LabeledPoseOptReq &msg)
+{
+  // Read the message:
+  std::pair<std::string, int> scene_idx= LabelToSceneIdx[msg.lpose.label];
+  double pose[7];
+  GPoseToX(msg.lpose.pose, pose);
+
+  double position_revised[3], eval_revised[2];
+  if(msg.type=="xyz")
+  {
+    RayTracePoseEstimators[scene_idx.first].SetPose(scene_idx.second, pose);
+    RayTracePoseEstimators[scene_idx.first].OptimizeXYZ(
+        scene_idx.second, DepthImg, NormalImg, 7, 7,
+        position_revised, eval_revised);
+  }
+  else if(msg.type=="lin2d")
+  {
+    RayTracePoseEstimators[scene_idx.first].SetPose(scene_idx.second, pose);
+    double axis_1[3], axis_2[3];
+    GPointToP(msg.axis1, axis_1);
+    GPointToP(msg.axis2, axis_2);
+    int n_stage(msg.num_div.size());
+    if(msg.range.size()!=2*n_stage
+        || msg.weight_depth.size()!=n_stage
+        || msg.weight_normal.size()!=n_stage)
+    {
+      std::cerr<<"ERROR-size of the parameters is wrong."<<std::endl;
+      return;
+    }
+    for(int st(0); st<n_stage; ++st)
+    {
+      double range_1(msg.range[2*st+0]), range_2(msg.range[2*st+1]), n_div(msg.num_div[st]);
+      double weight_depth(msg.weight_depth[st]), weight_normal(msg.weight_normal[st]);
+      // std::cerr<<"axis_1:"<<axis_1[0]<<", "<<axis_1[1]<<", "<<axis_1[2]<<std::endl;
+      // std::cerr<<"axis_2:"<<axis_2[0]<<", "<<axis_2[1]<<", "<<axis_2[2]<<std::endl;
+      // std::cerr<<range_1[0]<<", "<<range_2<<", "<<n_div<<std::endl;
+      // std::cerr<<weight_depth<<", "<<weight_normal<<std::endl;
+
+      // Improve pose by ray tracing pose estimation:
+      RayTracePoseEstimators[scene_idx.first].OptimizeLin2D(
+          scene_idx.second, DepthImg, NormalImg, 7, 7,
+          axis_1, axis_2,
+          range_1, range_2, n_div,
+          weight_depth, weight_normal,
+          /*opt_12=*/NULL, position_revised, eval_revised);
+    }
+  }
+  else
+  {
+    std::cerr<<"ERROR-unknown type: "<<msg.type<<std::endl;
+    return;
+  }
+
+  std::cerr<<"Revised "<<msg.type<<" ("<<msg.lpose.label<<" in "<<scene_idx.first<<"):";
+  for(int d(0); d<3; ++d)
+  {
+    std::cerr<<" "<<pose[d]-position_revised[d];
+    pose[d]= position_revised[d];
+  }
+  std::cerr<<" # "<<eval_revised[0]<<" "<<eval_revised[1]<<std::endl;
+
+  // Publish the revised pose:
+  pr2_lfd_vision::LabeledPoseRevision msg_pose_revision;
+  msg_pose_revision.lpose.header.seq= Sequence;  ++Sequence;
+  msg_pose_revision.lpose.header.stamp= PointCloudHeader.stamp;
+  msg_pose_revision.lpose.header.frame_id= PointCloudHeader.frame_id;
+  msg_pose_revision.lpose.label= msg.lpose.label;
+  XToGPose(pose, msg_pose_revision.lpose.pose);
+  msg_pose_revision.errors.resize(2);
+  msg_pose_revision.errors[0]= eval_revised[0];
+  msg_pose_revision.errors[1]= eval_revised[1];
+  PubLabeledPoseRevision.publish(msg_pose_revision);
+}
+//-------------------------------------------------------------------------------------------
+
 void CallbackLabeledPose(const pr2_lfd_vision::LabeledPoseConstPtr &msg)
 {
+  #if 0
   // Read the message:
   std::pair<std::string, int> scene_idx= LabelToSceneIdx[msg->label];
   double pose[7];
@@ -231,56 +317,21 @@ void CallbackLabeledPose(const pr2_lfd_vision::LabeledPoseConstPtr &msg)
   msg_pose_revision.errors[0]= eval_revised[0];
   msg_pose_revision.errors[1]= eval_revised[1];
   PubLabeledPoseRevision.publish(msg_pose_revision);
+  #endif
+  pr2_lfd_vision::LabeledPoseOptReq msg_opt_req;
+  msg_opt_req.lpose= *msg;
+  msg_opt_req.type= "xyz";
+  // msg_opt_req.range= ...
+  // msg_opt_req.num_div= ...
+  // msg_opt_req.weight_depth= ...
+  // msg_opt_req.weight_normal= ...
+  ExecLabeledPoseOptReq(msg_opt_req);
 }
 //-------------------------------------------------------------------------------------------
 
 void CallbackLabeledPoseOptReq(const pr2_lfd_vision::LabeledPoseOptReqConstPtr &msg)
 {
-  // Read the message:
-  std::pair<std::string, int> scene_idx= LabelToSceneIdx[msg->lpose.label];
-  double pose[7];
-  GPoseToX(msg->lpose.pose, pose);
-
-  double position_revised[3], eval_revised[2];
-  if(msg->type=="lin2d")
-  {
-    double axis_1[3], axis_2[3];
-    GPointToP(msg->axis1, axis_1);
-    GPointToP(msg->axis2, axis_2);
-    double range_1(msg->range[0]), range_2(msg->range[1]), n_div(msg->num_div);
-    double weight_depth(msg->weight_depth), weight_normal(msg->weight_normal);
-    // std::cerr<<"axis_1:"<<axis_1[0]<<", "<<axis_1[1]<<", "<<axis_1[2]<<std::endl;
-    // std::cerr<<"axis_2:"<<axis_2[0]<<", "<<axis_2[1]<<", "<<axis_2[2]<<std::endl;
-
-    // Improve pose by ray tracing pose estimation:
-    RayTracePoseEstimators[scene_idx.first].SetPose(scene_idx.second, pose);
-    RayTracePoseEstimators[scene_idx.first].OptimizeLin2D(
-        scene_idx.second, DepthImg, NormalImg, 7, 7,
-        axis_1, axis_2,
-        range_1, range_2, n_div,
-        weight_depth, weight_normal,
-        /*opt_12=*/NULL, position_revised, eval_revised);
-
-    std::cerr<<"Revised lin2d ("<<msg->lpose.label<<" in "<<scene_idx.first<<"):";
-    for(int d(0); d<3; ++d)
-    {
-      std::cerr<<" "<<pose[d]-position_revised[d];
-      pose[d]= position_revised[d];
-    }
-    std::cerr<<" # "<<eval_revised[0]<<" "<<eval_revised[1]<<std::endl;
-  }
-
-  // Publish the revised pose:
-  pr2_lfd_vision::LabeledPoseRevision msg_pose_revision;
-  msg_pose_revision.lpose.header.seq= Sequence;  ++Sequence;
-  msg_pose_revision.lpose.header.stamp= PointCloudHeader.stamp;
-  msg_pose_revision.lpose.header.frame_id= PointCloudHeader.frame_id;
-  msg_pose_revision.lpose.label= msg->lpose.label;
-  XToGPose(pose, msg_pose_revision.lpose.pose);
-  msg_pose_revision.errors.resize(2);
-  msg_pose_revision.errors[0]= eval_revised[0];
-  msg_pose_revision.errors[1]= eval_revised[1];
-  PubLabeledPoseRevision.publish(msg_pose_revision);
+  ExecLabeledPoseOptReq(*msg);
 }
 //-------------------------------------------------------------------------------------------
 
