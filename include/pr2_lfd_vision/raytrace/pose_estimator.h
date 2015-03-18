@@ -65,6 +65,7 @@ enum TRayTracePrimitiveKind{
   rtpkHalfCylinder,  // Param={radius,height}; Only y>=0 part.
   rtpkTube        ,  // Param={radius_out,radius_in,height,dx,dy}, dx,dy: displacement of hole position
   rtpkHalfTube    ,  // Param={radius_out,radius_in,height,dx,dy}, dx,dy: displacement of hole position; Only y>=0 part.
+  rtpkRectTube    ,  // Param={half_len_x_out,half_len_y_out,half_len_z, half_len_x_in,half_len_y_in,dx,dy}, dx,dy: displacement of hole position
   rtpkTorus       ,
   rtpkPolyhedra   };
 
@@ -91,6 +92,7 @@ inline TRayTracePrimitiveKind StrToRTPrimitiveKind(const std::string &kind)
   if(kind=="rtpkHalfCylinder" )   return rtpkHalfCylinder  ;
   if(kind=="rtpkTube"         )   return rtpkTube          ;
   if(kind=="rtpkHalfTube"     )   return rtpkHalfTube      ;
+  if(kind=="rtpkRectTube"     )   return rtpkRectTube      ;
   if(kind=="rtpkTorus"        )   return rtpkTorus         ;
   if(kind=="rtpkPolyhedra"    )   return rtpkPolyhedra     ;
   return rtpkInvalid;
@@ -106,6 +108,7 @@ inline std::string RTPrimitiveKindToStr(const TRayTracePrimitiveKind &kind)
   case rtpkHalfCylinder  :  return "rtpkHalfCylinder" ;
   case rtpkTube          :  return "rtpkTube"         ;
   case rtpkHalfTube      :  return "rtpkHalfTube"     ;
+  case rtpkRectTube      :  return "rtpkRectTube"     ;
   case rtpkTorus         :  return "rtpkTorus"        ;
   case rtpkPolyhedra     :  return "rtpkPolyhedra"    ;
   }

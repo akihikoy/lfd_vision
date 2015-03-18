@@ -83,6 +83,14 @@ Imager::SolidObject* CreateRayTracePrimitive(
     sub_obj4->Move(0.0, -prim.Param[0]*0.52, 0.0);
     obj= new SetDifference(Vector(0.0, 0.0, 0.0), sub_obj3, sub_obj4);
     break;
+  case rtpkRectTube   :  // Param={half_len_x_out,half_len_y_out,half_len_z, half_len_x_in,half_len_y_in,dx,dy}, dx,dy: displacement of hole position
+    /*cuboid_out:*/sub_obj1= new Cuboid(prim.Param[0], prim.Param[1], prim.Param[2]);
+    /*cuboid_in: */sub_obj2= new Cuboid(prim.Param[3], prim.Param[4], prim.Param[2]*1.05);  // 1.05 means z-expansion needed for better modeling
+    sub_obj2->Move(prim.Param[5],prim.Param[6],0.0);
+    obj= new SetDifference(Vector(0.0, 0.0, 0.0),
+        /*cuboid_out=*/sub_obj1,
+        /*cuboid_in= */sub_obj2);
+    break;
   case rtpkTorus    :
     // TODO: Implement from here to the end of this function
     break;
@@ -197,6 +205,10 @@ Imager::TROI3D GetROI3DPrimitive(const TRayTraceModel::TPrimitive &prim)
   case rtpkHalfTube     :
     roi.SetMin(-prim.Param[0],           0.0,-prim.Param[2]);
     roi.SetMax(+prim.Param[0],+prim.Param[0],+prim.Param[2]);
+    break;
+  case rtpkRectTube  :
+    roi.SetMin(-prim.Param[0],-prim.Param[1],-prim.Param[2]);
+    roi.SetMax(+prim.Param[0],+prim.Param[1],+prim.Param[2]);
     break;
   case rtpkTorus    :
     // TODO: Implement from here to the end of this function
