@@ -58,7 +58,7 @@ inline bool IsInvalid<double>(const double &x)
 
 
 pcl::PointCloud<pcl::PointXYZRGB>::Ptr
-ConvertROSMsgToPointCloud(const sensor_msgs::PointCloud2ConstPtr &msg);
+ConvertROSMsgToPointCloud(const sensor_msgs::PointCloud2ConstPtr &msg, bool no_rgb=false);
 
 /* Get RGB image and depth image from a Point Cloud.
     cf. pcl::PointXYZRGB Struct Reference
@@ -72,6 +72,16 @@ void ConvertPointCloudToRGBDImages(
 void ConvertPointCloudToNormalImage(
     const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr &cloud,
     cv::Mat &normal_img, int FS=9);
+//-------------------------------------------------------------------------------------------
+
+// Compute 3x4 projection/camera matrix from point cloud data.
+std::vector<double> GetCameraProjFromPointCloud(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr &cloud);
+//-------------------------------------------------------------------------------------------
+
+bool AssignInfToPlane(
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr &cloud_io,
+    const double &ransac_dist_thresh,
+    int ransac_max_iterations);
 //-------------------------------------------------------------------------------------------
 
 

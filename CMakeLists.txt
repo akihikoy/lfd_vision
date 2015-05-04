@@ -57,6 +57,12 @@ rosbuild_add_executable(flow_analyzer_node
 include_directories(/usr/include/libm100)
 target_link_libraries(flow_analyzer_node m100)
 
+rosbuild_add_executable(sentis_m100_node
+      src/sentis_m100_node.cpp
+      src/sentis_m100.cpp)
+include_directories(/usr/include/libm100)
+target_link_libraries(sentis_m100_node m100)
+
 rosbuild_add_executable(ode_pour_sim_node
       src/ode_pour_sim_node.cpp
       src/ode_pour_sim.cpp)

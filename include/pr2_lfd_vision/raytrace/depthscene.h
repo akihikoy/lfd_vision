@@ -13,6 +13,7 @@
 #include "../geom_util.h"
 //-------------------------------------------------------------------------------------------
 #include <list>
+#include <iostream>
 #include <opencv2/core/core.hpp>
 //-------------------------------------------------------------------------------------------
 namespace Imager
@@ -160,12 +161,23 @@ struct TCameraInfo
   int Height;
   double Fx, Fy;  // focal lengths
   double Cx, Cy;  // principal point
+  double ZcMin;
+
+  TCameraInfo() : ZcMin(0.001) {}
 
   // Project 3D point [xc,yc,zc] on an image [xp,yp]
   void Project(const double &xc, const double &yc, const double &zc, int &xp, int &yp) const
     {
-      xp= Fx*xc/zc + Cx;
-      yp= Fy*yc/zc + Cy;
+      if(zc>ZcMin)
+      {
+        xp= Fx*xc/zc + Cx;
+        yp= Fy*yc/zc + Cy;
+      }
+      else
+      {
+        xp= 0.0;
+        yp= 0.0;
+      }
     }
 
   // Inverse project a point [xp,yp] of image to 3D point [xc,yc,1]
@@ -274,7 +286,8 @@ struct TROI3D
     }
 
   // Convert 3D ROI to 2D ROI on an image plane (bounding box).
-  void ToImageROI(const TCameraInfo &cam, TROI2D<int> &roi2d) const
+  // Return true if there exists a valid ROI.
+  bool ToImageROI(const TCameraInfo &cam, TROI2D<int> &roi2d) const
     {
       double points[8][3]= {
           {Min[0], Min[1], Min[2]},
@@ -290,14 +303,19 @@ struct TROI3D
       for(int ip(0); ip<8; ++ip)
       {
         double *p(points[ip]);
-        cam.Project(p[0], p[1], p[2], xp,yp);
-        if(init)  {roi2d.Init(xp,yp);  init= false;}
-        else      {roi2d.Add(xp,yp);}
+        if(p[2]>cam.ZcMin)
+        {
+          cam.Project(p[0], p[1], p[2], xp,yp);
+          if(init)  {roi2d.Init(xp,yp);  init= false;}
+          else      {roi2d.Add(xp,yp);}
+        }
       }
+      return !init;
     }
   // Convert 3D ROI transformed with xbase to 2D ROI on an image plane (bounding box).
   // xbase: [0-2]: position x,y,z, [3-6]: orientation x,y,z,w.
-  void ToImageROI(const TCameraInfo &cam, const double xbase[7], TROI2D<int> &roi2d) const
+  // Return true if there exists a valid ROI.
+  bool ToImageROI(const TCameraInfo &cam, const double xbase[7], TROI2D<int> &roi2d) const
     {
       double points[8][3]= {
           {Min[0], Min[1], Min[2]},
@@ -315,10 +333,14 @@ struct TROI3D
       {
         double *p(points[ip]);
         trick::TransformP(xbase, p, pt);  // pt= xbase * p
-        cam.Project(pt[0], pt[1], pt[2], xp,yp);
-        if(init)  {roi2d.Init(xp,yp);  init= false;}
-        else      {roi2d.Add(xp,yp);}
+        if(pt[2]>cam.ZcMin)
+        {
+          cam.Project(pt[0], pt[1], pt[2], xp,yp);
+          if(init)  {roi2d.Init(xp,yp);  init= false;}
+          else      {roi2d.Add(xp,yp);}
+        }
       }
+      return !init;
     }
 };
 //-------------------------------------------------------------------------------------------

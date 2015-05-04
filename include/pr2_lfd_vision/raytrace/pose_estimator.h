@@ -132,6 +132,40 @@ public:
   static inline void Rad2Deg3(const TRadRotation &rad, TDegRotation &deg)
     {deg.X=Rad2Deg(rad.X); deg.Y=Rad2Deg(rad.Y); deg.Z=Rad2Deg(rad.Z);}
 
+  // Description for evaluation
+  struct TEvalDescription
+    {
+      double SqDiffDepth, SqDiffNormal;  // square errors of valid depth and normal points.
+      int NumNoDepth;    // number of unobserved depth pixels on depth_img in NumInsideCam of the model image.
+      int NumNoNormal;   // number of unobserved normal pixels on normal_img in NumInsideCam of the model image.
+      int NumInsideCam;      // number of pixels that are inside the range of camera.
+      int NumOutOfCam;        // number of pixels that are outside the range of the camera.
+      int NumMatchedDepth;    // number of matched depth pixels in depth_img in NumInsideCam of the model image (threshold is used).
+      int NumMatchedNormal;   // number of matched normal pixels in normal_img in NumInsideCam of the model image (threshold is used).
+      // NOTE: number of unmatched * pixels = NumInsideCam - (NumMatched* + NumNo*)
+
+      // Cache of evaluations
+      mutable double WError;
+      mutable double RMatchedDepth, RUnmatchedDepth, RNoDepth;
+      mutable double RMatchedNormal, RUnmatchedNormal, RNoNormal;
+      mutable int Quality;
+
+      TEvalDescription()
+        : SqDiffDepth(0.0),
+          SqDiffNormal(0.0),
+          NumNoDepth(0),
+          NumNoNormal(0),
+          NumInsideCam(0),
+          NumOutOfCam(0),
+          NumMatchedDepth(0),
+          NumMatchedNormal(0),
+          WError(0.0),
+          RMatchedDepth(0.0), RUnmatchedDepth(0.0), RNoDepth(0.0),
+          RMatchedNormal(0.0), RUnmatchedNormal(0.0), RNoNormal(0.0),
+          Quality(0)
+        {}
+    };
+
   static inline cv::Vec3f GetVisualNormal(const Imager::Vector &n)
     {
       cv::Vec3f col;
@@ -140,6 +174,16 @@ public:
     }
 
 public:
+  TRayTracePoseEstimator()
+    : sq_diff_depth_thresh_(0.0),
+      sq_diff_normal_thresh_(0.0),
+      nodata_sq_diff_depth_(0.0),
+      nodata_sq_diff_normal_(0.0),
+      th_good_depth_ratio_(0.3),
+      th_bad_depth_ratio_(0.7),
+      th_good_normal_ratio_(0.1),
+      th_bad_normal_ratio_(0.8)    {}
+
   // Add an object to the scene and return its index
   int AddObject(const TRayTraceModel &model, const double pose[7]);
 
@@ -152,49 +196,54 @@ public:
   // Set pose=x,y,z,quaternion of the object
   inline void SetPose(int index, const double pose[7]);
 
-  Imager::TROI2D<int> GetImageROI() const;
+  bool GetImageROI(Imager::TROI2D<int> &img_roi) const;
 
   void Render(
       cv::Mat &depth_img, cv::Mat &normal_img,
       int step_xp=2, int step_yp=2);
 
-  /*Get a distance between the ray traced model image and actual images.
+  /*Get a description for evaluation which is measurements between
+    the ray traced model image and actual images.
     index : if -1, all rendered intersections are considered,
         if >=0, only intersections whose solid is mapped to index are considered.
     depth_img, normal_img : depth and normal images.
-    sqdiff_depth, sqdiff_normal : square errors of valid depth and normal points.
-    n_invalid_depth : number of invalid depth pixels in depth_img on the model image.
-    n_invalid_normal : number of invalid normal pixels in normal_img on the model image.
-    n_invalid_range : number of invalid pixels that is out of range of the camera.
+    desc : obtained description.
     step_xp, step_yp : step size to compute the model image.  Greater is faster but bigger error.
+    Return true if desc is valid.
   */
-  void GetDistance(
+  bool GetEvalDescription(
       int index,
       cv::Mat &depth_img, cv::Mat &normal_img,
-      double &sqdiff_depth, double &sqdiff_normal,
-      int &n_invalid_depth, int &n_invalid_normal, int &n_invalid_range,
-      int step_xp=2, int step_yp=2);
+      TEvalDescription &desc, int step_xp=2, int step_yp=2);
 
-  void OptimizeXY(
-      int index,
-      cv::Mat &depth_img, cv::Mat &normal_img,
-      int step_xp, int step_yp,
-      const double &range_x, const double &range_y, const double &n_div,
-      const double &w_depth, const double &w_normal,
-      double xy_opt[2], double eval_opt[2]);
-  void OptimizeZ(
-      int index,
-      cv::Mat &depth_img, cv::Mat &normal_img,
-      int step_xp, int step_yp,
-      const double &range_z, const double &n_div,
-      const double &w_depth, const double &w_normal,
-      double z_opt[1], double eval_opt[2]);
+  // void OptimizeXY(
+      // int index,
+      // cv::Mat &depth_img, cv::Mat &normal_img,
+      // int step_xp, int step_yp,
+      // const double &range_x, const double &range_y, const double &n_div,
+      // const double &w_depth, const double &w_normal,
+      // double xy_opt[2], TEvalDescription *eval_desc_opt);
+  // void OptimizeZ(
+      // int index,
+      // cv::Mat &depth_img, cv::Mat &normal_img,
+      // int step_xp, int step_yp,
+      // const double &range_z, const double &n_div,
+      // const double &w_depth, const double &w_normal,
+      // double z_opt[1], TEvalDescription *eval_desc_opt);
   void OptimizeXYZ(
       int index,
       cv::Mat &depth_img, cv::Mat &normal_img,
       int step_xp=2, int step_yp=2,
-      double position_opt[3]=NULL, double eval_opt[2]=NULL);
+      double position_opt[3]=NULL, TEvalDescription *eval_desc_opt=NULL);
 
+  void OptimizeLin1D(
+      int index,
+      cv::Mat &depth_img, cv::Mat &normal_img,
+      int step_xp, int step_yp,
+      const double axis_1[3],
+      const double &range_1, const double &n_div,
+      const double &w_depth, const double &w_normal,
+      double opt_1[1], double position_opt[3], TEvalDescription *eval_desc_opt=NULL);
   void OptimizeLin2D(
       int index,
       cv::Mat &depth_img, cv::Mat &normal_img,
@@ -202,13 +251,89 @@ public:
       const double axis_1[3], const double axis_2[3],
       const double &range_1, const double &range_2, const double &n_div,
       const double &w_depth, const double &w_normal,
-      double opt_12[2], double position_opt[3], double eval_opt[2]);
+      double opt_12[2], double position_opt[3], TEvalDescription *eval_desc_opt=NULL);
+
+  void OptimizeRot1D(
+      int index,
+      cv::Mat &depth_img, cv::Mat &normal_img,
+      int step_xp, int step_yp,
+      const double axis_1[3],
+      const double &range_1, const double &n_div,
+      const double &w_depth, const double &w_normal,
+      double opt_1[1], double rotation_opt[4], TEvalDescription *eval_desc_opt=NULL);
+  void OptimizeRot2D(
+      int index,
+      cv::Mat &depth_img, cv::Mat &normal_img,
+      int step_xp, int step_yp,
+      const double axis_1[3], const double axis_2[3],
+      const double &range_1, const double &range_2, const double &n_div,
+      const double &w_depth, const double &w_normal,
+      double opt_12[2], double rotation_opt[4], TEvalDescription *eval_desc_opt=NULL);
+
+  /* Compare two evaluation descriptions,
+      return
+        -1: desc1 < desc2 (desc1 is worse),
+        0 : desc1 == desc2 (equal),
+        +1: desc1 > desc2 (desc1 is better).
+      w_depth: weight of depth-img difference.
+      w_normal: weight of normal-img difference. */
+  inline int CompareEvalDescriptions(
+      const TEvalDescription &desc1, const TEvalDescription &desc2,
+      const double &w_depth, const double &w_normal)
+    {
+      // return CompareEvalDescriptions1(desc1, desc2, w_depth, w_normal);
+      return CompareEvalDescriptions2(desc1, desc2, w_depth, w_normal);
+    }
+
+  /* Check an evaluation description satisfies a threshold (ver 2),
+      return true if satisfied.
+      w_depth: weight of depth-img difference.
+      w_normal: weight of normal-img difference. */
+  inline bool CheckEvalDescriptions(
+      const TEvalDescription &desc, const TEvalDescription &threshold,
+      const double &w_depth, const double &w_normal)
+    {
+      return CheckEvalDescriptions2(desc, threshold, w_depth, w_normal);
+    }
+
+  inline int EvaluateDescription1(
+      const TEvalDescription &desc, const double &w_depth, const double &w_normal);
+  inline int CompareEvalDescriptions1(
+      const TEvalDescription &desc1, const TEvalDescription &desc2,
+      const double &w_depth, const double &w_normal);
+
+  inline int EvaluateDescription2(
+      const TEvalDescription &desc, const double &w_depth, const double &w_normal);
+  inline int CompareEvalDescriptions2(
+      const TEvalDescription &desc1, const TEvalDescription &desc2,
+      const double &w_depth, const double &w_normal);
+  inline bool CheckEvalDescriptions2(
+      const TEvalDescription &desc, const TEvalDescription &threshold,
+      const double &w_depth, const double &w_normal);
+
 
   // Handle a key event where c is the output of cv::waitKey
   bool HandleKeyEvent(int index, int c);
 
   void SetCameraInfo(const Imager::TCameraInfo &cam)  {camera_= cam;}
   const Imager::TCameraInfo& CameraInfo() const {return camera_;}
+
+  const double& SqDiffDepthThresh() const {return sq_diff_depth_thresh_;}
+  const double& SqDiffNormalThresh() const {return sq_diff_normal_thresh_;}
+  const double& NodataSqDiffDepth() const {return nodata_sq_diff_depth_;}
+  const double& NodataSqDiffNormal() const {return nodata_sq_diff_normal_;}
+  const double& ThGoodDepthRatio () const {return th_good_depth_ratio_ ;}
+  const double& ThBadDepthRatio  () const {return th_bad_depth_ratio_  ;}
+  const double& ThGoodNormalRatio() const {return th_good_normal_ratio_;}
+  const double& ThBadNormalRatio () const {return th_bad_normal_ratio_ ;}
+  void SetSqDiffDepthThresh(const double &v)  {sq_diff_depth_thresh_= v;}
+  void SetSqDiffNormalThresh(const double &v)  {sq_diff_normal_thresh_= v;}
+  void SetNodataSqDiffDepth(const double &v)  {nodata_sq_diff_depth_= v;}
+  void SetNodataSqDiffNormal(const double &v)  {nodata_sq_diff_normal_= v;}
+  void SetThGoodDepthRatio (const double &v)  {th_good_depth_ratio_ = v;}
+  void SetThBadDepthRatio  (const double &v)  {th_bad_depth_ratio_  = v;}
+  void SetThGoodNormalRatio(const double &v)  {th_good_normal_ratio_= v;}
+  void SetThBadNormalRatio (const double &v)  {th_bad_normal_ratio_ = v;}
 
 private:
   Imager::DepthScene scene_;
@@ -218,13 +343,24 @@ private:
   std::map<const Imager::SolidObject*,int>  solid_to_index_;  // [*solid]= index; to know the object index of given solid pointer (of an intersection)
   Imager::TCameraInfo camera_;
 
+  double sq_diff_depth_thresh_;  // If depth error is less than this, consider matched
+  double sq_diff_normal_thresh_;  // If normal error is less than this, consider matched
+
+  double nodata_sq_diff_depth_;  // Depth error given to a no-data point
+  double nodata_sq_diff_normal_;  // Normal error given to a no-data point
+
+  // Thresholds of ratio for CompareEvalDescriptions2
+  double th_good_depth_ratio_;
+  double th_bad_depth_ratio_;
+  double th_good_normal_ratio_;
+  double th_bad_normal_ratio_;
+
   // Set rotation ex,ey,ez(in radian) of the object
   // WARNING: this function does not update poses_; use: SetPose, SetQ, SetXYZ
   inline void set_rotation(int index, const double &ex, const double &ey, const double &ez);
 
-};
+};  // TRayTracePoseEstimator
 //-------------------------------------------------------------------------------------------
-
 
 // Set x,y,z of the object
 inline void TRayTracePoseEstimator::SetXYZ(int index, const double &x, const double &y, const double &z)
@@ -279,6 +415,106 @@ inline void TRayTracePoseEstimator::SetPose(int index, const double pose[7])
 {
   SetXYZ(index, pose);
   SetQ(index, pose+3);
+}
+//-------------------------------------------------------------------------------------------
+
+inline int TRayTracePoseEstimator::EvaluateDescription1(
+    const TEvalDescription &desc, const double &w_depth, const double &w_normal)
+{
+  desc.WError= desc.SqDiffDepth*w_depth + desc.SqDiffNormal*w_normal;
+}
+//-------------------------------------------------------------------------------------------
+
+/* Compare two evaluation descriptions (ver 1),
+    return
+      -1: desc1 < desc2 (desc1 is worse),
+      0 : desc1 == desc2 (equal),
+      +1: desc1 > desc2 (desc1 is better).
+    w_depth: weight of depth-img difference.
+    w_normal: weight of normal-img difference. */
+inline int TRayTracePoseEstimator::CompareEvalDescriptions1(
+    const TEvalDescription &desc1, const TEvalDescription &desc2,
+    const double &w_depth, const double &w_normal)
+{
+  const int D1_IS_BETTER(+1), D2_IS_BETTER(-1), EQUAL(0);
+  if(desc1.NumOutOfCam>0 && desc2.NumOutOfCam>0)  return EQUAL;
+  if(desc1.NumOutOfCam>0)  return D2_IS_BETTER;  // We do not use if some points are out of the range
+  if(desc2.NumOutOfCam>0)  return D1_IS_BETTER;  // We do not use if some points are out of the range
+  EvaluateDescription1(desc1, w_depth, w_normal);
+  EvaluateDescription1(desc2, w_depth, w_normal);
+  if(desc1.WError==desc2.WError)  return EQUAL;
+  return (desc1.WError < desc2.WError) ? D1_IS_BETTER : D2_IS_BETTER;
+}
+//-------------------------------------------------------------------------------------------
+
+
+inline int TRayTracePoseEstimator::EvaluateDescription2(
+    const TEvalDescription &desc, const double &w_depth, const double &w_normal)
+{
+  desc.Quality= 0;
+
+  double n_total= desc.NumInsideCam + desc.NumOutOfCam;
+  desc.RMatchedDepth= (double)desc.NumMatchedDepth / n_total;
+  desc.RUnmatchedDepth= (double)(desc.NumInsideCam-desc.NumMatchedDepth-desc.NumNoDepth) / n_total;
+  desc.RNoDepth= (double)desc.NumNoDepth / n_total;
+  desc.RMatchedNormal= (double)desc.NumMatchedNormal / n_total;
+  desc.RUnmatchedNormal= (double)(desc.NumInsideCam-desc.NumMatchedNormal-desc.NumNoNormal) / n_total;
+  desc.RNoNormal= (double)desc.NumNoNormal / n_total;
+
+  if(desc.RMatchedDepth > th_good_depth_ratio_)  desc.Quality+= 2;
+  else if(desc.RUnmatchedDepth > th_bad_depth_ratio_)  desc.Quality+= 0;
+  else  desc.Quality+= 1;
+  if(desc.RMatchedNormal > th_good_normal_ratio_)  desc.Quality+= 2;
+  else if(desc.RUnmatchedNormal > th_bad_normal_ratio_)  desc.Quality+= 0;
+  else  desc.Quality+= 1;
+
+  desc.WError= desc.SqDiffDepth*w_depth + desc.SqDiffNormal*w_normal;
+}
+//-------------------------------------------------------------------------------------------
+
+/* Compare two evaluation descriptions (ver 2),
+    return
+      -1: desc1 < desc2 (desc1 is worse),
+      0 : desc1 == desc2 (equal),
+      +1: desc1 > desc2 (desc1 is better).
+    w_depth: weight of depth-img difference.
+    w_normal: weight of normal-img difference. */
+inline int TRayTracePoseEstimator::CompareEvalDescriptions2(
+    const TEvalDescription &desc1, const TEvalDescription &desc2,
+    const double &w_depth, const double &w_normal)
+{
+  const int D1_IS_BETTER(+1), D2_IS_BETTER(-1), EQUAL(0);
+
+  EvaluateDescription2(desc1, w_depth, w_normal);
+  EvaluateDescription2(desc2, w_depth, w_normal);
+
+  if(desc1.Quality > desc2.Quality)  return D1_IS_BETTER;
+  else if(desc1.Quality < desc2.Quality)  return D2_IS_BETTER;
+
+  // else: desc1.Quality == desc2.Quality
+  if(desc1.WError==desc2.WError)  return EQUAL;
+  return (desc1.WError < desc2.WError) ? D1_IS_BETTER : D2_IS_BETTER;
+
+  // if(desc1.NumOutOfCam>0 && desc2.NumOutOfCam>0)  return EQUAL;
+  // if(desc1.NumOutOfCam>0)  return D2_IS_BETTER;  // We do not use if some points are out of the range
+  // if(desc2.NumOutOfCam>0)  return D1_IS_BETTER;  // We do not use if some points are out of the range
+}
+//-------------------------------------------------------------------------------------------
+
+/* Check an evaluation description satisfies a threshold (ver 2),
+    return true if satisfied.
+    w_depth: weight of depth-img difference.
+    w_normal: weight of normal-img difference. */
+inline bool TRayTracePoseEstimator::CheckEvalDescriptions2(
+    const TEvalDescription &desc, const TEvalDescription &threshold,
+    const double &w_depth, const double &w_normal)
+{
+  EvaluateDescription2(desc, w_depth, w_normal);
+  // first, check by Quality
+  if(desc.Quality < threshold.Quality)  return false;
+  // then, compare SqDiffDepth and SqDiffNormal
+  return desc.SqDiffDepth <= threshold.SqDiffDepth
+          && desc.SqDiffNormal <= threshold.SqDiffNormal;
 }
 //-------------------------------------------------------------------------------------------
 

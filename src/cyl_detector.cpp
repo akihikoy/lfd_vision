@@ -329,7 +329,7 @@ void DetectCylinder(
   if(cloud_low->points.size()==0)  return;
 
   // Remove plains
-  bool res= RemovePlains<pcl::PointXYZ>(cloud_low,
+  bool res= RemovePlanes<pcl::PointXYZ>(cloud_low,
                 /*non_planar_points_ratio=*/0.3,
                 /*ransac_dist_thresh=*/0.01,
                 /*ransac_max_iterations=*/100);

@@ -169,15 +169,52 @@ inline void GPoseToX(const t_pose &pose, t_value x[7])
 }
 //-------------------------------------------------------------------------------------------
 
+/* Find a least square solution of W in W*x=y for {(x,y)}.
+    x= (x_1,...,x_d); d: dim of x.
+    y= (y_1,...,y_c); c: dim of y.
+    X= [x_1_1,...,x_d_1]
+       [x_1_2,...,x_d_2]
+       ...
+       [x_1_N,...,x_d_N]; N: num of samples.
+    Y= [y_1_1,...,y_c_1]
+       [y_1_2,...,y_c_2]
+       ...
+       [y_1_N,...,y_c_N]; N: num of samples.
+    lambda: regularization parameter.
+    return W.
+*/
+inline Eigen::MatrixXd LeastSq(const Eigen::MatrixXd &X, const Eigen::MatrixXd &Y, const double &lambda=0.01)
+{
+  assert(X.rows()==Y.rows());
+  Eigen::MatrixXd I= Eigen::MatrixXd::Identity(X.cols(),X.cols());
+  return /*W=*/ ( (X.transpose()*X + lambda * I).inverse()*X.transpose() * Y ).transpose();
+}
+//-------------------------------------------------------------------------------------------
+
+
 // Visualize a normal vector with RGB color.
 template <typename t_1, typename t_2>
 inline void GetVisualNormal(
     const t_1 &nx, const t_1 &ny, const t_1 &nz,
     t_2 &r, t_2 &g, t_2 &b)
 {
-  r= 0.5*(1.0-nx);
-  g= 0.5*(1.0-ny);
-  b= 0.5*(1.0-nz);
+  // Version 1
+  // r= 0.5*(1.0-nx);
+  // g= 0.5*(1.0-ny);
+  // b= 0.5*(1.0-nz);
+  // Version 2 (consider [nx,ny,nz]==[-nx,-ny,-nz])
+  if(nz>=0.0)
+  {
+    r= 0.5*(1.0-nx);
+    g= 0.5*(1.0-ny);
+    b= 0.5*(1.0-nz);
+  }
+  else
+  {
+    r= 0.5*(1.0+nx);
+    g= 0.5*(1.0+ny);
+    b= 0.5*(1.0+nz);
+  }
 }
 //-------------------------------------------------------------------------------------------
 

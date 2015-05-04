@@ -268,18 +268,24 @@ int TRayTracePoseEstimator::AddObject(const TRayTraceModel &model, const double 
 }
 //-------------------------------------------------------------------------------------------
 
-Imager::TROI2D<int> TRayTracePoseEstimator::GetImageROI() const
+bool TRayTracePoseEstimator::GetImageROI(Imager::TROI2D<int> &img_roi) const
 {
-  Imager::TROI2D<int> img_roi;
   bool init(true);
   for(int i(0),i_end(poses_.size()); i<i_end; ++i)
   {
     Imager::TROI2D<int> img_roi2;
-    local_roi_[i].ToImageROI(camera_, poses_[i].X, img_roi2);
+    bool is_valid= local_roi_[i].ToImageROI(camera_, poses_[i].X, img_roi2);
+    if(!is_valid)  continue;
     if(init)  {img_roi= img_roi2;  init= false;}
     else      {img_roi.Add(img_roi2);}
   }
-  return img_roi;
+  if(init)  return false;
+  if(img_roi.Min[0]<-camera_.Width/2)  img_roi.Min[0]= -camera_.Width/2;
+  if(img_roi.Min[1]<-camera_.Height/2)  img_roi.Min[1]= -camera_.Height/2;
+  if(img_roi.Max[0]>camera_.Width+camera_.Width/2)  img_roi.Max[0]= camera_.Width+camera_.Width/2;
+  if(img_roi.Max[1]>camera_.Height+camera_.Height/2)  img_roi.Max[1]= camera_.Height+camera_.Height/2;
+//*DEBUG*/std::cerr<<"img_roi: "<<img_roi.Min[0]<<", "<<img_roi.Min[1]<<",  "<<img_roi.Max[0]<<", "<<img_roi.Max[1]<<"; "<<(!init)<<std::endl;
+  return true;
 }
 //-------------------------------------------------------------------------------------------
 
@@ -288,123 +294,137 @@ void TRayTracePoseEstimator::Render(
     int step_xp, int step_yp)
 {
   std::list<Imager::Intersection> intersections;
-  scene_.Render4(camera_, GetImageROI(), intersections, step_xp, step_yp);
+  Imager::TROI2D<int> img_roi;
+  if(!GetImageROI(img_roi))  return;
+  scene_.Render4(camera_, img_roi, intersections, step_xp, step_yp);
 
   for(std::list<Imager::Intersection>::const_iterator itr(intersections.begin()),last(intersections.end());
       itr!=last; ++itr)
   {
+    if(itr->point.z<=camera_.ZcMin)  continue;
     int px(0), py(0);
     camera_.Project(itr->point.x, itr->point.y, itr->point.z, px, py);
     if(camera_.IsInvalid(px,py))  continue;
     cv::Vec3f normal(GetVisualNormal(itr->surfaceNormal));
 
     depth_img.at<float>(py,px)= itr->point.z;
+//*DEBUG*/std::cerr<<normal_img.data<<" : "<<normal_img.rows<<", "<<normal_img.cols<<" : "<<py<<", "<<px<<std::endl;
     normal_img.at<cv::Vec3f>(py,px)= normal;
   }
 }
 //-------------------------------------------------------------------------------------------
 
-/*Get a distance between the ray traced model image and actual images.
+/*Get a description for evaluation which is measurements between
+  the ray traced model image and actual images.
   index : if -1, all rendered intersections are considered,
       if >=0, only intersections whose solid is mapped to index are considered.
   depth_img, normal_img : depth and normal images.
-  sqdiff_depth, sqdiff_normal : square errors of valid depth and normal points.
-  n_invalid_depth : number of invalid depth pixels in depth_img on the model image.
-  n_invalid_normal : number of invalid normal pixels in normal_img on the model image.
-  n_invalid_range : number of invalid pixels that is out of range of the camera.
+  desc : obtained description.
   step_xp, step_yp : step size to compute the model image.  Greater is faster but bigger error.
+  Return true if desc is valid.
 */
-void TRayTracePoseEstimator::GetDistance(
+bool TRayTracePoseEstimator::GetEvalDescription(
     int index,
     cv::Mat &depth_img, cv::Mat &normal_img,
-    double &sqdiff_depth, double &sqdiff_normal,
-    int &n_invalid_depth, int &n_invalid_normal, int &n_invalid_range,
-    int step_xp, int step_yp)
+    TEvalDescription &desc, int step_xp, int step_yp)
 {
   std::list<Imager::Intersection> intersections;
-  scene_.Render4(camera_, GetImageROI(), intersections, step_xp, step_yp);
+  Imager::TROI2D<int> img_roi;
+  if(!GetImageROI(img_roi))  return false;
+  scene_.Render4(camera_, img_roi, intersections, step_xp, step_yp);
 
+  float invalid_depth(0.0f);
   cv::Vec3f invalid_normal(0.0,0.0,0.0);
-  sqdiff_depth= 0.0;
-  sqdiff_normal= 0.0;
-  int n_valid_depth(0), n_valid_normal(0);
-  n_invalid_depth= 0;
-  n_invalid_normal= 0;
-  n_invalid_range= 0;
+  desc= TEvalDescription();
+  double sq_diff_depth(0.0), sq_diff_normal(0.0);
   for(std::list<Imager::Intersection>::const_iterator itr(intersections.begin()),last(intersections.end());
       itr!=last; ++itr)
   {
     //*DEBUG*/std::cerr<<index<<"\t"<<solid_to_index_[itr->solid]<<std::endl;
     if(index>=0 && solid_to_index_[itr->solid]!=index)  continue;
+    if(itr->point.z<=camera_.ZcMin)  continue;
     int px(0), py(0);
     camera_.Project(itr->point.x, itr->point.y, itr->point.z, px, py);
-    if(camera_.IsInvalid(px,py))  {++n_invalid_range;  continue;}
+    if(camera_.IsInvalid(px,py))  {++desc.NumOutOfCam;  continue;}
+    ++desc.NumInsideCam;
     cv::Vec3f normal(GetVisualNormal(itr->surfaceNormal));
 
     // Update difference:
-    if(IsValid(depth_img.at<float>(py,px)))
+    if(depth_img.at<float>(py,px) != invalid_depth)
     {
-      sqdiff_depth+= Sq(depth_img.at<float>(py,px) - itr->point.z);
-      ++n_valid_depth;
+      sq_diff_depth= Sq(depth_img.at<float>(py,px) - itr->point.z);
+      desc.SqDiffDepth+= sq_diff_depth;
+      if(sq_diff_depth<=sq_diff_depth_thresh_)
+        ++desc.NumMatchedDepth;
     }
     else
     {
-      // sqdiff_depth+= 0.1;  // FIXME: how to treat invalid sensor data?
-      ++n_invalid_depth;
+      desc.SqDiffDepth+= nodata_sq_diff_depth_;  // no sensor data
+      ++desc.NumNoDepth;
     }
     if(normal_img.at<cv::Vec3f>(py,px) != invalid_normal)
     {
-      sqdiff_normal+= Sq(cv::norm(normal_img.at<cv::Vec3f>(py,px) - normal));
-      ++n_valid_normal;
+      sq_diff_normal= Sq(cv::norm(normal_img.at<cv::Vec3f>(py,px) - normal));
+      /*DEBUG*-/if(IsInvalid(sq_diff_normal))
+      {
+        std::cerr<<"sq_diff_normal: "<<sq_diff_normal<<std::endl;
+        std::cerr<<"  normal_img.at<cv::Vec3f>(py,px): "<<normal_img.at<cv::Vec3f>(py,px)<<std::endl;
+        std::cerr<<"  normal: "<<normal<<std::endl;
+      }//*/
+      desc.SqDiffNormal+= sq_diff_normal;
+      if(sq_diff_normal<=sq_diff_normal_thresh_)
+        ++desc.NumMatchedNormal;
     }
     else
     {
-      // sqdiff_normal+= 0.5;  // FIXME: how to treat invalid sensor data?
-      ++n_invalid_normal;
+      desc.SqDiffNormal+= nodata_sq_diff_normal_;  // no sensor data
+      ++desc.NumNoNormal;
     }
   }
-  if(n_valid_depth>0)   sqdiff_depth/= static_cast<double>(n_valid_depth);
-  else                  sqdiff_depth= 1.0;
-  if(n_valid_normal>0)  sqdiff_normal/= static_cast<double>(n_valid_normal);
-  else                  sqdiff_normal= 1.0;
-  //*DEBUG*/std::cerr<<sqdiff_depth<<"\t"<<sqdiff_normal<<"\t"<<n_valid_depth<<", "<<n_valid_normal<<std::endl;
-  //*DEBUG*/std::cerr<<sqdiff_depth<<"\t"<<sqdiff_normal<<"\t"<<n_invalid_depth<<", "<<n_invalid_normal<<", "<<n_invalid_range<<std::endl;
+  int n_valid_depth= desc.NumInsideCam - desc.NumNoDepth;
+  int n_valid_normal= desc.NumInsideCam - desc.NumNoNormal;
+  if(n_valid_depth>0)   desc.SqDiffDepth/= static_cast<double>(n_valid_depth);
+  else                  desc.SqDiffDepth= 1.0;
+  if(n_valid_normal>0)  desc.SqDiffNormal/= static_cast<double>(n_valid_normal);
+  else                  desc.SqDiffNormal= 1.0;
+  //*DEBUG*/std::cerr<<desc.SqDiffDepth<<"\t"<<desc.SqDiffNormal<<"\t"<<n_valid_depth<<", "<<n_valid_normal<<std::endl;
+  //*DEBUG*/std::cerr<<desc.SqDiffDepth<<"\t"<<desc.SqDiffNormal<<"\t"<<n_invalid_depth<<", "<<n_invalid_normal<<", "<<n_invalid_range<<std::endl;
+  return true;
 }
 //-------------------------------------------------------------------------------------------
 
+#if 0
+DEPRECATED: Use OptimizeLin2D
 void TRayTracePoseEstimator::OptimizeXY(
     int index,
     cv::Mat &depth_img, cv::Mat &normal_img,
     int step_xp, int step_yp,
     const double &range_x, const double &range_y, const double &n_div,
     const double &w_depth, const double &w_normal,
-    double xy_opt[2], double eval_opt[2])
+    double xy_opt[2], TEvalDescription *eval_desc_opt)
 {
   double x0(poses_[index].X[0]), y0(poses_[index].X[1]), z0(poses_[index].X[2]);
   double rx(0.5*range_x), ry(0.5*range_y);
-  double x_best(x0), y_best(y0), eval_best(100.0);
-  double sqdiff_depth_best(100.0), sqdiff_normal_best(100.0);
+  // Evaluate current pose:
+  double x_best(x0), y_best(y0);
+  TEvalDescription eval_desc_best;
+  GetEvalDescription(index, depth_img, normal_img,
+      eval_desc_best, step_xp, step_yp);
+  // Brute force optimization:
   for(double x(x0-rx); x<x0+rx; x+= 2.0*rx/n_div)
   {
     for(double y(y0-ry); y<y0+ry; y+= 2.0*ry/n_div)
     {
       SetXYZ(index, x,y,z0);
-      double sqdiff_depth(0.0), sqdiff_normal(0.0), eval(0.0);
-      int n_invalid_depth(0), n_invalid_normal(0), n_invalid_range(0);
-      GetDistance(index, depth_img, normal_img,
-          sqdiff_depth, sqdiff_normal,
-          n_invalid_depth, n_invalid_normal, n_invalid_range,
-          step_xp, step_yp);
-      if(n_invalid_range>0)  continue;  // We do not use if some points are out of the range
-      eval= sqdiff_depth*w_depth + sqdiff_normal*w_normal;
-      if(eval<eval_best)
+      TEvalDescription eval_desc;
+      if(!GetEvalDescription(index, depth_img, normal_img,
+            eval_desc, step_xp, step_yp))
+        continue;
+      if(CompareEvalDescriptions(eval_desc,eval_desc_best,w_depth,w_normal)>0)
       {
         x_best= x;
         y_best= y;
-        eval_best= eval;
-        sqdiff_depth_best= sqdiff_depth;
-        sqdiff_normal_best= sqdiff_normal;
-        // std::cerr<<eval_best<<"\t"<<x_best<<"\t"<<y_best<<std::endl;
+        eval_desc_best= eval_desc;
       }
     }
   }
@@ -414,84 +434,134 @@ void TRayTracePoseEstimator::OptimizeXY(
     xy_opt[0]= x_best;
     xy_opt[1]= y_best;
   }
-  if(eval_opt)
+  if(eval_desc_opt)
   {
-    eval_opt[0]= sqdiff_depth_best;
-    eval_opt[1]= sqdiff_normal_best;
+    *eval_desc_opt= eval_desc_best;
   }
 }
 //-------------------------------------------------------------------------------------------
 
+DEPRECATED: Use OptimizeLin1D
 void TRayTracePoseEstimator::OptimizeZ(
     int index,
     cv::Mat &depth_img, cv::Mat &normal_img,
     int step_xp, int step_yp,
     const double &range_z, const double &n_div,
     const double &w_depth, const double &w_normal,
-    double z_opt[1], double eval_opt[2])
+    double z_opt[1], TEvalDescription *eval_desc_opt)
 {
   double x0(poses_[index].X[0]), y0(poses_[index].X[1]), z0(poses_[index].X[2]);
   double rz(0.5*range_z);
-  double z_best(z0), eval_best(100.0);
-  double sqdiff_depth_best(100.0), sqdiff_normal_best(100.0);
+  // Evaluate current pose:
+  double z_best(z0);
+  TEvalDescription eval_desc_best;
+  GetEvalDescription(index, depth_img, normal_img,
+      eval_desc_best, step_xp, step_yp);
+  // Brute force optimization:
   for(double z(z0-rz); z<z0+rz; z+= 2.0*rz/n_div)
   {
     SetXYZ(index, x0,y0,z);
-    double sqdiff_depth(0.0), sqdiff_normal(0.0), eval(0.0);
-    int n_invalid_depth(0), n_invalid_normal(0), n_invalid_range(0);
-    GetDistance(index, depth_img, normal_img,
-        sqdiff_depth, sqdiff_normal,
-        n_invalid_depth, n_invalid_normal, n_invalid_range,
-        step_xp, step_yp);
-    if(n_invalid_range>0)  continue;  // We do not use if some points are out of the range
-    eval= sqdiff_depth*w_depth + sqdiff_normal*w_normal;
-    if(eval<eval_best)
+    TEvalDescription eval_desc;
+    if(!GetEvalDescription(index, depth_img, normal_img,
+          eval_desc, step_xp, step_yp))
+      continue;
+    if(CompareEvalDescriptions(eval_desc,eval_desc_best,w_depth,w_normal)>0)
     {
       z_best= z;
-      eval_best= eval;
-      sqdiff_depth_best= sqdiff_depth;
-      sqdiff_normal_best= sqdiff_normal;
-      // std::cerr<<eval_best<<"\t"<<z_best<<std::endl;
+      eval_desc_best= eval_desc;
     }
   }
   SetXYZ(index, x0,y0,z_best);
   if(z_opt)  z_opt[0]= z_best;
-  if(eval_opt)
+  if(eval_desc_opt)
   {
-    eval_opt[0]= sqdiff_depth_best;
-    eval_opt[1]= sqdiff_normal_best;
+    *eval_desc_opt= eval_desc_best;
   }
 }
 //-------------------------------------------------------------------------------------------
+#endif
 
 void TRayTracePoseEstimator::OptimizeXYZ(
     int index,
     cv::Mat &depth_img, cv::Mat &normal_img,
     int step_xp, int step_yp,
-    double position_opt[3], double eval_opt[2])
+    double position_opt[3], TEvalDescription *eval_desc_opt)
 {
-  double *xy_opt(NULL), *z_opt(NULL);
+  double axis_x[3]={1.0,0.0,0.0}, axis_y[3]={0.0,1.0,0.0}, axis_z[3]={0.0,0.0,1.0};
+
+  OptimizeLin2D(index, depth_img, normal_img, step_xp, step_yp,
+      axis_x, axis_y,
+      /*range_1=*/0.20, /*range_2=*/0.20, /*n_div=*/40.0,
+      /*w_depth=*/5.0, /*w_normal=*/1.0,
+      NULL, position_opt, eval_desc_opt);
+
+  OptimizeLin1D(index, depth_img, normal_img, step_xp, step_yp,
+      axis_z,
+      /*range_1=*/0.20, /*n_div=*/40.0,
+      /*w_depth=*/5.0, /*w_normal=*/0.5,
+      NULL, position_opt, eval_desc_opt);
+
+  OptimizeLin2D(index, depth_img, normal_img, step_xp, step_yp,
+      axis_x, axis_y,
+      /*range_1=*/0.05, /*range_2=*/0.05, /*n_div=*/20.0,
+      /*w_depth=*/5.0, /*w_normal=*/1.0,
+      NULL, position_opt, eval_desc_opt);
+
+  OptimizeLin1D(index, depth_img, normal_img, step_xp, step_yp,
+      axis_z,
+      /*range_1=*/0.05, /*n_div=*/20.0,
+      /*w_depth=*/5.0, /*w_normal=*/0.5,
+      NULL, position_opt, eval_desc_opt);
+}
+//-------------------------------------------------------------------------------------------
+
+void TRayTracePoseEstimator::OptimizeLin1D(
+    int index,
+    cv::Mat &depth_img, cv::Mat &normal_img,
+    int step_xp, int step_yp,
+    const double axis_1[3],
+    const double &range_1, const double &n_div,
+    const double &w_depth, const double &w_normal,
+    double opt_1[1], double position_opt[3], TEvalDescription *eval_desc_opt)
+{
+  Eigen::Vector3d xyz0(poses_[index].X), a1(axis_1), xyz(0.0,0.0,0.0);
+  double r1(0.5*range_1);
+  double t1_best(0.0);
+  // Evaluate current pose:
+  TEvalDescription eval_desc_best;
+  GetEvalDescription(index, depth_img, normal_img,
+      eval_desc_best, step_xp, step_yp);
+  // Brute force optimization:
+  for(double t1(-r1); t1<+r1; t1+= 2.0*r1/n_div)
+  {
+    xyz= xyz0 + t1*a1;
+    SetXYZ(index, xyz[0],xyz[1],xyz[2]);
+    TEvalDescription eval_desc;
+    if(!GetEvalDescription(index, depth_img, normal_img,
+          eval_desc, step_xp, step_yp))
+      continue;
+    if(CompareEvalDescriptions(eval_desc,eval_desc_best,w_depth,w_normal)>0)
+    {
+      t1_best= t1;
+      eval_desc_best= eval_desc;
+    }
+  }
+  xyz= xyz0 + t1_best*a1;
+  SetXYZ(index, xyz[0],xyz[1],xyz[2]);
+  if(opt_1)
+  {
+    opt_1[0]= t1_best;
+  }
   if(position_opt)
   {
-    xy_opt= position_opt+0;
-    z_opt= position_opt+2;
+    position_opt[0]= xyz[0];
+    position_opt[1]= xyz[1];
+    position_opt[2]= xyz[2];
   }
-  OptimizeXY(index, depth_img, normal_img, step_xp, step_yp,
-      /*range_x=*/0.20, /*range_y=*/0.20, /*n_div=*/40.0,
-      /*w_depth=*/5.0, /*w_normal=*/1.0,
-      xy_opt, eval_opt);
-  OptimizeZ(index, depth_img, normal_img, step_xp, step_yp,
-      /*range_z=*/0.20, /*n_div=*/40.0,
-      /*w_depth=*/5.0, /*w_normal=*/0.5,
-      z_opt, eval_opt);
-  OptimizeXY(index, depth_img, normal_img, step_xp, step_yp,
-      /*range_x=*/0.05, /*range_y=*/0.05, /*n_div=*/20.0,
-      /*w_depth=*/5.0, /*w_normal=*/1.0,
-      xy_opt, eval_opt);
-  OptimizeZ(index, depth_img, normal_img, step_xp, step_yp,
-      /*range_z=*/0.05, /*n_div=*/20.0,
-      /*w_depth=*/5.0, /*w_normal=*/0.5,
-      z_opt, eval_opt);
+  if(eval_desc_opt)
+  {
+    *eval_desc_opt= eval_desc_best;
+  }
 }
 //-------------------------------------------------------------------------------------------
 
@@ -502,34 +572,31 @@ void TRayTracePoseEstimator::OptimizeLin2D(
     const double axis_1[3], const double axis_2[3],
     const double &range_1, const double &range_2, const double &n_div,
     const double &w_depth, const double &w_normal,
-    double opt_12[2], double position_opt[3], double eval_opt[2])
+    double opt_12[2], double position_opt[3], TEvalDescription *eval_desc_opt)
 {
   Eigen::Vector3d xyz0(poses_[index].X), a1(axis_1), a2(axis_2), xyz(0.0,0.0,0.0);
   double r1(0.5*range_1), r2(0.5*range_2);
-  double t1_best(0.0), t2_best(0.0), eval_best(100.0);
-  double sqdiff_depth_best(100.0), sqdiff_normal_best(100.0);
+  double t1_best(0.0), t2_best(0.0);
+  // Evaluate current pose:
+  TEvalDescription eval_desc_best;
+  GetEvalDescription(index, depth_img, normal_img,
+      eval_desc_best, step_xp, step_yp);
+  // Brute force optimization:
   for(double t1(-r1); t1<+r1; t1+= 2.0*r1/n_div)
   {
     for(double t2(-r2); t2<+r2; t2+= 2.0*r2/n_div)
     {
       xyz= xyz0 + t1*a1 + t2*a2;
       SetXYZ(index, xyz[0],xyz[1],xyz[2]);
-      double sqdiff_depth(0.0), sqdiff_normal(0.0), eval(0.0);
-      int n_invalid_depth(0), n_invalid_normal(0), n_invalid_range(0);
-      GetDistance(index, depth_img, normal_img,
-          sqdiff_depth, sqdiff_normal,
-          n_invalid_depth, n_invalid_normal, n_invalid_range,
-          step_xp, step_yp);
-      if(n_invalid_range>0)  continue;  // We do not use if some points are out of the range
-      eval= sqdiff_depth*w_depth + sqdiff_normal*w_normal;
-      if(eval<eval_best)
+      TEvalDescription eval_desc;
+      if(!GetEvalDescription(index, depth_img, normal_img,
+            eval_desc, step_xp, step_yp))
+        continue;
+      if(CompareEvalDescriptions(eval_desc,eval_desc_best,w_depth,w_normal)>0)
       {
         t1_best= t1;
         t2_best= t2;
-        eval_best= eval;
-        sqdiff_depth_best= sqdiff_depth;
-        sqdiff_normal_best= sqdiff_normal;
-        // std::cerr<<eval_best<<"\t"<<t1_best<<"\t"<<t2_best<<std::endl;
+        eval_desc_best= eval_desc;
       }
     }
   }
@@ -546,10 +613,124 @@ void TRayTracePoseEstimator::OptimizeLin2D(
     position_opt[1]= xyz[1];
     position_opt[2]= xyz[2];
   }
-  if(eval_opt)
+  if(eval_desc_opt)
   {
-    eval_opt[0]= sqdiff_depth_best;
-    eval_opt[1]= sqdiff_normal_best;
+    *eval_desc_opt= eval_desc_best;
+  }
+}
+//-------------------------------------------------------------------------------------------
+
+void TRayTracePoseEstimator::OptimizeRot1D(
+    int index,
+    cv::Mat &depth_img, cv::Mat &normal_img,
+    int step_xp, int step_yp,
+    const double axis_1[3],
+    const double &range_1, const double &n_div,
+    const double &w_depth, const double &w_normal,
+    double opt_1[1], double rotation_opt[4], TEvalDescription *eval_desc_opt)
+{
+  Eigen::Quaterniond q0(QToEigMat(poses_[index].X+3));
+  Eigen::Vector3d a1(axis_1);
+  double qx[4]= {0.0,0.0,0.0,0.0};
+  double r1(0.5*range_1);
+  double t1_best(0.0);
+  // Evaluate current pose:
+  TEvalDescription eval_desc_best;
+  GetEvalDescription(index, depth_img, normal_img,
+      eval_desc_best, step_xp, step_yp);
+  // Brute force optimization:
+  for(double t1(-r1); t1<+r1; t1+= 2.0*r1/n_div)
+  {
+    Eigen::Quaterniond q= Eigen::AngleAxisd(t1, a1) * q0;
+    EigMatToQ(q, qx);
+    SetQ(index, qx);
+    TEvalDescription eval_desc;
+    if(!GetEvalDescription(index, depth_img, normal_img,
+          eval_desc, step_xp, step_yp))
+      continue;
+    if(CompareEvalDescriptions(eval_desc,eval_desc_best,w_depth,w_normal)>0)
+    {
+      t1_best= t1;
+      eval_desc_best= eval_desc;
+    }
+  }
+  Eigen::Quaterniond q= Eigen::AngleAxisd(t1_best, a1) * q0;
+  EigMatToQ(q, qx);
+  SetQ(index, qx);
+  if(opt_1)
+  {
+    opt_1[0]= t1_best;
+  }
+  if(rotation_opt)
+  {
+    rotation_opt[0]= qx[0];
+    rotation_opt[1]= qx[1];
+    rotation_opt[2]= qx[2];
+    rotation_opt[3]= qx[3];
+  }
+  if(eval_desc_opt)
+  {
+    *eval_desc_opt= eval_desc_best;
+  }
+}
+//-------------------------------------------------------------------------------------------
+
+void TRayTracePoseEstimator::OptimizeRot2D(
+    int index,
+    cv::Mat &depth_img, cv::Mat &normal_img,
+    int step_xp, int step_yp,
+    const double axis_1[3], const double axis_2[3],
+    const double &range_1, const double &range_2, const double &n_div,
+    const double &w_depth, const double &w_normal,
+    double opt_12[2], double rotation_opt[4], TEvalDescription *eval_desc_opt)
+{
+  Eigen::Quaterniond q0(QToEigMat(poses_[index].X+3));
+  Eigen::Vector3d a1(axis_1), a2(axis_2);
+  double qx[4]= {0.0,0.0,0.0,0.0};
+  double r1(0.5*range_1), r2(0.5*range_2);
+  double t1_best(0.0), t2_best(0.0);
+  // Evaluate current pose:
+  TEvalDescription eval_desc_best;
+  GetEvalDescription(index, depth_img, normal_img,
+      eval_desc_best, step_xp, step_yp);
+  // Brute force optimization:
+  for(double t1(-r1); t1<+r1; t1+= 2.0*r1/n_div)
+  {
+    for(double t2(-r2); t2<+r2; t2+= 2.0*r2/n_div)
+    {
+      Eigen::Quaterniond q= Eigen::AngleAxisd(t2, a2) * (Eigen::AngleAxisd(t1, a1) * q0);
+      EigMatToQ(q, qx);
+      SetQ(index, qx);
+      TEvalDescription eval_desc;
+      if(!GetEvalDescription(index, depth_img, normal_img,
+            eval_desc, step_xp, step_yp))
+        continue;
+      if(CompareEvalDescriptions(eval_desc,eval_desc_best,w_depth,w_normal)>0)
+      {
+        t1_best= t1;
+        t2_best= t2;
+        eval_desc_best= eval_desc;
+      }
+    }
+  }
+  Eigen::Quaterniond q= Eigen::AngleAxisd(t2_best, a2) * (Eigen::AngleAxisd(t1_best, a1) * q0);
+  EigMatToQ(q, qx);
+  SetQ(index, qx);
+  if(opt_12)
+  {
+    opt_12[0]= t1_best;
+    opt_12[1]= t2_best;
+  }
+  if(rotation_opt)
+  {
+    rotation_opt[0]= qx[0];
+    rotation_opt[1]= qx[1];
+    rotation_opt[2]= qx[2];
+    rotation_opt[3]= qx[3];
+  }
+  if(eval_desc_opt)
+  {
+    *eval_desc_opt= eval_desc_best;
   }
 }
 //-------------------------------------------------------------------------------------------

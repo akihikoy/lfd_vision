@@ -345,7 +345,7 @@ void DownsampleByVoxelGrid(
 
 // Remove planar objects from a point cloud
 template <typename t_point>
-bool RemovePlains(
+bool RemovePlanes(
     typename pcl::PointCloud<t_point>::Ptr &cloud_io,
     const double &non_planar_points_ratio,
     const double &ransac_dist_thresh,
