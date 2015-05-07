@@ -187,6 +187,9 @@ public:
   // Add an object to the scene and return its index
   int AddObject(const TRayTraceModel &model, const double pose[7]);
 
+  // Get pose=x,y,z,quaternion of the object
+  const TPose& Pose(int index) const {return poses_[index];}
+
   // Set x,y,z of the object
   inline void SetXYZ(int index, const double &x, const double &y, const double &z);
   // Set x,y,z of the object
@@ -209,12 +212,14 @@ public:
     depth_img, normal_img : depth and normal images.
     desc : obtained description.
     step_xp, step_yp : step size to compute the model image.  Greater is faster but bigger error.
+    f_depth_normalize: normalization factor of depth.
     Return true if desc is valid.
   */
   bool GetEvalDescription(
       int index,
       cv::Mat &depth_img, cv::Mat &normal_img,
-      TEvalDescription &desc, int step_xp=2, int step_yp=2);
+      TEvalDescription &desc, int step_xp=2, int step_yp=2,
+      const double &f_depth_normalize=1.0);
 
   // void OptimizeXY(
       // int index,

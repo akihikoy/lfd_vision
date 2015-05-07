@@ -2,7 +2,7 @@
   <node name="rt_pose_estimator_m100" pkg="pr2_lfd_vision" type="rt_pose_estimator_node">
     <remap from="/camera/depth/points_xyzrgb" to="/sentis_m100/depth_non_filtered" />
     <param name="no_rgb_in_points" value="true" />
-    <param name="remove_plane_from_cloud" value="true" />
+    <param name="remove_plane_from_cloud" value="false" />
     <param name="normal_calc_step" value="3" />
     <param name="opt_render_dx" value="3" />
     <param name="opt_render_dy" value="3" />
@@ -25,5 +25,10 @@
        0.0, -99.1001, 59.2054, 0.0,
        0.0, 0.0, 1.0, 0.0]
     </rosparam>
+    <!--<rosparam param="cam_proj">
+      [-96.4376, 0.0, 81.5862, 0.0,
+       0.0, -96.0888, 59.6041, 0.0,
+       0.0, 0.0, 1.0, 0.0]
+    </rosparam>-->
   </node>
 </launch>

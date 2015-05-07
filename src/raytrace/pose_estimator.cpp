@@ -321,12 +321,14 @@ void TRayTracePoseEstimator::Render(
   depth_img, normal_img : depth and normal images.
   desc : obtained description.
   step_xp, step_yp : step size to compute the model image.  Greater is faster but bigger error.
+  f_depth_normalize: normalization factor of depth.
   Return true if desc is valid.
 */
 bool TRayTracePoseEstimator::GetEvalDescription(
     int index,
     cv::Mat &depth_img, cv::Mat &normal_img,
-    TEvalDescription &desc, int step_xp, int step_yp)
+    TEvalDescription &desc, int step_xp, int step_yp,
+    const double &f_depth_normalize)
 {
   std::list<Imager::Intersection> intersections;
   Imager::TROI2D<int> img_roi;
@@ -335,6 +337,8 @@ bool TRayTracePoseEstimator::GetEvalDescription(
 
   float invalid_depth(0.0f);
   cv::Vec3f invalid_normal(0.0,0.0,0.0);
+  double f_depth_n(f_depth_normalize);
+  if(f_depth_n<1.0e-6)  f_depth_n= 1.0;
   desc= TEvalDescription();
   double sq_diff_depth(0.0), sq_diff_normal(0.0);
   for(std::list<Imager::Intersection>::const_iterator itr(intersections.begin()),last(intersections.end());
@@ -352,7 +356,7 @@ bool TRayTracePoseEstimator::GetEvalDescription(
     // Update difference:
     if(depth_img.at<float>(py,px) != invalid_depth)
     {
-      sq_diff_depth= Sq(depth_img.at<float>(py,px) - itr->point.z);
+      sq_diff_depth= Sq((depth_img.at<float>(py,px) - itr->point.z)/f_depth_n);
       desc.SqDiffDepth+= sq_diff_depth;
       if(sq_diff_depth<=sq_diff_depth_thresh_)
         ++desc.NumMatchedDepth;
@@ -409,7 +413,7 @@ void TRayTracePoseEstimator::OptimizeXY(
   double x_best(x0), y_best(y0);
   TEvalDescription eval_desc_best;
   GetEvalDescription(index, depth_img, normal_img,
-      eval_desc_best, step_xp, step_yp);
+      eval_desc_best, step_xp, step_yp, z0);
   // Brute force optimization:
   for(double x(x0-rx); x<x0+rx; x+= 2.0*rx/n_div)
   {
@@ -418,7 +422,7 @@ void TRayTracePoseEstimator::OptimizeXY(
       SetXYZ(index, x,y,z0);
       TEvalDescription eval_desc;
       if(!GetEvalDescription(index, depth_img, normal_img,
-            eval_desc, step_xp, step_yp))
+            eval_desc, step_xp, step_yp, z0))
         continue;
       if(CompareEvalDescriptions(eval_desc,eval_desc_best,w_depth,w_normal)>0)
       {
@@ -456,14 +460,14 @@ void TRayTracePoseEstimator::OptimizeZ(
   double z_best(z0);
   TEvalDescription eval_desc_best;
   GetEvalDescription(index, depth_img, normal_img,
-      eval_desc_best, step_xp, step_yp);
+      eval_desc_best, step_xp, step_yp, z0);
   // Brute force optimization:
   for(double z(z0-rz); z<z0+rz; z+= 2.0*rz/n_div)
   {
     SetXYZ(index, x0,y0,z);
     TEvalDescription eval_desc;
     if(!GetEvalDescription(index, depth_img, normal_img,
-          eval_desc, step_xp, step_yp))
+          eval_desc, step_xp, step_yp, z0))
       continue;
     if(CompareEvalDescriptions(eval_desc,eval_desc_best,w_depth,w_normal)>0)
     {
@@ -530,7 +534,7 @@ void TRayTracePoseEstimator::OptimizeLin1D(
   // Evaluate current pose:
   TEvalDescription eval_desc_best;
   GetEvalDescription(index, depth_img, normal_img,
-      eval_desc_best, step_xp, step_yp);
+      eval_desc_best, step_xp, step_yp, xyz0[2]);
   // Brute force optimization:
   for(double t1(-r1); t1<+r1; t1+= 2.0*r1/n_div)
   {
@@ -538,7 +542,7 @@ void TRayTracePoseEstimator::OptimizeLin1D(
     SetXYZ(index, xyz[0],xyz[1],xyz[2]);
     TEvalDescription eval_desc;
     if(!GetEvalDescription(index, depth_img, normal_img,
-          eval_desc, step_xp, step_yp))
+          eval_desc, step_xp, step_yp, xyz0[2]))
       continue;
     if(CompareEvalDescriptions(eval_desc,eval_desc_best,w_depth,w_normal)>0)
     {
@@ -580,7 +584,7 @@ void TRayTracePoseEstimator::OptimizeLin2D(
   // Evaluate current pose:
   TEvalDescription eval_desc_best;
   GetEvalDescription(index, depth_img, normal_img,
-      eval_desc_best, step_xp, step_yp);
+      eval_desc_best, step_xp, step_yp, xyz0[2]);
   // Brute force optimization:
   for(double t1(-r1); t1<+r1; t1+= 2.0*r1/n_div)
   {
@@ -590,7 +594,7 @@ void TRayTracePoseEstimator::OptimizeLin2D(
       SetXYZ(index, xyz[0],xyz[1],xyz[2]);
       TEvalDescription eval_desc;
       if(!GetEvalDescription(index, depth_img, normal_img,
-            eval_desc, step_xp, step_yp))
+            eval_desc, step_xp, step_yp, xyz0[2]))
         continue;
       if(CompareEvalDescriptions(eval_desc,eval_desc_best,w_depth,w_normal)>0)
       {
@@ -629,6 +633,7 @@ void TRayTracePoseEstimator::OptimizeRot1D(
     const double &w_depth, const double &w_normal,
     double opt_1[1], double rotation_opt[4], TEvalDescription *eval_desc_opt)
 {
+  double z0(poses_[index].X[2]);
   Eigen::Quaterniond q0(QToEigMat(poses_[index].X+3));
   Eigen::Vector3d a1(axis_1);
   double qx[4]= {0.0,0.0,0.0,0.0};
@@ -637,7 +642,7 @@ void TRayTracePoseEstimator::OptimizeRot1D(
   // Evaluate current pose:
   TEvalDescription eval_desc_best;
   GetEvalDescription(index, depth_img, normal_img,
-      eval_desc_best, step_xp, step_yp);
+      eval_desc_best, step_xp, step_yp, z0);
   // Brute force optimization:
   for(double t1(-r1); t1<+r1; t1+= 2.0*r1/n_div)
   {
@@ -646,7 +651,7 @@ void TRayTracePoseEstimator::OptimizeRot1D(
     SetQ(index, qx);
     TEvalDescription eval_desc;
     if(!GetEvalDescription(index, depth_img, normal_img,
-          eval_desc, step_xp, step_yp))
+          eval_desc, step_xp, step_yp, z0))
       continue;
     if(CompareEvalDescriptions(eval_desc,eval_desc_best,w_depth,w_normal)>0)
     {
@@ -684,6 +689,7 @@ void TRayTracePoseEstimator::OptimizeRot2D(
     const double &w_depth, const double &w_normal,
     double opt_12[2], double rotation_opt[4], TEvalDescription *eval_desc_opt)
 {
+  double z0(poses_[index].X[2]);
   Eigen::Quaterniond q0(QToEigMat(poses_[index].X+3));
   Eigen::Vector3d a1(axis_1), a2(axis_2);
   double qx[4]= {0.0,0.0,0.0,0.0};
@@ -692,7 +698,7 @@ void TRayTracePoseEstimator::OptimizeRot2D(
   // Evaluate current pose:
   TEvalDescription eval_desc_best;
   GetEvalDescription(index, depth_img, normal_img,
-      eval_desc_best, step_xp, step_yp);
+      eval_desc_best, step_xp, step_yp, z0);
   // Brute force optimization:
   for(double t1(-r1); t1<+r1; t1+= 2.0*r1/n_div)
   {
@@ -703,7 +709,7 @@ void TRayTracePoseEstimator::OptimizeRot2D(
       SetQ(index, qx);
       TEvalDescription eval_desc;
       if(!GetEvalDescription(index, depth_img, normal_img,
-            eval_desc, step_xp, step_yp))
+            eval_desc, step_xp, step_yp, z0))
         continue;
       if(CompareEvalDescriptions(eval_desc,eval_desc_best,w_depth,w_normal)>0)
       {

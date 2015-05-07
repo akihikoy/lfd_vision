@@ -208,6 +208,32 @@ std::vector<double> GetCameraProjFromPointCloud(const pcl::PointCloud<pcl::Point
 }
 //-------------------------------------------------------------------------------------------
 
+// Get an error map of camera projection matrix over point cloud data.
+void CameraProjErrorImgFromCloud(
+    const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr &cloud,
+    cv::Mat &err_img, const double &Fx, const double &Fy, const double &Cx, const double &Cy)
+{
+  err_img.create(cloud->height, cloud->width, CV_8UC3);
+  for(size_t y(0); y<cloud->height; ++y)
+  {
+    for(size_t x(0); x<cloud->width; ++x)
+    {
+      const pcl::PointXYZRGB &pt(cloud->at(x,y));
+      if(!(IsValid(pt) && std::fabs(pt.z)>0.2))
+      {
+        err_img.at<cv::Vec3b>(y,x)= cv::Vec3b(0.0,0.0,0.0);
+      }
+      else
+      {
+        int u= Fx * pt.x/pt.z + Cx;
+        int v= Fy * pt.y/pt.z + Cy;
+        err_img.at<cv::Vec3b>(y,x)= cv::Vec3b(0.0,std::fabs(u-x),std::fabs(v-y));
+      }
+    }
+  }
+}
+//-------------------------------------------------------------------------------------------
+
 bool AssignInfToPlane(
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr &cloud_io,
     const double &ransac_dist_thresh,

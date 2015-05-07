@@ -78,6 +78,12 @@ void ConvertPointCloudToNormalImage(
 std::vector<double> GetCameraProjFromPointCloud(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr &cloud);
 //-------------------------------------------------------------------------------------------
 
+// Get an error map of camera projection matrix over point cloud data.
+void CameraProjErrorImgFromCloud(
+    const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr &cloud,
+    cv::Mat &err_img, const double &Fx, const double &Fy, const double &Cx, const double &Cy);
+//-------------------------------------------------------------------------------------------
+
 bool AssignInfToPlane(
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr &cloud_io,
     const double &ransac_dist_thresh,

@@ -18,6 +18,7 @@
     <!--<include file="$(find pr2_gazebo)/launch/pr2.launch"/>-->
   <!--end of pr2_empty_world.launch-->
 
+  <!--<include file="$(find pr2_description)/robots/upload_pr2.launch" />-->
   <include file="$(find pr2_lfd_vision)/urdf/upload_pr2_m100.launch" />
 
   <!--Based on <include file="$(find pr2_gazebo)/launch/pr2_no_controllers.launch" />-->
@@ -38,8 +39,5 @@
     <!-- Load and Start Default Controllers -->
     <include file="$(find pr2_controller_configuration_gazebo)/pr2_default_controllers.launch" />
   <!--end of pr2.launch-->
-
-  <param name="use_collision_map" type="bool" value="false"/>
-  <include file="$(find pr2_3dnav)/both_arms_navigation.launch"/>
 
 </launch>

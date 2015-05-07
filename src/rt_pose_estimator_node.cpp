@@ -56,7 +56,7 @@ double ThGoodNormalRatio(0.1);
 double ThBadNormalRatio (0.8);
 
 double ResizeRatio(1.0);
-int DisplayMode(0);  // 0: 0.5*original+render, 1: 0.25*original+render, 2: render, 3: original.
+int DisplayMode(0);  // 0: 0.5*original+render, 1: 0.25*original+render, 2: render, 3: original, 4: camera_info error.
 
 }
 //-------------------------------------------------------------------------------------------
@@ -195,7 +195,7 @@ void CallbackPointCloud(const sensor_msgs::PointCloud2ConstPtr &msg)
   {
     TRayTracePoseEstimator::TEvalDescription eval_desc, ed0;
     CurrRTPoseEstimator->second.GetEvalDescription(TargetObject, depth_img, normal_img,
-        eval_desc, OptRenderStepX, OptRenderStepY);
+        eval_desc, OptRenderStepX, OptRenderStepY, /*f_depth_normalize=*/CurrRTPoseEstimator->second.Pose(TargetObject).X[2]);
     CurrRTPoseEstimator->second.CompareEvalDescriptions(eval_desc,ed0,1.0,1.0);
     std::cerr<<"Quality,RMatchedDepth,RMatchedNormal,SqDiffDepth,SqDiffNormal= "
         <<eval_desc.Quality<<", "<<eval_desc.RMatchedDepth<<", "<<eval_desc.RMatchedNormal<<", "<<eval_desc.SqDiffDepth<<", "<<eval_desc.SqDiffNormal<<std::endl;
@@ -246,7 +246,7 @@ void CallbackPointCloud(const sensor_msgs::PointCloud2ConstPtr &msg)
   else if(c=='m')
   {
     ++DisplayMode;
-    if(DisplayMode>=4)  DisplayMode= 0;
+    if(DisplayMode>4)  DisplayMode= 0;
     std::cerr<<"DisplayMode: "<<DisplayMode<<std::endl;
   }
   else if(c=='c')  // Calibration from point cloud
@@ -279,7 +279,7 @@ void CallbackPointCloud(const sensor_msgs::PointCloud2ConstPtr &msg)
   }
 
   // Rendering:
-  // 0: 0.5*original+render, 1: 0.25*original+render, 2: render, 3: original.
+  // 0: 0.5*original+render, 1: 0.25*original+render, 2: render, 3: original, 4: camera_info error.
   if(DisplayMode==0 && RayTracePoseEstimators.size()>0)
   {
     depth_img*= 0.5;
@@ -295,7 +295,7 @@ void CallbackPointCloud(const sensor_msgs::PointCloud2ConstPtr &msg)
     depth_img.setTo(0.0);
     normal_img.setTo(cv::Scalar(0.0,0.0,0.0));
   }
-  if(DisplayMode!=3)
+  if(DisplayMode!=3 && DisplayMode!=4)
   {
     for(std::map<std::string, TRayTracePoseEstimator>::iterator
           itr(RayTracePoseEstimators.begin()),itr_end(RayTracePoseEstimators.end());
@@ -307,6 +307,12 @@ void CallbackPointCloud(const sensor_msgs::PointCloud2ConstPtr &msg)
       cv::rectangle(normal_img,cv::Point(roi.Min[0],roi.Min[1]), cv::Point(roi.Max[0],roi.Max[1]), cv::Scalar(255,255,255), 1, 8, 0);
       itr->second.Render(depth_img, normal_img);
     }
+  }
+  if(DisplayMode==4)
+  {
+    CameraProjErrorImgFromCloud(cloud, normal_img,
+        CameraInfo.Fx, CameraInfo.Fy, CameraInfo.Cx, CameraInfo.Cy);
+    normal_img*= 100.0;
   }
 
   if(ResizeRatio!=1.0)
