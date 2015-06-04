@@ -73,6 +73,16 @@ target_link_libraries(ode_pour_sim_node
       /home/akihiko/prg/libode/ode-latest/drawstuff/src/.libs/libdrawstuff.a
       SM ICE GL Xext X11 GLU)
 
+rosbuild_add_executable(ode_grpour_sim_node
+      src/ode_grpour_sim_node.cpp
+      src/ode_grpour_sim.cpp)
+add_definitions(-DdDOUBLE)
+include_directories(/home/akihiko/prg/libode/ode-latest/include)
+target_link_libraries(ode_grpour_sim_node
+      /home/akihiko/prg/libode/ode-latest/ode/src/.libs/libode.a
+      /home/akihiko/prg/libode/ode-latest/drawstuff/src/.libs/libdrawstuff.a
+      SM ICE GL Xext X11 GLU)
+
 # -L/usr/X11R6/lib -ldl  -lpthread
 
 

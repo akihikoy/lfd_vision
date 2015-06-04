@@ -122,7 +122,7 @@ class TRayTracePoseEstimator
 //===========================================================================================
 {
 public:
-  struct TPose {double X[7]; /*[0-2]: position x,y,z, [3-6]: orientation x,y,z,w.*/};
+  // struct TPose {double X[7]; /*[0-2]: position x,y,z, [3-6]: orientation x,y,z,w.*/};
 
   // Rotation of an object in YZX-Euler angles in DEGREE.
   struct TDegRotation {double Y,Z,X;  TDegRotation():Y(0.0),Z(0.0),X(0.0){}};

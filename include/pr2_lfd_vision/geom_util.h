@@ -16,6 +16,11 @@ namespace trick
 {
 //-------------------------------------------------------------------------------------------
 
+// For STL containers:
+struct TPose {double X[7]; /*[0-2]: position x,y,z, [3-6]: orientation qx,qy,qz,qw.*/};
+struct TPosVel {double X[6]; /*[0-2]: position x,y,z, [3-5]: velocity vx,vy,vz.*/};
+//-------------------------------------------------------------------------------------------
+
 template <typename t_value>
 inline t_value Sq(const t_value &val)
 {
@@ -216,6 +221,52 @@ inline void GetVisualNormal(
     b= 0.5*(1.0+nz);
   }
 }
+//-------------------------------------------------------------------------------------------
+
+template <typename t_value=double, bool using_minmax=false>
+struct TRotatedBoundingBox
+{
+  t_value X[7];  // Center pose: x,y,z, qx,qy,qz,qw
+  t_value Size[3];  // x-size,y-size,z-size; used if not using_minmax
+  t_value Min[3], Max[3];  // min and max of x,y,z; used if using_minmax
+
+  TRotatedBoundingBox()  {Init();}
+
+  void Init()
+    {
+      for(int d(0);d<7;++d)  X[d]= 0.0;
+      X[6]= 1.0;  // qw
+      for(int d(0);d<3;++d)  Size[d]= 0.0;
+    }
+
+  // Check if a given point (x,y,z) is inside the bounding box.
+  //   inv_x: Use the result of InvX() for speed up when evaluating many points.
+  bool IsIn(const t_value p[3], Eigen::Affine3d *inv_x=NULL) const
+    {
+      // Compute a position of p in this BB's local frame
+      t_value l_p[3];
+      if(inv_x==NULL)
+        EigMatToP(XToEigMat(X).inverse() * Eigen::Translation3d(p[0],p[1],p[2]), l_p);
+      else
+        EigMatToP((*inv_x) * Eigen::Translation3d(p[0],p[1],p[2]), l_p);
+      // Check if l_p is inside the AABB
+      if(using_minmax)  // using Min,Max
+      {
+        for(int d(0);d<3;++d)
+          if(l_p[d]<Min[d] || l_p[d]>Max[d])
+            return false;
+      }
+      else  // using Size
+      {
+        for(int d(0);d<3;++d)
+          if(l_p[d]<-0.5*Size[d] || l_p[d]>+0.5*Size[d])
+            return false;
+      }
+      return true;
+    }
+
+  Eigen::Affine3d InvX() const {return XToEigMat(X).inverse();}
+};
 //-------------------------------------------------------------------------------------------
 
 

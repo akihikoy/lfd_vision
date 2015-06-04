@@ -1,0 +1,14 @@
+int32 MaxContacts
+int32 BallNum
+int32 BallType
+float32 BallRad
+float32 BallBoxRatio
+float32 BoxThickness
+float32[] RcvPos
+float32[] RcvSize
+float32 ContactBounce
+float32 ContactBounceVel
+float32 ContactSoftCFM
+float32 GripperHeight
+float32 TimeStep
+float32 Gravity

@@ -9,6 +9,7 @@
 #ifndef flow_analyzer_h
 #define flow_analyzer_h
 //-------------------------------------------------------------------------------------------
+#include "pr2_lfd_vision/geom_util.h"
 #include "pr2_lfd_vision/pcl_util.h"
 //-------------------------------------------------------------------------------------------
 #include <pcl/point_types.h>
@@ -35,12 +36,10 @@ struct TBBEquation
 };
 //-------------------------------------------------------------------------------------------
 
-struct TBoundingBox
+struct TBoundingBox : TRotatedBoundingBox<double>
 {
   bool Active;
   bool IsEquation;
-  double X[7];  // x,y,z, qx,qy,qz,qw
-  double Size[3];  // x-size,y-size,z-size
   TBBEquation Eq;
   TBoundingBox() : Active(false), IsEquation(false) {}
 };
