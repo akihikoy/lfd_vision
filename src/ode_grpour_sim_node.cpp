@@ -9,6 +9,8 @@
 #include "pr2_lfd_vision/ode_grpour_sim.h"
 #include "pr2_lfd_vision/ODEConfig.h"
 #include "pr2_lfd_vision/ODESensor.h"
+#include "pr2_lfd_vision/ODEViz.h"
+#include "pr2_lfd_vision/ODEVizPrimitive.h"
 #include "pr2_lfd_vision/ODEGetConfig.h"
 #include "pr2_lfd_vision/ODEReset2.h"
 //-------------------------------------------------------------------------------------------
@@ -23,13 +25,13 @@ namespace trick
 ros::Publisher *PRatioPub(NULL);
 ros::Publisher *PFlowPub(NULL);
 ros::Publisher *PSensorsPub(NULL);
-int NumSrc(0);
+
+std::vector<pr2_lfd_vision::ODEVizPrimitive> VizObjs;
 
 void OnSensingCallback(const ode_pour::TSensors1 &sensors)
 {
-  int num_src(sensors.NumSrc); int num_rcv(sensors.NumRcv); int num_flow(sensors.NumFlow);
+  int num_rcv(sensors.NumRcv); int num_flow(sensors.NumFlow);
   const double &z_rcv(sensors.ZRcv);
-  NumSrc= num_src;
   std_msgs::Float64 ratio_msg;
   // ratio_msg.data= 5.0*z_rcv;
   /*TEST*/ratio_msg.data= 0.0055*static_cast<double>(num_rcv);
@@ -49,10 +51,14 @@ void OnSensingCallback(const ode_pour::TSensors1 &sensors)
   for(int i(0),iend(sensors.BallX.size());i<iend;++i)
     for(int d(0);d<6;++d)
       sensors_msg.ball_x[6*i+d]= sensors.BallX[i].X[d];
+  sensors_msg.ball_colliding.resize(sensors.BallColliding.size());
+  for(int i(0),iend(sensors.BallColliding.size());i<iend;++i)
+    sensors_msg.ball_colliding[i]= sensors.BallColliding[i];
   sensors_msg.num_src              = sensors.NumSrc;
   sensors_msg.num_rcv              = sensors.NumRcv;
   sensors_msg.num_flow             = sensors.NumFlow;
   sensors_msg.num_spill            = sensors.NumSpill;
+  sensors_msg.num_bounce           = sensors.NumBounce;
   sensors_msg.z_rcv                = sensors.ZRcv;
 
   XToGPose(sensors.XSrc, sensors_msg.x_src);
@@ -64,7 +70,51 @@ void OnSensingCallback(const ode_pour::TSensors1 &sensors)
   sensors_msg.gripper_colliding    = sensors.GripperColliding;
   sensors_msg.src_colliding        = sensors.SrcColliding;
   sensors_msg.time                 = sensors.Time;
+  sensors_msg.on_init              = sensors.OnInit;
   PSensorsPub->publish(sensors_msg);
+}
+//-------------------------------------------------------------------------------------------
+
+void OnDrawCallback()
+{
+  dReal x[7]={0.0,0.0,0.0, 1.0,0.0,0.0,0.0};
+  dReal sides[4]={0.0,0.0,0.0,0.0};
+  dMatrix3 R;
+  dVector3 p;
+  for(std::vector<pr2_lfd_vision::ODEVizPrimitive>::const_iterator
+      itr(VizObjs.begin()),itr_e(VizObjs.end()); itr!=itr_e; ++itr)
+  {
+    dsSetColorAlpha(itr->color.r,itr->color.g,itr->color.b,itr->color.a);
+    GPoseToX(itr->pose, x);
+    dReal q[4]= {x[6],x[3],x[4],x[5]};
+    switch(itr->type)
+    {
+    case pr2_lfd_vision::ODEVizPrimitive::LINE:
+      p[0]= x[0]+itr->param[0];
+      p[1]= x[1]+itr->param[1];
+      p[2]= x[2]+itr->param[2];
+      dsDrawLine(x, p);
+      break;
+    case pr2_lfd_vision::ODEVizPrimitive::SPHERE:
+      dRfromQ(R,q);
+      dsDrawSphere(x, R, /*rad=*/itr->param[0]);
+      break;
+    case pr2_lfd_vision::ODEVizPrimitive::CYLINDER:
+      dRfromQ(R,q);
+      dsDrawCylinder(x, R, /*len=*/itr->param[1], /*rad=*/itr->param[0]);
+      break;
+    case pr2_lfd_vision::ODEVizPrimitive::CUBE:
+      dRfromQ(R,q);
+      sides[0]= itr->param[0];
+      sides[1]= itr->param[1];
+      sides[2]= itr->param[2];
+      dsDrawBox(x, R, sides);
+      break;
+    default:
+      std::cerr<<"Unknown type:"<<itr->type<<std::endl;
+      return;
+    }
+  }
 }
 //-------------------------------------------------------------------------------------------
 
@@ -95,6 +145,12 @@ void PPourCallback(const std_msgs::Float64MultiArray &msg)
   ode_pour::TargetPourX= msg.data[0];
   ode_pour::TargetPourY= msg.data[1];
   ode_pour::TargetPourZ= msg.data[2];
+}
+//-------------------------------------------------------------------------------------------
+
+void ODEVizCallback(const pr2_lfd_vision::ODEViz &msg)
+{
+  VizObjs= msg.objects;
 }
 //-------------------------------------------------------------------------------------------
 
@@ -158,15 +214,7 @@ bool ResetSim2(pr2_lfd_vision::ODEReset2::Request &req, pr2_lfd_vision::ODEReset
 bool ResetSim(std_srvs::Empty::Request &req, std_srvs::Empty::Response &res)
 {
   std::cerr<<"Resetting simulator..."<<std::endl;
-  NumSrc= 0;
   ode_pour::Reset();
-  // usleep(50*1000);
-  // while(NumSrc<100)
-  // {
-    // std::cerr<<"NumSrc= "<<NumSrc<<std::endl;
-    // ros::spinOnce();
-    // usleep(50*1000);
-  // }
   std::cerr<<"done."<<std::endl;
   return true;
 }
@@ -214,6 +262,7 @@ int main(int argc, char**argv)
 
   ros::Subscriber sub_theta= node.subscribe("theta", 1, &ThetaCallback);
   ros::Subscriber sub_ppour= node.subscribe("ppour", 1, &PPourCallback);
+  ros::Subscriber sub_viz= node.subscribe("viz", 1, &ODEVizCallback);
   ros::ServiceServer srv_get_config= node.advertiseService("get_config", &GetConfig);
   ros::ServiceServer srv_reset= node.advertiseService("reset", &ResetSim);
   ros::ServiceServer srv_reset2= node.advertiseService("reset2", &ResetSim2);
@@ -221,6 +270,7 @@ int main(int argc, char**argv)
   ros::ServiceServer srv_resume= node.advertiseService("resume", &Resume);
 
   ode_pour::SensingCallback= &OnSensingCallback;
+  ode_pour::DrawCallback= &OnDrawCallback;
   ode_pour::StepCallback= &OnStepCallback;
   ode_pour::Run(argc, argv, texture_path.c_str());
 

@@ -19,6 +19,7 @@
 #define dsDrawCylinder dsDrawCylinderD
 #define dsDrawCapsule dsDrawCapsuleD
 #define dsDrawTriangle dsDrawTriangleD
+#define dsDrawLine dsDrawLineD
 #endif
 //-------------------------------------------------------------------------------------------
 #include <vector>
@@ -62,6 +63,7 @@ extern double TimeStep;
 extern double Gravity;
 extern bool Running;
 extern void (*SensingCallback)(const TSensors1 &sensors);
+extern void (*DrawCallback)(void);
 extern void (*StepCallback)(const double &time, const double &time_step);
 //-------------------------------------------------------------------------------------------
 
@@ -246,9 +248,10 @@ public:
 
 struct TSensors1
 {
-  std::vector<int> BallSt;  // Ball status kinds (1:in src, 2:in rcv, 3:flow, 4:spill, 0:unknown)
+  std::vector<int> BallSt;  // Ball status kinds (1:in src, 2:in rcv, 3:flow, 4:spill, 5:bounce, 0:unknown)
   std::vector<TPosVel> BallX;  // Ball positions and velocities
-  int NumSrc, NumRcv, NumFlow, NumSpill;  // Number of balls in each status kind
+  std::vector<int> BallColliding;  // Ball colliding (0: not colliding, 1: colliding, 2: colliding with ground)
+  int NumSrc, NumRcv, NumFlow, NumSpill, NumBounce;  // Number of balls in each status kind
   double ZRcv;
 
   double XSrc[7], XRcv[7];  // Poses (x,y,z,qx,qy,qz,qw) of containers
@@ -259,12 +262,34 @@ struct TSensors1
   bool SrcColliding;  // If source container is colliding except for balls
 
   double Time;  // Simulation time
+  bool   OnInit;  // True during initializing
 
   void Clear()
     {
       BallSt.clear();
       BallX.clear();
-      NumSrc= 0; NumRcv= 0; NumFlow= 0; NumSpill= 0;
+      BallColliding.clear();
+      SetZeros(-1);
+    }
+
+  void SetZeros(int num_balls)
+    {
+      if(num_balls>=0)
+      {
+        BallSt.resize(num_balls);
+        BallX.resize(num_balls);
+        BallColliding.resize(num_balls);
+      }
+      for(std::vector<int>::iterator itr(BallSt.begin()),itr_end(BallSt.end());
+          itr!=itr_end; ++itr)
+        *itr= 0;
+      for(std::vector<TPosVel>::iterator itr(BallX.begin()),itr_end(BallX.end());
+          itr!=itr_end; ++itr)
+        for(int d(0);d<6;++d)  itr->X[d]= 0.0;
+      for(std::vector<int>::iterator itr(BallColliding.begin()),itr_end(BallColliding.end());
+          itr!=itr_end; ++itr)
+        *itr= 0;
+      NumSrc= 0; NumRcv= 0; NumFlow= 0; NumSpill= 0; NumBounce= 0;
       ZRcv= 0.0;
       for(int d(0);d<7;++d) XSrc[d]=0.0;  XSrc[6]=1.0;
       for(int d(0);d<7;++d) XRcv[d]=0.0;  XRcv[6]=1.0;
@@ -273,6 +298,18 @@ struct TSensors1
       GripperColliding= false;
       SrcColliding= false;
       Time= 0.0;
+      OnInit= true;
+    }
+
+  // Reset values for each new physics computation step.
+  // Only collision flags are reset. Other values are kept.
+  void ResetForStep()
+    {
+      for(std::vector<int>::iterator itr(BallColliding.begin()),itr_end(BallColliding.end());
+          itr!=itr_end; ++itr)
+        *itr= 0;
+      GripperColliding= false;
+      SrcColliding= false;
     }
 };
 //-------------------------------------------------------------------------------------------
@@ -298,7 +335,7 @@ public:
   void Draw();
 
   void ControlCallback(const double &time_step);
-  void DrawCallback();
+  void EDrawCallback();
   /* Called when b1 and b2 are colliding.
       Return whether we ignore this collision (true: ignore collision). */
   bool CollisionCallback(dBodyID &b1, dBodyID &b2, std::valarray<dContact> &contact);

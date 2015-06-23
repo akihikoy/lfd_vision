@@ -49,6 +49,7 @@ double TimeStep(0.04);
 double Gravity(-0.5);
 bool Running(true);
 void (*SensingCallback)(const TSensors1 &sensors)= NULL;
+void (*DrawCallback)(void)= NULL;
 void (*StepCallback)(const double &time, const double &time_step)= NULL;
 //-------------------------------------------------------------------------------------------
 
@@ -335,8 +336,8 @@ void TDynRobot::Draw()
 
   // dReal side(0.2),mass(1.0);
 
-  body_.resize(9+2+3);
-  link_b_.resize(9+2);  // +2: gripper
+  body_.resize(9+2+3+2);
+  link_b_.resize(9+2+2);  // +2: gripper(dummy), +2: gripper(actual)
   link_sp_.resize(3);  // xyz sliders
 
   int ib(0),ibox(0);
@@ -363,7 +364,7 @@ void TDynRobot::Draw()
     link_sp_[i].ColorCode= 5;
   }
 
-  // Gripper:
+  // Gripper (dummy to detect collision):
   double g_thickness(0.15),g_margin(0.005);
   double gripper_sizes[2][3]={
       {g_thickness, 0.35, 0.1},
@@ -455,6 +456,27 @@ void TDynRobot::Draw()
   min[0]= -0.5*sizexy; min[1]= -0.5*sizexy; min[2]= -0.5*thickness;
   max[0]= +0.5*sizexy; max[1]= +0.5*sizexy; max[2]= sizez+size2h  ;
 
+
+  // Gripper (actual; colliding with the other objects):
+  double gripper_sizes_A[2][3]={
+      {g_thickness*0.7, 0.35, 0.1},
+      {g_thickness*0.7, 0.35, 0.1}};
+  double gripper_poss_A[2][3]={
+      {+0.5*sizexy+0.5*g_thickness*0.7+g_margin, -0.05, GripperHeight},
+      {-0.5*sizexy-0.5*g_thickness*0.7-g_margin, -0.05, GripperHeight}};
+  for(int i(0); i<2; ++i,++ib,++ibox)
+  {
+    link_b_[ibox].create(space, gripper_sizes_A[i][0], gripper_sizes_A[i][1], gripper_sizes_A[i][2]);
+    body_[ib].create(world);
+    body_[ib].setPosition(B[0]+gripper_poss_A[i][0], B[1]+gripper_poss_A[i][1], B[2]+gripper_poss_A[i][2]);
+    dMass m;
+    m.setBox(1.0, gripper_sizes_A[i][0], gripper_sizes_A[i][1], gripper_sizes_A[i][2]);
+    body_[ib].setMass(&m);
+    link_b_[ibox].setBody(body_[ib]);
+    link_b_[ibox].ColorCode= 12;
+  }
+
+
   // int dir(1);
   // dMatrix3 R;
   // dRSetIdentity (R);  // Z
@@ -462,8 +484,8 @@ void TDynRobot::Draw()
   // if(dir==2) dRFromAxisAndAngle (R,1.0,0.0,0.0,0.5*M_PI);  // Y
   // body_[0].setRotation (R);
 
-  joint_f_.resize(8+2);
-  for(int i(3),j(0); i<3+9+2; ++i)
+  joint_f_.resize(8+2+2);
+  for(int i(3),j(0); i<3+9+2+2; ++i)
   {
     if(i==5)  continue;
     joint_f_[j].create(world);
@@ -665,6 +687,7 @@ void TEnvironment::Create()
 
   time_= 0.0;
   sensors_.Clear();
+  sensors_.SetZeros(balls_.BallsB().size());
 }
 //-------------------------------------------------------------------------------------------
 
@@ -672,7 +695,7 @@ void TEnvironment::StepSim(const double &time_step)
 {
   ControlCallback(time_step);
 
-  sensors_.Clear();
+  sensors_.ResetForStep();
 
   space_.collide(0,&NearCallback);
   world_.step(time_step);
@@ -684,7 +707,7 @@ void TEnvironment::StepSim(const double &time_step)
 
 void TEnvironment::Draw()
 {
-  if(Running)  DrawCallback();
+  if(Running)  EDrawCallback();
 
   balls_.Draw();
   // gripper_.Draw();
@@ -722,17 +745,16 @@ void TEnvironment::ControlCallback(const double &time_step)
 }
 //-------------------------------------------------------------------------------------------
 
-void TEnvironment::DrawCallback()
+void TEnvironment::EDrawCallback()
 {
   ODEBodyToX(source_.Body(5), BoundBoxSrc.X);
   ODEBodyToX(receiver_.Body(0), BoundBoxRcv.X);
   Eigen::Affine3d  inv_x_src(BoundBoxSrc.InvX()), inv_x_rcv(BoundBoxRcv.InvX());
   std::vector<TNCBody> &balls_b(balls_.BallsB());
   // std::vector<TNCSphere> &balls_g(balls_.BallsG());
-  sensors_.BallSt.resize(balls_b.size());
-  sensors_.BallX.resize(balls_b.size());
-  int num_src(0), num_rcv(0), num_flow(0), num_spill(0);
+  int num_src(0), num_rcv(0), num_flow(0), num_spill(0), num_bounce(0);
   double speed;
+  int prev_st(0), flow_flag(0);
   std::list<double> z_rcv_data;
   for(size_t i(0); i<balls_b.size(); ++i)
   {
@@ -745,6 +767,8 @@ void TEnvironment::DrawCallback()
     // if(angle<0.0)  angle+= 2.0*M_PI;
     // dReal angle_base= TargetAngle+0.5*M_PI;
 
+    prev_st= sensors_.BallSt[i];
+    flow_flag= 0;
     sensors_.BallSt[i]= 0;
     if(BoundBoxSrc.IsIn(pos,&inv_x_src))
     {
@@ -754,7 +778,7 @@ void TEnvironment::DrawCallback()
     }
     else if(BoundBoxRcv.IsIn(pos,&inv_x_rcv))
     {
-      if(speed<0.1)
+      if(sensors_.BallColliding[i]!=0 && speed<0.1)
       {
         balls_.SetBallCol(i,0);
         ++num_rcv;
@@ -764,9 +788,8 @@ void TEnvironment::DrawCallback()
       }
       else
       {
-        balls_.SetBallCol(i,2);
-        ++num_flow;
-        sensors_.BallSt[i]= 3;
+        // std::cerr<<"DEBUG "<<speed<<", "<<sensors_.BallColliding[i]<<std::endl;
+        flow_flag= 2;
       }
     }
     else if(pos[2]<2.0*BallRad/*speed<0.1*/)
@@ -777,9 +800,24 @@ void TEnvironment::DrawCallback()
     }
     else
     {
-      balls_.SetBallCol(i,2);
-      ++num_flow;
-      sensors_.BallSt[i]= 3;
+      flow_flag= 1;
+    }
+    if(flow_flag!=0)
+    {
+      if((prev_st==1 || prev_st==3) && sensors_.BallColliding[i]!=2
+          && !(sensors_.BallColliding[i]!=0 && speed<0.02)
+          && !(flow_flag==2 && sensors_.BallColliding[i]!=0))
+      {
+        balls_.SetBallCol(i,2);
+        ++num_flow;
+        sensors_.BallSt[i]= 3;
+      }
+      else
+      {
+        balls_.SetBallCol(i,4);
+        ++num_bounce;
+        sensors_.BallSt[i]= 5;
+      }
     }
     if(speed>0.1)  balls_.SetBallCol(i, balls_.BallCol(i)+6);
   }
@@ -794,6 +832,7 @@ void TEnvironment::DrawCallback()
   sensors_.NumRcv= num_rcv;
   sensors_.NumFlow= num_flow;
   sensors_.NumSpill= num_spill;
+  sensors_.NumBounce= num_bounce;
   sensors_.ZRcv= z_rcv;
 
   for(int d(0);d<7;++d)  sensors_.XSrc[d]= BoundBoxSrc.X[d];
@@ -805,14 +844,20 @@ void TEnvironment::DrawCallback()
 
   sensors_.Time= time_;
 
-  std::cerr<<"#src, #flow, #rcv, #spill, z_rcv= "
-    <<num_src<<", "<<num_flow<<", "<<num_rcv<<", "<<num_spill<<", "<<z_rcv/*<<", "<<speed*/<<std::endl;
+  if(sensors_.OnInit && num_src==balls_b.size())
+  {
+    sensors_.OnInit= false;
+  }
+
+  std::cerr<<"#src, #flow, #rcv, #spill, #bounce, z_rcv= "
+    <<num_src<<", "<<num_flow<<", "<<num_rcv<<", "<<num_spill<<", "<<num_bounce<<", "<<z_rcv/*<<", "<<speed*/<<std::endl;
   if(sensors_.GripperColliding || sensors_.SrcColliding)
     std::cerr<<"Collision: "
         <<(sensors_.GripperColliding?"[Gripper]":"")
         <<(sensors_.SrcColliding?"[Source]":"")<<std::endl;
 
   if(SensingCallback!=NULL)  SensingCallback(sensors_);
+  if(DrawCallback!=NULL)  DrawCallback();
 
 }
 //-------------------------------------------------------------------------------------------
@@ -821,25 +866,39 @@ void TEnvironment::DrawCallback()
     Return whether we ignore this collision (true: ignore collision). */
 bool TEnvironment::CollisionCallback(dBodyID &b1, dBodyID &b2, std::valarray<dContact> &contact)
 {
-  const dBodyID b_grippers[2]= {source_.Body(3).id(), source_.Body(4).id()};
+  // Detect gripper's collision
+  const dBodyID b_grippers_d[2]= {source_.Body(3).id(), source_.Body(4).id()};
+  const dBodyID b_grippers_a[2]= {source_.Body(14).id(), source_.Body(15).id()};
   for(int i(0); i<2; ++i)
   {
-    if(b1==b_grippers[i] || b2==b_grippers[i])
+    if(b1==b_grippers_d[i] || b2==b_grippers_d[i])
     {
+      for(int j(0); j<2; ++j)
+        if(b1==b_grippers_a[j] || b2==b_grippers_a[j])
+          return true;  // Ignore dummy gripper collision with actual gripper
       sensors_.GripperColliding= true;
-      return true;  // Ignore gripper collision
+      return true;  // Ignore dummy gripper collision
     }
   }
 
   // If a ball is colliding, return false (does not ignore the collision)
+  // TODO: Use a map [id]-->index to speed up this search
+  int idx(0),num_match(0);
   for(std::vector<TNCBody>::const_iterator itr(balls_.Body().begin()),itrend(balls_.Body().end());
-      itr!=itrend; ++itr)
+      itr!=itrend; ++itr,++idx)
   {
-    if(b1==itr->id() || b2==itr->id())  return false;
+    if(b1==itr->id() || b2==itr->id())
+    {
+      if(b1==0 || b2==0)  sensors_.BallColliding[idx]= 2;  // Colliding with ground
+      else  sensors_.BallColliding[idx]= 1;
+      ++num_match;
+    }
   }
+  if(num_match>0)  return false;
 
+  // Detect source container's collision
   bool sb1(false),sb2(false);  // Becomes true if b* is a part of src container
-  for(int i(5),iend(source_.Body().size()); i<iend; ++i)
+  for(int i(5),iend(14/*source_.Body().size()*/); i<iend; ++i)
   {
     const dBodyID b_src= source_.Body(i).id();
     if(b1==b_src)  sb1= true;
