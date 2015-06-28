@@ -251,7 +251,10 @@ int main(int argc, char**argv)
   ros::NodeHandle node("~");
 
   std::string texture_path;
+  int winx(500), winy(400);
   node.param("texture_path",texture_path,std::string("config/textures"));
+  node.param("winx",winx,winx);
+  node.param("winy",winy,winy);
 
   ros::Publisher ratio_pub= node.advertise<std_msgs::Float64>("/color_occupied_ratio", 1);
   PRatioPub= &ratio_pub;
@@ -272,7 +275,7 @@ int main(int argc, char**argv)
   ode_pour::SensingCallback= &OnSensingCallback;
   ode_pour::DrawCallback= &OnDrawCallback;
   ode_pour::StepCallback= &OnStepCallback;
-  ode_pour::Run(argc, argv, texture_path.c_str());
+  ode_pour::Run(argc, argv, texture_path.c_str(), winx, winy);
 
   return 0;
 }

@@ -364,7 +364,7 @@ private:
 
 void Create();
 void Reset();
-void Run(int argc, char **argv, const char *texture_path="textures");
+void Run(int argc, char **argv, const char *texture_path="textures", int winx=500, int winy=400);
 void Stop();
 //-------------------------------------------------------------------------------------------
 

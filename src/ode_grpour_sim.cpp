@@ -967,8 +967,10 @@ static void SimStart()
 {
   dAllocateODEDataForThread(dAllocateMaskAll);
 
-  static float xyz[3] = {0.4405,-0.4452,0.8200};
-  static float hpr[3] = {123.5000,-35.0000,0.0000};
+  // static float xyz[3] = {0.4405,-0.4452,0.8200};
+  // static float hpr[3] = {123.5000,-35.0000,0.0000};
+  static float xyz[3] = {0.4914,-1.3448,0.9500};
+  static float hpr[3] = {90.5000,-17.5000,0.0000};
   dsSetViewpoint (xyz,hpr);
 }
 //-------------------------------------------------------------------------------------------
@@ -1055,7 +1057,7 @@ void Reset()
 }
 //-------------------------------------------------------------------------------------------
 
-void Run(int argc, char **argv, const char *texture_path)
+void Run(int argc, char **argv, const char *texture_path, int winx, int winy)
 {
   // setup pointers to drawstuff callback functions
   dsFunctions fn;
@@ -1073,7 +1075,7 @@ void Run(int argc, char **argv, const char *texture_path)
   // env.Create();
   Create();
 
-  dsSimulationLoop (argc,argv,500,400,&fn);
+  dsSimulationLoop (argc,argv,winx,winy,&fn);
 
   dCloseODE();
 }
