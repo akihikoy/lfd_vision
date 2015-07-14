@@ -219,6 +219,40 @@ void TFlowFinder::GetAngleSpdImg(cv::Mat &img_angle, cv::Mat &img_spd)
 //------------------------------------------------------------------------------
 
 
+//===========================================================================================
+// Utility
+//===========================================================================================
+
+// TEST: Compute average speed, angle
+void CalcFlowAverage(const TFlowFinder &ff, cv::Vec2d &avr_xy, cv::Vec2d &avr_vel, cv::Vec2d &avr_spddir)
+{
+  double sum_amt(0.0);
+  const std::vector<TFlowElement> &flow(ff.FlowElements());
+  for(int i(0),i_end(flow.size());i<i_end;++i)
+  {
+    double amt= flow[i].Amount;
+    sum_amt+= amt;
+    avr_xy[0]+= amt*flow[i].X;
+    avr_xy[1]+= amt*flow[i].Y;
+    avr_spddir[0]+= amt*flow[i].Speed;
+    avr_spddir[1]+= amt*std::fabs(flow[i].Angle);
+  }
+  if(sum_amt>1.0e-6)
+  {
+    avr_xy/= sum_amt;
+    avr_spddir/= sum_amt;
+  }
+  else
+  {
+    avr_xy= cv::Vec2d(0.0,0.0);
+    avr_spddir= cv::Vec2d(0.0,0.0);
+  }
+  avr_vel= cv::Vec2d(avr_spddir[0]*std::cos(avr_spddir[1]), avr_spddir[0]*std::sin(avr_spddir[1]));
+  // std::cerr<<"spd,angle: "<<avr_spddir<<std::endl;
+}
+//-------------------------------------------------------------------------------------------
+
+
 //-------------------------------------------------------------------------------------------
 }  // end of trick
 //-------------------------------------------------------------------------------------------

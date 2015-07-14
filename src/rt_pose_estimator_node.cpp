@@ -8,6 +8,7 @@
 //-------------------------------------------------------------------------------------------
 #include "pr2_lfd_vision/raytrace/pose_estimator.h"
 #include "pr2_lfd_vision/pcl_util.h"
+#include "pr2_lfd_vision/vision_util.h"
 //-------------------------------------------------------------------------------------------
 #include "pr2_lfd_vision/CreateScene.h"
 #include "pr2_lfd_vision/RemoveScene.h"
@@ -320,6 +321,8 @@ void CallbackPointCloud(const sensor_msgs::PointCloud2ConstPtr &msg)
     cv::resize(depth_img, depth_img, cv::Size(0,0), ResizeRatio,ResizeRatio);
     cv::resize(normal_img, normal_img, cv::Size(0,0), ResizeRatio,ResizeRatio);
   }
+  DrawCrossOnCenter(depth_img, 20, cv::Scalar(255,255,255));
+  DrawCrossOnCenter(normal_img, 20, cv::Scalar(255,255,255));
   // cv::imshow("rgb", rgb_img);
   cv::imshow("depth", depth_img);
   cv::imshow("normal", normal_img);

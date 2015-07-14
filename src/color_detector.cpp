@@ -120,7 +120,8 @@ cv::Mat TColorDetector::Detect(const cv::Mat &src_img)
 TMultipleColorDetector::TMultipleColorDetector()
   :
     camera_window_(NULL),
-    col_radius_(-3,5,5)
+    col_radius_(-3,5,5),
+    block_area_min_(10.0)
 {
 }
 //-------------------------------------------------------------------------------------------
@@ -143,14 +144,61 @@ void TMultipleColorDetector::Reset()
 
 void TMultipleColorDetector::Detect(const cv::Mat &frame, int mode, bool verbose)
 {
+  std::vector<std::vector<cv::Point> > contours;
+  double area(0.0);
+  cv::Point2d center;
+  cv::Rect bound;
+  cv::Mat tmp_mask;
   data_ratio_.resize(Size());
-  data_median_x_.resize(Size());
-  data_median_y_.resize(Size());
+  data_area_.resize(Size());
+  data_center_xy_.resize(2*Size());
+  data_bound_.resize(4*Size());
+  nums_blocks_.resize(Size());
+  blocks_area_.clear();
+  blocks_center_xy_.clear();
   for(int i(0); i<Size(); ++i)
   {
     mask_imgs_[i]= col_detectors_[i].Detect(frame);
 
-    int nonzero= cv::countNonZero(mask_imgs_[i]), diff(0);
+    mask_imgs_[i].copyTo(tmp_mask);
+    // FindLargestContour(tmp_mask, &area, &center, &bound);
+    {
+      cv::findContours(tmp_mask,contours,CV_RETR_EXTERNAL,CV_CHAIN_APPROX_SIMPLE);
+      int n_blocks= 0;
+      if(contours.size()>0)
+      {
+        int ic_max(0);
+        double a(0.0),a_max(0.0);
+        cv::Point2d c(0,0), c_max(0,0);
+        for(int ic(0),ic_end(contours.size()); ic<ic_end; ++ic)
+        {
+          a= cv::contourArea(contours[ic],false);
+          if(a<block_area_min_)  continue;
+          ++n_blocks;
+          blocks_area_.push_back(a);
+          cv::Moments mu= cv::moments(contours[ic]);
+          c= cv::Point2d(mu.m10/mu.m00, mu.m01/mu.m00);
+          blocks_center_xy_.push_back(c.x);
+          blocks_center_xy_.push_back(c.y);
+          if(a>a_max)  {ic_max= ic; a_max= a;  c_max= c;}
+        }
+        std::vector<cv::Point> &cnt(contours[ic_max]);
+        area= a_max;
+        center= c_max;
+        bound= cv::boundingRect(cnt);
+      }
+      nums_blocks_[i]= n_blocks;
+      if(n_blocks==0)
+      {
+        area= 0.0;
+        center= cv::Point2d(0.0,0.0);
+        bound= cv::Rect(0,0,0,0);
+      }
+    }
+
+
+    // int nonzero= cv::countNonZero(mask_imgs_[i]), diff(0);
+    int nonzero(area), diff(0);
     double ratio(0.0);
     switch(mode)
     {
@@ -174,19 +222,27 @@ void TMultipleColorDetector::Detect(const cv::Mat &frame, int mode, bool verbose
       std::cerr<<"Invalid mode:"<<mode<<std::endl;
     }
 
-    int x_med(0), y_med(0);
-    GetMedian(mask_imgs_[i],x_med,y_med);
-
     data_ratio_[i]= ratio;
-    data_median_x_[i]= x_med;
-    data_median_y_[i]= y_med;
+    data_area_[i]= area;
+
+    // int x_med(0), y_med(0);
+    // GetMedian(mask_imgs_[i],x_med,y_med);
+    // data_center_xy_[2*i+0]= x_med;
+    // data_center_xy_[2*i+1]= y_med;
+
+    data_center_xy_[2*i+0]= center.x;
+    data_center_xy_[2*i+1]= center.y;
+    data_bound_[4*i+0]= bound.x;
+    data_bound_[4*i+1]= bound.y;
+    data_bound_[4*i+2]= bound.width;
+    data_bound_[4*i+3]= bound.height;
   }
 }
 //-------------------------------------------------------------------------------------------
 
 void TMultipleColorDetector::Draw(cv::Mat &img_draw)
 {
-  cv::Mat disp_imgs[3];
+  cv::Mat disp_img, disp_imgs[3];
   if(Size()>=2)
   {
     int rows(mask_imgs_[0].rows), cols(mask_imgs_[0].cols);
@@ -199,7 +255,7 @@ void TMultipleColorDetector::Draw(cv::Mat &img_draw)
       disp_imgs[1]+= double(DispColors(i)[1])/255.0 * mask_imgs_[i];
       disp_imgs[2]+= double(DispColors(i)[2])/255.0 * mask_imgs_[i];
     }
-    cv::merge(disp_imgs, 3, img_draw);
+    cv::merge(disp_imgs, 3, disp_img);
   }
   else
   {
@@ -207,12 +263,22 @@ void TMultipleColorDetector::Draw(cv::Mat &img_draw)
     disp_imgs[1]= mask_imgs_[0];
     disp_imgs[2]= mask_imgs_[0];
     // img_draw= mask_imgs_[0];
-    cv::merge(disp_imgs, 3, img_draw);
+    cv::merge(disp_imgs, 3, disp_img);
+  }
+  img_draw+= disp_img;
+
+  cv::Point2d c(0.0,0.0);
+  for(std::list<double>::const_iterator itr(blocks_center_xy_.begin()),itr_end(blocks_center_xy_.end());
+      itr!=itr_end; ++itr)
+  {
+    c.x= *itr;  ++itr;  c.y= *itr;
+    cv::circle(img_draw,c,3,0.5*cv::Scalar(DispColors(0)));
   }
 
   for(int i(0); i<Size(); ++i)
   {
-    cv::circle(img_draw,cv::Point(data_median_x_[i],data_median_y_[i]),3,0.5*cv::Scalar(DispColors(i)));
+    cv::circle(img_draw,Center(i),3,0.7*cv::Scalar(DispColors(i)));
+    cv::rectangle(img_draw, Bound(i),0.7*cv::Scalar(DispColors(i)), 1);
   }
 }
 //-------------------------------------------------------------------------------------------

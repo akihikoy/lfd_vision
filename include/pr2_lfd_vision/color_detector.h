@@ -12,6 +12,7 @@
 #include <opencv2/core/core.hpp>
 #include <opencv2/imgproc/imgproc.hpp>  // CV_BGR2HSV
 #include <vector>
+#include <list>
 //-------------------------------------------------------------------------------------------
 namespace trick
 {
@@ -108,11 +109,29 @@ public:
 
   void Reset();
 
+  const double& BlockAreaMin() const {return block_area_min_;}
+  void SetBlockAreaMin(const double &v)  {block_area_min_= v;}
+
+  // Get information
   int Size() const {return col_detectors_.size();}
   const double& Ratio(int index) const {return data_ratio_[index];}
-  const double& MedianX(int index) const {return data_median_x_[index];}
-  const double& MedianY(int index) const {return data_median_y_[index];}
+  const double& Area(int index) const {return data_area_[index];}
+  cv::Point Center(int index) const {return cv::Point(CenterX(index), CenterY(index));}
+  const double& CenterX(int index) const {return data_center_xy_[2*index];}
+  const double& CenterY(int index) const {return data_center_xy_[2*index+1];}
+  cv::Rect Bound(int index) const {return cv::Rect(data_bound_[4*index+0], data_bound_[4*index+1], data_bound_[4*index+2], data_bound_[4*index+3]);}
 
+  // Raw data access
+  const std::vector<double>& DataRatio() const {return data_ratio_;}  // [ratio] * size
+  const std::vector<double>& DataArea() const {return data_area_;}  // [area] * size
+  const std::vector<double>& DataCenterXY() const {return data_center_xy_;}  // [x,y] * size
+  const std::vector<double>& DataBound() const {return data_bound_;}  // [x,y,lx,ly] * size
+
+  const std::vector<int>&  NumsBlocks() const {return nums_blocks_;}
+  const std::list<double>& BlocksArea() const {return blocks_area_;}  // [area] * sum(nums_blocks_)
+  const std::list<double>& BlocksCenterXY() const {return blocks_center_xy_;}  // [x,y] * sum(nums_blocks_)
+
+  // Do detection
   void Detect(const cv::Mat &frame, int mode, bool verbose=true);
   void Draw(cv::Mat &img_draw);
 
@@ -131,11 +150,20 @@ private:
   std::vector<int> nonzero_base_;
   std::vector<cv::Mat>  mask_imgs_;
 
+  // Only largest contours
   std::vector<double> data_ratio_;
-  std::vector<double> data_median_x_, data_median_y_;
+  std::vector<double> data_area_;
+  std::vector<double> data_center_xy_;  // [x,y] * size
+  std::vector<double> data_bound_;  // [x,y,lx,ly] * size
+
+  // All contours of all detectors
+  std::vector<int>  nums_blocks_;
+  std::list<double> blocks_area_;  // [area] * sum(nums_blocks_)
+  std::list<double> blocks_center_xy_;  // [x,y] * sum(nums_blocks_)
 
   cv::Mat  *camera_window_;
   cv::Vec3s  col_radius_;
+  double block_area_min_;  // Minimum value of block area
 
 };
 //-------------------------------------------------------------------------------------------

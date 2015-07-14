@@ -53,11 +53,27 @@ inline bool FileExists(const std::string &filename)
 void GetMedian(const cv::Mat &src, int &x_med, int &y_med);
 //-------------------------------------------------------------------------------------------
 
+// Find the largest contour and return info. bin_src should be a binary image.
+bool FindLargestContour(const cv::Mat &bin_src,
+    double *area=NULL,
+    cv::Point2d *center=NULL,
+    cv::Rect *bound=NULL,
+    std::vector<cv::Point> *contour=NULL);
+//-------------------------------------------------------------------------------------------
+
 bool OpenVideoOut(cv::VideoWriter &vout, const char *file_name, int fps, const cv::Size &size);
 //-------------------------------------------------------------------------------------------
 
 // Rotate 90, 180, 270 degrees
 void Rotate90N(const cv::Mat &src, cv::Mat &dst, int N);
+//-------------------------------------------------------------------------------------------
+
+inline void DrawCrossOnCenter(cv::Mat &img, int size, const cv::Scalar &col, int thickness=1)
+{
+  int hsize(size/2);
+  cv::line(img, cv::Point(img.cols/2-hsize,img.rows/2), cv::Point(img.cols/2+hsize,img.rows/2), col, thickness);
+  cv::line(img, cv::Point(img.cols/2,img.rows/2-hsize), cv::Point(img.cols/2,img.rows/2+hsize), col, thickness);
+}
 //-------------------------------------------------------------------------------------------
 
 
