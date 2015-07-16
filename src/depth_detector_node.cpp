@@ -188,14 +188,15 @@ int main(int argc, char**argv)
       // TEST: Compute average speed, angle
       double sum_amt(0.0);
       cv::Vec2d avr_xy(0.0,0.0), avr_pvel(0.0,0.0), avr_vel(0.0,0.0);
-      for(int i(0);i<flow_finder.FlowElements().size();++i)
+      for(std::list<TFlowElement>::const_iterator itr(flow_finder.FlowElements().begin()),itr_end(flow_finder.FlowElements().end());
+          itr!=itr_end; ++itr)
       {
-        double amt= flow_finder.FlowElements()[i].Amount;
+        double amt= itr->Amount;
         sum_amt+= amt;
-        avr_xy[0]+= amt*flow_finder.FlowElements()[i].X;
-        avr_xy[1]+= amt*flow_finder.FlowElements()[i].Y;
-        avr_pvel[0]+= amt*flow_finder.FlowElements()[i].Speed;
-        avr_pvel[1]+= amt*std::fabs(flow_finder.FlowElements()[i].Angle);
+        avr_xy[0]+= amt*itr->X;
+        avr_xy[1]+= amt*itr->Y;
+        avr_pvel[0]+= amt*itr->Speed;
+        avr_pvel[1]+= amt*std::fabs(itr->Angle);
       }
       if(sum_amt>1.0e-6)
       {

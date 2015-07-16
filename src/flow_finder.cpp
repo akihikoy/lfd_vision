@@ -163,19 +163,20 @@ void TFlowFinder::DrawFlow(cv::Mat &frame, const cv::Scalar &color, const double
 {
   cv::Scalar col2(color*0.5);
   cv::Scalar col3(color*0.8);
-  for(int i(0); i<flow_elmts_.size(); ++i)
+  for(std::list<TFlowElement>::const_iterator itr(flow_elmts_.begin()),itr_end(flow_elmts_.end());
+      itr!=itr_end; ++itr)
   {
     // Draw contour:
-    if(flow_elmts_[i].Contour!=NULL && flow_elmts_[i].Contour->size()>0)
+    if(itr->Contour!=NULL && itr->Contour->size()>0)
     {
-      const cv::Point *pts= (const cv::Point*) cv::Mat(*flow_elmts_[i].Contour).data;
-      int npts= flow_elmts_[i].Contour->size();
+      const cv::Point *pts= (const cv::Point*) cv::Mat(*itr->Contour).data;
+      int npts= itr->Contour->size();
       cv::fillPoly(frame, &pts, &npts, /*ncontours=*/1, col2, /*lineType=*/8);
       cv::polylines(frame, &pts, &npts, /*ncontours=*/1, /*isClosed=*/true, col3, /*thickness=*/1, /*lineType=*/8);
     }
     // Draw flow:
-    cv::Point2d center(flow_elmts_[i].X, flow_elmts_[i].Y);
-    cv::Point2d vel(flow_elmts_[i].VX, flow_elmts_[i].VY);
+    cv::Point2d center(itr->X, itr->Y);
+    cv::Point2d vel(itr->VX, itr->VY);
     cv::line(frame, center, center+len*vel, color, thickness, /*line_type=*/CV_AA, 0);
   }
 }
@@ -227,15 +228,16 @@ void TFlowFinder::GetAngleSpdImg(cv::Mat &img_angle, cv::Mat &img_spd)
 void CalcFlowAverage(const TFlowFinder &ff, cv::Vec2d &avr_xy, cv::Vec2d &avr_vel, cv::Vec2d &avr_spddir)
 {
   double sum_amt(0.0);
-  const std::vector<TFlowElement> &flow(ff.FlowElements());
-  for(int i(0),i_end(flow.size());i<i_end;++i)
+  const std::list<TFlowElement> &flow(ff.FlowElements());
+  for(std::list<TFlowElement>::const_iterator itr(flow.begin()),itr_end(flow.end());
+      itr!=itr_end; ++itr)
   {
-    double amt= flow[i].Amount;
+    double amt= itr->Amount;
     sum_amt+= amt;
-    avr_xy[0]+= amt*flow[i].X;
-    avr_xy[1]+= amt*flow[i].Y;
-    avr_spddir[0]+= amt*flow[i].Speed;
-    avr_spddir[1]+= amt*std::fabs(flow[i].Angle);
+    avr_xy[0]+= amt*itr->X;
+    avr_xy[1]+= amt*itr->Y;
+    avr_spddir[0]+= amt*itr->Speed;
+    avr_spddir[1]+= amt*std::fabs(itr->Angle);
   }
   if(sum_amt>1.0e-6)
   {

@@ -27,3 +27,25 @@ src/pr2_lfd_trick
 src/pr2_lfd_vision
 
 logIK.pickle
+default_colors1.dat
+default_colors1.dat.old1
+default_colors1.dat.old2
+frame/
+hdefault_colors1.dat
+hdefault_colors2.dat
+include/pr2_lfd_vision/old/
+meshes/bkup/
+meshes/bkup2/
+meshes/bkup3/
+meshes/m100_clamp_mount.blend1
+meshes/m100_clamp_mount.blend2
+old/
+src/old/
+x2default_colors0.dat
+x2default_colors1.dat
+x2default_colors2.dat
+xdefault_colors0.dat
+xdefault_colors1.dat
+xdefault_colors2.dat
+ydefault_colors0.dat
+

@@ -56,7 +56,7 @@ public:
 
   /*! Detect specific colors from the source image, and return the mask image (0 or 255).
     \param src_img  Input image.  */
-  cv::Mat Detect(const cv::Mat &src_img);
+  cv::Mat Detect(const cv::Mat &src_img) const;
 
 
   int ColorCode() const {return color_code_;}
@@ -109,6 +109,19 @@ public:
 
   void Reset();
 
+  // Do detection
+  void Detect(const cv::Mat &frame, int mode, bool verbose=true);
+  void Draw(cv::Mat &img_draw) const;
+
+  void CameraWindowMouseCallback(int active_col_index, int event, int x, int y, int flags);
+  void MaskWindowMouseCallback(int active_col_index, int event, int x, int y, int flags);
+
+  void LoadColors(int index, const std::string &file_name);
+  void SaveColors(int index, const std::string &file_name);
+
+  const TColorDetector& Detector(int index) const {return col_detectors_[index];}
+  TColorDetector& RefDetector(int index)  {return col_detectors_[index];}
+
   const double& BlockAreaMin() const {return block_area_min_;}
   void SetBlockAreaMin(const double &v)  {block_area_min_= v;}
 
@@ -131,18 +144,8 @@ public:
   const std::list<double>& BlocksArea() const {return blocks_area_;}  // [area] * sum(nums_blocks_)
   const std::list<double>& BlocksCenterXY() const {return blocks_center_xy_;}  // [x,y] * sum(nums_blocks_)
 
-  // Do detection
-  void Detect(const cv::Mat &frame, int mode, bool verbose=true);
-  void Draw(cv::Mat &img_draw);
-
   // Set camera window for mouse event
   void SetCameraWindow(cv::Mat &camera_frame)  {camera_window_= &camera_frame;}
-
-  void CameraWindowMouseCallback(int active_col_index, int event, int x, int y, int flags);
-  void MaskWindowMouseCallback(int active_col_index, int event, int x, int y, int flags);
-
-  void LoadColors(int index, const std::string &file_name);
-  void SaveColors(int index, const std::string &file_name);
 
 private:
   std::vector<TColorDetector>  col_detectors_;

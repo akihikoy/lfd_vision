@@ -10,6 +10,7 @@
 #define flow_finder_h
 //-------------------------------------------------------------------------------------------
 #include <opencv2/core/core.hpp>
+#include <list>
 //-------------------------------------------------------------------------------------------
 namespace trick
 {
@@ -45,7 +46,9 @@ public:
   // region of interest
   // set ROI?
 
-  const std::vector<TFlowElement>& FlowElements() const {return flow_elmts_;}
+  std::list<TFlowElement>& RefFlowElements()  {return flow_elmts_;}
+
+  const std::list<TFlowElement>& FlowElements() const {return flow_elmts_;}
   const std::vector<std::vector<cv::Point> >& Contours() const {return contours_;}
 
   void SetOptFlowWinSize(const cv::Size &v)  {optflow_win_size_= v;}
@@ -59,7 +62,7 @@ public:
     {speed_min_=min; speed_max_=max;}
 
 private:
-  std::vector<TFlowElement> flow_elmts_;
+  std::list<TFlowElement> flow_elmts_;
 
   // Parameters:
   cv::Size optflow_win_size_;

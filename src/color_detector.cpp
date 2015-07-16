@@ -78,7 +78,7 @@ void TColorDetector::SetupColors(const std::vector<cv::Vec3b> &colors, const cv:
 
 /*! Detect specific colors from the source image, and return the mask image (0 or 255).
   \param src_img  Input image.  */
-cv::Mat TColorDetector::Detect(const cv::Mat &src_img)
+cv::Mat TColorDetector::Detect(const cv::Mat &src_img) const
 {
   assert(src_img.type()==CV_8UC3);
 
@@ -240,7 +240,7 @@ void TMultipleColorDetector::Detect(const cv::Mat &frame, int mode, bool verbose
 }
 //-------------------------------------------------------------------------------------------
 
-void TMultipleColorDetector::Draw(cv::Mat &img_draw)
+void TMultipleColorDetector::Draw(cv::Mat &img_draw) const
 {
   cv::Mat disp_img, disp_imgs[3];
   if(Size()>=2)
