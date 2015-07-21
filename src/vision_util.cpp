@@ -9,6 +9,7 @@
 #include "pr2_lfd_vision/vision_util.h"
 //-------------------------------------------------------------------------------------------
 #include <opencv2/imgproc/imgproc.hpp>
+#include <iomanip>
 //-------------------------------------------------------------------------------------------
 namespace trick
 {
@@ -75,9 +76,23 @@ bool FindLargestContour(const cv::Mat &bin_src,
 }
 //-------------------------------------------------------------------------------------------
 
+// Rotate 90, 180, 270 degrees
+void Rotate90N(const cv::Mat &src, cv::Mat &dst, int N)
+{
+  if(src.data!=dst.data)  src.copyTo(dst);
+  for(int i((N%4+4)%4); i>0; --i)
+  {
+    cv::transpose(dst, dst);
+    cv::flip(dst, dst, /*horizontal*/1);
+  }
+}
+//-------------------------------------------------------------------------------------------
+
 bool OpenVideoOut(cv::VideoWriter &vout, const char *file_name, int fps, const cv::Size &size)
 {
-  int codec= CV_FOURCC('P','I','M','1');
+  // int codec= CV_FOURCC('P','I','M','1');  // mpeg1video
+  // int codec= CV_FOURCC('X','2','6','4');  // x264?
+  int codec= CV_FOURCC('m','p','4','v');  // mpeg4 (Simple Profile)
   vout.open(file_name, codec, fps, size, true);
 
   if (!vout.isOpened())
@@ -90,14 +105,107 @@ bool OpenVideoOut(cv::VideoWriter &vout, const char *file_name, int fps, const c
 }
 //-------------------------------------------------------------------------------------------
 
-// Rotate 90, 180, 270 degrees
-void Rotate90N(const cv::Mat &src, cv::Mat &dst, int N)
+TEasyVideoOut::TEasyVideoOut(const double init_fps)
+  :
+    file_prefix_ ("/tmp/video"),
+    file_suffix_ (".avi"),
+    img_size_ (0,0),
+    fps_ (init_fps),
+    time_prev_ (-1.0),
+    fps_alpha_ (0.05)
 {
-  if(src.data!=dst.data)  src.copyTo(dst);
-  for(int i((N%4+4)%4); i>0; --i)
+}
+//-------------------------------------------------------------------------------------------
+
+// Start recording.
+void TEasyVideoOut::Rec()
+{
+  if(!writer_.isOpened())
   {
-    cv::transpose(dst, dst);
-    cv::flip(dst, dst, /*horizontal*/1);
+    int i(0);
+    std::string file_name;
+    do
+    {
+      std::stringstream ss;
+      ss<<file_prefix_<<std::setfill('0')<<std::setw(4)<<i<<file_suffix_;
+      file_name= ss.str();
+      ++i;
+    } while(FileExists(file_name));
+    OpenVideoOut(writer_, file_name.c_str(), fps_, img_size_);
+  }
+}
+//-------------------------------------------------------------------------------------------
+
+// Stop recording.
+void TEasyVideoOut::Stop()
+{
+  if(writer_.isOpened())
+  {
+    writer_.release();
+    std::cerr<<"###Finished: video output"<<std::endl;
+  }
+}
+//-------------------------------------------------------------------------------------------
+
+// Writing frame(during recording)/updating FPS,image size
+void TEasyVideoOut::Step(const cv::Mat &frame)
+{
+  img_size_= cv::Size(frame.cols, frame.rows);
+
+  // update fps
+  if(time_prev_<0.0)
+  {
+    time_prev_= GetCurrentTime();
+  }
+  else
+  {
+    double new_fps= 1.0/(GetCurrentTime()-time_prev_);
+    if(new_fps>fps_/20.0 && new_fps<fps_*20.0)  // Removing outliers (e.g. pause/resume)
+      fps_= fps_alpha_*new_fps + (1.0-fps_alpha_)*fps_;
+    time_prev_= GetCurrentTime();
+  }
+
+  if(writer_.isOpened())
+  {
+    if(frame.depth()==8 && frame.channels()==3)
+      writer_<<frame;
+    else
+    {
+      // If frame is [0...1] float type matrix:
+      cv::Mat frame2,frame3;
+      if(frame.depth()!=8)
+        cv::Mat(frame*255.0).convertTo(frame2, CV_8UC(frame.channels()));
+      else
+        frame2= frame;
+      if(frame2.channels()!=3)
+      {
+        cv::Mat in[]= {frame2, frame2, frame2};
+        cv::merge(in, 3, frame3);
+      }
+      else
+        frame3= frame2;
+      writer_<<frame3;
+    }
+  }
+}
+//-------------------------------------------------------------------------------------------
+
+/* Visualize a recording mark (red circle), effective only during recording.
+    pos: position (0: left top (default), 1: left bottom, 2: right bottom, 3: right top)
+*/
+void TEasyVideoOut::VizRec(cv::Mat &frame, int pos, int rad, int margin) const
+{
+  if(writer_.isOpened())
+  {
+    cv::Point2d pt((rad+margin), (rad+margin));
+    switch(pos)
+    {
+    case 0:  pt= cv::Point2d((rad+margin),(rad+margin)); break;
+    case 1:  pt= cv::Point2d((rad+margin),frame.rows-(rad+margin)); break;
+    case 2:  pt= cv::Point2d(frame.cols-(rad+margin),frame.rows-(rad+margin)); break;
+    case 3:  pt= cv::Point2d(frame.cols-(rad+margin),(rad+margin)); break;
+    }
+    cv::circle(frame, pt, rad, cv::Scalar(0,0,255), -1);
   }
 }
 //-------------------------------------------------------------------------------------------

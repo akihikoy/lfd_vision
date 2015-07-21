@@ -48,10 +48,7 @@ TMovingObjectDetector MovDetector;
 
 int NumDetectors(1);
 int NRotate90(0);
-std::string VOutBase("/tmp/vout_");
-cv::VideoWriter VOutFrame;
-cv::Size ImgSize(0,0);
-double FPS(10.0);
+TEasyVideoOut VideoOut;
 int VizMode(2);  // 0: camera only, 1: camera + detected, 2: 0.5*camera + detected, 3: 0.25*camera + detected, 4: detected only, 5: 0.5*camera + flow + flow-mask
 int FlowMaskMode(2);  // 0: none, 1: removing moving objects, 2: mask with colors
 
@@ -145,24 +142,7 @@ bool HandleKeyEvent()
   }
   else if(c=='W')
   {
-    if(VOutFrame.isOpened())
-    {
-      VOutFrame.release();
-      std::cerr<<"###Finished: video output"<<std::endl;
-    }
-    else
-    {
-      int i(0);
-      std::string file_name;
-      do
-      {
-        std::stringstream ss1;
-        ss1<<VOutBase<<"frame"<<i<<".avi";
-        file_name= ss1.str();
-        ++i;
-      } while(FileExists(file_name));
-      OpenVideoOut(VOutFrame, file_name.c_str(), FPS, ImgSize);
-    }
+    VideoOut.Switch();
   }
   else if(c==' ')
   {
@@ -279,6 +259,7 @@ int main(int argc, char**argv)
   int mode(2);  // Ratio computation mode (1 or 2, 1:deprecated).
   int pub_mode(0);  // 0: original, 1: only ColDetSensor message, 2: both
   double block_area_min(10.0);
+  std::string vout_base("/tmp/vout");
   node.param("camera",camera,0);
   node.param("mode",mode,mode);
   node.param("pub_mode",pub_mode,pub_mode);
@@ -288,7 +269,7 @@ int main(int argc, char**argv)
   node.param("block_area_min",block_area_min,block_area_min);
   node.param("color_files_base",ColorFilesBase,std::string(""));
   node.param("rotate90n",NRotate90,NRotate90);
-  node.param("vout_base",VOutBase,VOutBase);
+  node.param("vout_base",vout_base,vout_base);
 
   cv::VideoCapture cap(camera); // open the default camera
   if(!cap.isOpened())  // check if we succeeded
@@ -297,6 +278,8 @@ int main(int argc, char**argv)
     return -1;
   }
   std::cerr<<"Camera opened"<<std::endl;
+
+  VideoOut.SetfilePrefix(vout_base);
 
   ColDetector.Setup(NumDetectors);
   for(int i(0); i<NumDetectors; ++i)
@@ -353,8 +336,7 @@ int main(int argc, char**argv)
 
   cv::setMouseCallback("color_detector", OnMouse);
 
-  double time_prev= GetCurrentTime(), fps_alpha(0.05);
-  int    show_fps(0);
+  int show_fps(0);
 
   // ros::Rate loop_rate(5);  // 5 Hz
   for(int f(0);ros::ok();++f)
@@ -363,7 +345,6 @@ int main(int argc, char**argv)
     {
       cap >> frame; // get a new frame from camera
       if(NRotate90!=0)  Rotate90N(frame,frame,NRotate90);
-      ImgSize= cv::Size(frame.cols,frame.rows);
 
       // Visualization setup
       // 0: camera only, 1: camera + detected, 2: 0.5*camera + detected, 3: 0.25*camera + detected, 4: detected only, 5: 0.5*camera + flow + flow-mask
@@ -510,14 +491,11 @@ int main(int argc, char**argv)
         std::cerr<<" "<<ColDetector.Ratio(i);
       std::cerr<<"\t spd,angle: "<<avr_spddir<<std::endl;
 
+      VideoOut.Step(disp_img);
+      VideoOut.VizRec(disp_img);
       cv::imshow("color_detector", disp_img);
 
-      if(VOutFrame.isOpened())  VOutFrame<<disp_img;
-
-      // update fps
-      FPS= fps_alpha*(1.0/(GetCurrentTime()-time_prev)) + (1.0-fps_alpha)*FPS;
-      time_prev= GetCurrentTime();
-      if(show_fps==0)  {std::cerr<<"FPS: "<<FPS<<std::endl;  show_fps=20;}
+      if(show_fps==0)  {std::cerr<<"FPS: "<<VideoOut.FPS()<<std::endl;  show_fps=VideoOut.FPS()*4;}
       --show_fps;
 
     }  // Running

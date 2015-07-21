@@ -58,6 +58,7 @@ double ThBadNormalRatio (0.8);
 
 double ResizeRatio(1.0);
 int DisplayMode(0);  // 0: 0.5*original+render, 1: 0.25*original+render, 2: render, 3: original, 4: camera_info error.
+TEasyVideoOut VideoOutD, VideoOutN;  // Video writer for depth and normal
 
 }
 //-------------------------------------------------------------------------------------------
@@ -189,7 +190,7 @@ void CallbackPointCloud(const sensor_msgs::PointCloud2ConstPtr &msg)
   normal_img.copyTo(NormalImg);
   PointCloudHeader= msg->header;
 
-  int c(cv::waitKey(10));
+  char c(cv::waitKey(10));
   if(c=='\x1b'||c=='q')  ros::shutdown();
   else if(CurrRTPoseEstimator!=RayTracePoseEstimators.end()
       && CurrRTPoseEstimator->second.HandleKeyEvent(TargetObject,c))
@@ -249,6 +250,11 @@ void CallbackPointCloud(const sensor_msgs::PointCloud2ConstPtr &msg)
     ++DisplayMode;
     if(DisplayMode>4)  DisplayMode= 0;
     std::cerr<<"DisplayMode: "<<DisplayMode<<std::endl;
+  }
+  else if(c=='W')  // Video record/stop
+  {
+    VideoOutD.Switch();
+    VideoOutN.Switch();
   }
   else if(c=='c')  // Calibration from point cloud
   {
@@ -316,6 +322,8 @@ void CallbackPointCloud(const sensor_msgs::PointCloud2ConstPtr &msg)
     normal_img*= 100.0;
   }
 
+  VideoOutD.Step(depth_img);
+  VideoOutN.Step(normal_img);
   if(ResizeRatio!=1.0)
   {
     cv::resize(depth_img, depth_img, cv::Size(0,0), ResizeRatio,ResizeRatio);
@@ -323,6 +331,8 @@ void CallbackPointCloud(const sensor_msgs::PointCloud2ConstPtr &msg)
   }
   DrawCrossOnCenter(depth_img, 20, cv::Scalar(255,255,255));
   DrawCrossOnCenter(normal_img, 20, cv::Scalar(255,255,255));
+  VideoOutD.VizRec(depth_img);
+  VideoOutN.VizRec(normal_img);
   // cv::imshow("rgb", rgb_img);
   cv::imshow("depth", depth_img);
   cv::imshow("normal", normal_img);
@@ -495,6 +505,8 @@ int main(int argc, char**argv)
   ros::init(argc, argv, "rt_pose_estimator");
   ros::NodeHandle node("~");
 
+  std::string vout_base("/tmp/rt");
+
   std::string point_cloud_in;
   node.param("in_points", point_cloud_in, std::string("/camera/depth/points_xyzrgb"));
   std::string labeled_pose_in, labeled_pose_optreq_in, labeled_pose_out;
@@ -519,6 +531,7 @@ int main(int argc, char**argv)
 
   node.param("resize_ratio", ResizeRatio, ResizeRatio);
   node.param("display_mode", DisplayMode, DisplayMode);
+  node.param("vout_base",vout_base,vout_base);
 
   int cam_width(640), cam_height(480);
   std::vector<double> cam_proj, cam_proj_default(12,0.0);  // 3x4 projection/camera matrix
@@ -532,8 +545,11 @@ int main(int argc, char**argv)
   node.param("cam_proj", cam_proj, cam_proj_default);
 
   // cv::namedWindow("rgb",1);
-  // cv::namedWindow("depth",1);
+  cv::namedWindow("depth",1);
   cv::namedWindow("normal",1);
+
+  VideoOutD.SetfilePrefix(vout_base+"_depth");
+  VideoOutN.SetfilePrefix(vout_base+"_normal");
 
   /*############Setup ray tracing############*/
   // Create object

@@ -36,11 +36,11 @@ rosbuild_add_executable(color_detector_node
       src/mov_detector.cpp
       src/vision_util.cpp)
 
-rosbuild_add_executable(test_col_flow
-      test/test_col_flow.cpp
-      src/color_detector.cpp
-      src/flow_finder.cpp
-      src/vision_util.cpp)
+# rosbuild_add_executable(test_col_flow
+#       test/test_col_flow.cpp
+#       src/color_detector.cpp
+#       src/flow_finder.cpp
+#       src/vision_util.cpp)
 
 rosbuild_add_executable(depth_detector_node
       src/depth_detector_node.cpp
@@ -101,6 +101,7 @@ rosbuild_add_executable(rt_pose_estimator_node
       src/rt_pose_estimator_node.cpp
       src/raytrace/pose_estimator.cpp
       src/raytrace/depthscene.cpp
-      src/pcl_util.cpp)
+      src/pcl_util.cpp
+      src/vision_util.cpp)
 target_link_libraries(rt_pose_estimator_node ray_trace)
 
