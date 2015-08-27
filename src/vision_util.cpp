@@ -167,13 +167,13 @@ void TEasyVideoOut::Step(const cv::Mat &frame)
 
   if(writer_.isOpened())
   {
-    if(frame.depth()==8 && frame.channels()==3)
+    if(frame.depth()==CV_8U && frame.channels()==3)
       writer_<<frame;
     else
     {
       // If frame is [0...1] float type matrix:
       cv::Mat frame2,frame3;
-      if(frame.depth()!=8)
+      if(frame.depth()!=CV_8U)
         cv::Mat(frame*255.0).convertTo(frame2, CV_8UC(frame.channels()));
       else
         frame2= frame;
