@@ -12,6 +12,7 @@
 #define pcl_util_h
 //-------------------------------------------------------------------------------------------
 #include <pcl/point_types.h>
+#include <pcl/point_cloud.h>
 #include <pcl/ros/conversions.h>
 #include <opencv2/core/core.hpp>
 // #include <geometry_msgs/Pose.h>

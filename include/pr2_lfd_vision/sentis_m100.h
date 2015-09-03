@@ -83,6 +83,7 @@
 //-------------------------------------------------------------------------------------------
 #if SENTIS_M100_USING_PCL==1
 #include <pcl/point_types.h>
+#include <pcl/point_cloud.h>
 #endif
 #if SENTIS_M100_USING_CV==1
 #include <opencv2/core/core.hpp>
