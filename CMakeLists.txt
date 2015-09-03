@@ -21,6 +21,9 @@ rosbuild_genmsg()
 #uncomment if you have defined services
 rosbuild_gensrv()
 
+find_package(OpenCV)
+include_directories(${OpenCV_INCLUDE_DIRS})
+
 #common commands for building c++ executables and libraries
 #rosbuild_add_library(${PROJECT_NAME} src/example.cpp)
 #target_link_libraries(${PROJECT_NAME} another_library)
@@ -35,6 +38,7 @@ rosbuild_add_executable(color_detector_node
       src/flow_finder.cpp
       src/mov_detector.cpp
       src/vision_util.cpp)
+target_link_libraries(color_detector_node ${OpenCV_LIBRARIES})
 
 # rosbuild_add_executable(test_col_flow
 #       test/test_col_flow.cpp
@@ -48,13 +52,13 @@ rosbuild_add_executable(depth_detector_node
       src/sentis_m100.cpp
       src/vision_util.cpp)
 include_directories(/usr/include/libm100)
-target_link_libraries(depth_detector_node m100)
+target_link_libraries(depth_detector_node ${OpenCV_LIBRARIES} m100)
 
 rosbuild_add_executable(cyl_detector_node
       src/cyl_detector.cpp
       src/cyl_detector_node.cpp)
 include_directories(/home/akihiko/install/boost1.49/include)
-target_link_libraries(cyl_detector_node vtkCommon vtkFiltering vtkRendering vtkGraphics)
+target_link_libraries(cyl_detector_node ${OpenCV_LIBRARIES} vtkCommon vtkFiltering vtkRendering vtkGraphics)
 
 rosbuild_add_executable(flow_analyzer_node
       src/flow_analyzer_node.cpp
@@ -62,13 +66,13 @@ rosbuild_add_executable(flow_analyzer_node
       src/flow_finder.cpp
       src/flow_analyzer.cpp)
 include_directories(/usr/include/libm100)
-target_link_libraries(flow_analyzer_node m100)
+target_link_libraries(flow_analyzer_node ${OpenCV_LIBRARIES} m100)
 
 rosbuild_add_executable(sentis_m100_node
       src/sentis_m100_node.cpp
       src/sentis_m100.cpp)
 include_directories(/usr/include/libm100)
-target_link_libraries(sentis_m100_node m100)
+target_link_libraries(sentis_m100_node ${OpenCV_LIBRARIES} m100)
 
 rosbuild_add_executable(ode_pour_sim_node
       src/ode_pour_sim_node.cpp
@@ -103,5 +107,5 @@ rosbuild_add_executable(rt_pose_estimator_node
       src/raytrace/depthscene.cpp
       src/pcl_util.cpp
       src/vision_util.cpp)
-target_link_libraries(rt_pose_estimator_node ray_trace)
+target_link_libraries(rt_pose_estimator_node ray_trace ${OpenCV_LIBRARIES})
 

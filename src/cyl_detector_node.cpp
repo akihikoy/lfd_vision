@@ -10,8 +10,8 @@
 //-------------------------------------------------------------------------------------------
 #include <ros/ros.h>
 #include <sensor_msgs/PointCloud2.h>
-#include <ar_track_alvar/AlvarMarker.h>
-#include <ar_track_alvar/AlvarMarkers.h>
+#include <ar_track_alvar_msgs/AlvarMarker.h>
+#include <ar_track_alvar_msgs/AlvarMarkers.h>
 #include <pcl/ros/conversions.h>
 //-------------------------------------------------------------------------------------------
 namespace trick
@@ -47,7 +47,7 @@ void PointCloudCallback(const sensor_msgs::PointCloud2ConstPtr &msg)
 }
 //-------------------------------------------------------------------------------------------
 
-void ARMarkersCallback(const ar_track_alvar::AlvarMarkers &msg)
+void ARMarkersCallback(const ar_track_alvar_msgs::AlvarMarkers &msg)
 {
   //FIXME: compare the marker's frame-id with the point clouds' frame-id
   using namespace trick::detail;
