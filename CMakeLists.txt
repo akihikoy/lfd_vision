@@ -46,52 +46,60 @@ target_link_libraries(color_detector_node ${OpenCV_LIBRARIES})
 #       src/flow_finder.cpp
 #       src/vision_util.cpp)
 
-rosbuild_add_executable(depth_detector_node
-      src/depth_detector_node.cpp
-      src/flow_finder.cpp
-      src/sentis_m100.cpp
-      src/vision_util.cpp)
-include_directories(/usr/include/libm100)
-target_link_libraries(depth_detector_node ${OpenCV_LIBRARIES} m100)
-
+if(EXISTS /usr/include/libm100)
+  rosbuild_add_executable(depth_detector_node
+        src/depth_detector_node.cpp
+        src/flow_finder.cpp
+        src/sentis_m100.cpp
+        src/vision_util.cpp)
+  include_directories(/usr/include/libm100)
+  target_link_libraries(depth_detector_node ${OpenCV_LIBRARIES} m100)
+endif(EXISTS /usr/include/libm100)
+  
 rosbuild_add_executable(cyl_detector_node
       src/cyl_detector.cpp
       src/cyl_detector_node.cpp)
-include_directories(/home/akihiko/install/boost1.49/include)
+if(EXISTS $ENV{HOME}/install/boost1.49/include)
+  include_directories($ENV{HOME}/install/boost1.49/include)
+endif(EXISTS $ENV{HOME}/install/boost1.49/include)
 target_link_libraries(cyl_detector_node ${OpenCV_LIBRARIES} vtkCommon vtkFiltering vtkRendering vtkGraphics)
 
-rosbuild_add_executable(flow_analyzer_node
-      src/flow_analyzer_node.cpp
-      src/sentis_m100.cpp
-      src/flow_finder.cpp
-      src/flow_analyzer.cpp)
-include_directories(/usr/include/libm100)
-target_link_libraries(flow_analyzer_node ${OpenCV_LIBRARIES} m100)
+if(EXISTS /usr/include/libm100)
+  rosbuild_add_executable(flow_analyzer_node
+        src/flow_analyzer_node.cpp
+        src/sentis_m100.cpp
+        src/flow_finder.cpp
+        src/flow_analyzer.cpp)
+  include_directories(/usr/include/libm100)
+  target_link_libraries(flow_analyzer_node ${OpenCV_LIBRARIES} m100)
+endif(EXISTS /usr/include/libm100)
 
-rosbuild_add_executable(sentis_m100_node
-      src/sentis_m100_node.cpp
-      src/sentis_m100.cpp)
-include_directories(/usr/include/libm100)
-target_link_libraries(sentis_m100_node ${OpenCV_LIBRARIES} m100)
+if(EXISTS /usr/include/libm100)
+  rosbuild_add_executable(sentis_m100_node
+        src/sentis_m100_node.cpp
+        src/sentis_m100.cpp)
+  include_directories(/usr/include/libm100)
+  target_link_libraries(sentis_m100_node ${OpenCV_LIBRARIES} m100)
+endif(EXISTS /usr/include/libm100)
 
 rosbuild_add_executable(ode_pour_sim_node
       src/ode_pour_sim_node.cpp
       src/ode_pour_sim.cpp)
 add_definitions(-DdDOUBLE)
-include_directories(/home/akihiko/prg/libode/ode-latest/include)
+include_directories($ENV{HOME}/prg/libode/ode-latest/include)
 target_link_libraries(ode_pour_sim_node
-      /home/akihiko/prg/libode/ode-latest/ode/src/.libs/libode.a
-      /home/akihiko/prg/libode/ode-latest/drawstuff/src/.libs/libdrawstuff.a
+      $ENV{HOME}/prg/libode/ode-latest/ode/src/.libs/libode.a
+      $ENV{HOME}/prg/libode/ode-latest/drawstuff/src/.libs/libdrawstuff.a
       SM ICE GL Xext X11 GLU)
 
 rosbuild_add_executable(ode_grpour_sim_node
       src/ode_grpour_sim_node.cpp
       src/ode_grpour_sim.cpp)
 add_definitions(-DdDOUBLE)
-include_directories(/home/akihiko/prg/libode/ode-latest/include)
+include_directories($ENV{HOME}/prg/libode/ode-latest/include)
 target_link_libraries(ode_grpour_sim_node
-      /home/akihiko/prg/libode/ode-latest/ode/src/.libs/libode.a
-      /home/akihiko/prg/libode/ode-latest/drawstuff/src/.libs/libdrawstuff.a
+      $ENV{HOME}/prg/libode/ode-latest/ode/src/.libs/libode.a
+      $ENV{HOME}/prg/libode/ode-latest/drawstuff/src/.libs/libdrawstuff.a
       SM ICE GL Xext X11 GLU)
 
 # -L/usr/X11R6/lib -ldl  -lpthread
