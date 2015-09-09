@@ -25,6 +25,9 @@ using namespace std;
 namespace ode_pour
 {
 
+static const int MAX_CONTACTS_CAPACITY(10);  // MaxContacts can not be greater than this.
+
+//-------------------------------------------------------------------------------------------
 // int MaxContacts(10);  // maximum number of contact points per body
 int MaxContacts(1);  // maximum number of contact points per body
 double VizJointLen(0.1);
@@ -864,7 +867,7 @@ void TEnvironment::EDrawCallback()
 
 /* Called when b1 and b2 are colliding.
     Return whether we ignore this collision (true: ignore collision). */
-bool TEnvironment::CollisionCallback(dBodyID &b1, dBodyID &b2, std::valarray<dContact> &contact)
+bool TEnvironment::CollisionCallback(dBodyID &b1, dBodyID &b2, dContact *contact)
 {
   // Detect gripper's collision
   const dBodyID b_grippers_d[2]= {source_.Body(3).id(), source_.Body(4).id()};
@@ -941,7 +944,9 @@ static void NearCallback(void *data, dGeomID o1, dGeomID o2)
   dBodyID b2= dGeomGetBody(o2);
   if(b1 && b2 && dAreConnected(b1,b2)) return;
 
-  std::valarray<dContact> contact(MaxContacts);   // up to MaxContacts contacts per link
+  if(MaxContacts>MAX_CONTACTS_CAPACITY)  MaxContacts= MAX_CONTACTS_CAPACITY;
+  // std::valarray<dContact> contact(MaxContacts);   // up to MaxContacts contacts per link
+  dContact contact[MAX_CONTACTS_CAPACITY+2];  //+2 is to avoid an ODE bug
   for(int i(0); i<MaxContacts; ++i)
   {
     contact[i].surface.mode= dContactBounce | dContactSoftCFM;

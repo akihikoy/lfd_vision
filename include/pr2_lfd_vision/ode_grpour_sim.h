@@ -338,7 +338,7 @@ public:
   void EDrawCallback();
   /* Called when b1 and b2 are colliding.
       Return whether we ignore this collision (true: ignore collision). */
-  bool CollisionCallback(dBodyID &b1, dBodyID &b2, std::valarray<dContact> &contact);
+  bool CollisionCallback(dBodyID &b1, dBodyID &b2, dContact *contact);
 
   // Save ball state into file
   void DumpBallStat(const char *file_name);
