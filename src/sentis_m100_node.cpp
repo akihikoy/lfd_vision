@@ -15,7 +15,8 @@
 //-------------------------------------------------------------------------------------------
 #include <ros/ros.h>
 #include <sensor_msgs/PointCloud2.h>
-#include <pcl/ros/conversions.h>
+// #include <pcl/ros/conversions.h>
+#include <pcl_conversions/pcl_conversions.h>
 // #include <pcl/filters/passthrough.h>
 //-------------------------------------------------------------------------------------------
 namespace trick

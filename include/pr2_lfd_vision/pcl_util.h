@@ -13,8 +13,9 @@
 //-------------------------------------------------------------------------------------------
 #include <pcl/point_types.h>
 #include <pcl/point_cloud.h>
-#include <pcl/ros/conversions.h>
+// #include <pcl/ros/conversions.h>
 #include <opencv2/core/core.hpp>
+#include <sensor_msgs/PointCloud2.h>
 // #include <geometry_msgs/Pose.h>
 //-------------------------------------------------------------------------------------------
 namespace trick

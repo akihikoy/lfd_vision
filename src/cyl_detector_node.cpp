@@ -12,6 +12,7 @@
 #include <sensor_msgs/PointCloud2.h>
 #include <ar_track_alvar_msgs/AlvarMarker.h>
 #include <ar_track_alvar_msgs/AlvarMarkers.h>
+#include <pcl_conversions/pcl_conversions.h>
 #include <pcl/ros/conversions.h>
 //-------------------------------------------------------------------------------------------
 namespace trick
