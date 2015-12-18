@@ -1,0 +1,7 @@
+<launch>
+  <node cwd="node" type="ode_grpour_sim_node" pkg="pr2_lfd_vision" name="ode_grpour_sim">
+    <param name="texture_path" value="$(find pr2_lfd_vision)/config/textures" />
+    <param name="winx" value="480" />
+    <param name="winy" value="480" />
+  </node>
+</launch>

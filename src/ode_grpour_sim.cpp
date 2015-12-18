@@ -956,7 +956,7 @@ static void NearCallback(void *data, dGeomID o1, dGeomID o2)
     contact[i].surface.bounce_vel= ContactBounceVel;  // 0.01;
     contact[i].surface.soft_cfm= ContactSoftCFM;  // 0.1
   }
-  std::cerr<<"DBG:"<<MaxContacts<<" "<<o1<<" "<<o2<<" "<<b1<<" "<<b2<<" "<<&contact[0].geom<<" "<<sizeof(dContact)<<std::endl;
+  // std::cerr<<"DBG:"<<MaxContacts<<" "<<o1<<" "<<o2<<" "<<b1<<" "<<b2<<" "<<&contact[0].geom<<" "<<sizeof(dContact)<<std::endl;
   if(int numc=dCollide(o1,o2,MaxContacts,&contact[0].geom,sizeof(dContact)))
   {
     if(Env->CollisionCallback(b1,b2,contact))  return;  // ignore if the callback returns true
