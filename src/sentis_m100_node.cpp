@@ -88,21 +88,24 @@ int main(int argc, char**argv)
   ros::init(argc, argv, "sentis_m100");
   ros::NodeHandle node("~");
 
-  int init_fps, tcp_port, udp_port;
+  int init_fps, tcp_port, udp_port, integ_time;
   std::string tcp_ip, udp_ip;
   node.param("init_fps",init_fps,1);
   node.param("tcp_ip",tcp_ip,std::string("192.168.0.10"));
   node.param("udp_ip",udp_ip,std::string("224.0.0.1"));
   node.param("tcp_port",tcp_port,10001);
   node.param("udp_port",udp_port,10002);
+  node.param("integ_time",integ_time,573);
 
   // M100_IMAGE_WIDTH,M100_IMAGE_HEIGHT
 
   ros::Publisher pub_cloud= node.advertise<sensor_msgs::PointCloud2>("depth_non_filtered", 1);
   // ros::Publisher pub_cloud= node.advertise<pcl::PointCloud<pcl::PointXYZ> >("/depth_non_filtered", 1);
   TSentisM100Node tof_sensor(node);
-  tof_sensor.Init(init_fps, /*data_format=*/XYZ_COORDS_DATA, tcp_ip.c_str(), udp_ip.c_str(), tcp_port, udp_port);
-  // tof_sensor.PrintRegisters(0);
+  tof_sensor.Init(init_fps, /*data_format=*/XYZ_COORDS_DATA,
+                  tcp_ip.c_str(), udp_ip.c_str(), tcp_port, udp_port,
+                  integ_time);
+  tof_sensor.PrintRegisters(0);
   // tof_sensor.PrintRegisters(1);
   // tof_sensor.SetFrameRate(40);
   double t_start= GetCurrentTime();

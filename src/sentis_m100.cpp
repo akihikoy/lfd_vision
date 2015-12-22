@@ -30,7 +30,8 @@ bool TSentisM100::Init(
       const char *tcp_ip,
       const char *udp_ip,
       unsigned short tcp_port,
-      unsigned short udp_port)
+      unsigned short udp_port,
+      unsigned short integ_time)
 {
   T_SENTIS_CONFIG config;
   config.tcp_ip= tcp_ip;
@@ -55,6 +56,11 @@ bool TSentisM100::Init(
   std::cerr<<"Setting frame rate."<<std::endl;
   if(!WriteRegister(FrameRate, init_fps))  return false;  // up to 40
   if(!PrintRegister(FrameRate,"FrameRate"))  return false;
+
+  if(!PrintRegister(IntegrationTime,"IntegrationTime"))  return false;
+  std::cerr<<"Setting integration time."<<std::endl;
+  if(!WriteRegister(IntegrationTime, integ_time))  return false;
+  if(!PrintRegister(IntegrationTime,"IntegrationTime"))  return false;
 
   if(!PrintRegister(ImageDataFormat,"ImageDataFormat"))  return false;
   std::cerr<<"Setting image data format."<<std::endl;
@@ -247,7 +253,7 @@ bool TSentisM100::PrintRegisters(int preset=0)
     PRINT_REGISTER(Mode0)
     PRINT_REGISTER(Status)
     PRINT_REGISTER(ImageDataFormat)
-    PRINT_REGISTER(IntegrationTime)  // min 50 max 25000
+    PRINT_REGISTER(IntegrationTime)  // min 50 max 25000, current 573
     PRINT_REGISTER(DeviceType)
     PRINT_REGISTER(DeviceInfo)
     PRINT_REGISTER(FirmwareInfo)

@@ -114,7 +114,8 @@ public:
       const char *tcp_ip= "192.168.0.10",
       const char *udp_ip= "224.0.0.1",
       unsigned short tcp_port= 10001,
-      unsigned short udp_port= 10002);
+      unsigned short udp_port= 10002,
+      unsigned short integ_time= 573);
 
   // FIXME TODO implement close using  STSclose(handle_)
 
