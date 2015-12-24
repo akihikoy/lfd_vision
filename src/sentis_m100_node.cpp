@@ -105,8 +105,8 @@ int main(int argc, char**argv)
   tof_sensor.Init(init_fps, /*data_format=*/XYZ_COORDS_DATA,
                   tcp_ip.c_str(), udp_ip.c_str(), tcp_port, udp_port,
                   integ_time);
-  tof_sensor.PrintRegisters(0);
-  // tof_sensor.PrintRegisters(1);
+  // tof_sensor.PrintRegisters(0);
+  tof_sensor.PrintRegisters(1);
   // tof_sensor.SetFrameRate(40);
   double t_start= GetCurrentTime();
   ros::Rate loop_rate(40);  // 40 Hz
