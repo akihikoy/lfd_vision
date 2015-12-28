@@ -4,9 +4,9 @@
 <launch>
   <node pkg="sentis_tof_m100" type="sentis_tof_m100_node" name="sentis_tof_m100_1"
     args="" required="true" output="screen" >
-    <rosparam command="load" file="$(find pr2_lfd_vision)/config/sentis_tof_m100_1.yaml" />
+    <rosparam command="load" file="$(find lfd_vision)/config/sentis_tof_m100_1.yaml" />
   </node>
   <!--<node name="rqt_reconfigure" pkg="rqt_reconfigure" type="rqt_reconfigure" />-->
   <!--<node name="rviz" pkg="rviz" type="rviz" args="-d $(find sentis_tof_m100)/launch/rvizConfig.rviz" />-->
-  <node name="flow_analyzer" pkg="pr2_lfd_vision" type="flow_analyzer_node" />
+  <node name="flow_analyzer" pkg="lfd_vision" type="flow_analyzer_node" />
 </launch>

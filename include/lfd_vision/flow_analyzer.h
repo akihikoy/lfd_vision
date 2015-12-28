@@ -9,8 +9,8 @@
 #ifndef flow_analyzer_h
 #define flow_analyzer_h
 //-------------------------------------------------------------------------------------------
-#include "pr2_lfd_vision/geom_util.h"
-#include "pr2_lfd_vision/pcl_util.h"
+#include "lfd_vision/geom_util.h"
+#include "lfd_vision/pcl_util.h"
 //-------------------------------------------------------------------------------------------
 #include <pcl/point_types.h>
 #include <pcl/io/pcd_io.h>

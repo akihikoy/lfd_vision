@@ -1,13 +1,13 @@
 <package>
-  <description brief="pr2_lfd_vision">
+  <description brief="lfd_vision">
 
-     pr2_lfd_vision
+     lfd_vision
 
   </description>
   <author>Akihiko Y</author>
   <license>???</license>
   <review status="unreviewed" notes=""/>
-  <url>http://ros.org/wiki/pr2_lfd_vision</url>
+  <url>http://ros.org/wiki/lfd_vision</url>
   <depend package="rospy"/>
   <depend package="roscpp"/>
   <depend package="std_msgs"/>

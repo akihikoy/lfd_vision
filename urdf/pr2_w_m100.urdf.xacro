@@ -34,7 +34,7 @@
   <!-- materials for visualization -->
   <include filename="$(find pr2_description)/urdf/materials.urdf.xacro" />
   <!-- Sentis m100 and its mount -->
-  <include filename="$(find pr2_lfd_vision)/urdf/m100_clamp_mount.urdf.xacro" />
+  <include filename="$(find lfd_vision)/urdf/m100_clamp_mount.urdf.xacro" />
 
   <!-- Now we can start using the macros included above to define the actual PR2 -->
 

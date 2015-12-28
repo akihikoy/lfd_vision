@@ -6,8 +6,8 @@
     \date    Oct.17, 2014
 */
 //-------------------------------------------------------------------------------------------
-#include "pr2_lfd_vision/flow_analyzer.h"
-#include "pr2_lfd_vision/geom_util.h"
+#include "lfd_vision/flow_analyzer.h"
+#include "lfd_vision/geom_util.h"
 //-------------------------------------------------------------------------------------------
 // #include <pcl/filters/box_clipper3D.h>
 #include <pcl/filters/crop_box.h>

@@ -3,7 +3,7 @@
     We do NOT use the sentis_tof_m100 package.
     To check IP, go http://192.168.1.1/ then find a MAC addr 00:26:35:00:00:4C-->
 <launch>
-  <node name="sentis_m100" pkg="pr2_lfd_vision" type="sentis_m100_node">
+  <node name="sentis_m100" pkg="lfd_vision" type="sentis_m100_node">
     <param name="init_fps" value="2" />
     <param name="integ_time" value="573" />
     <!--<param name="integ_time" value="5000" />-->

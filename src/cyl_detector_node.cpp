@@ -6,7 +6,7 @@
     \date    Jul.28, 2014
 */
 //-------------------------------------------------------------------------------------------
-#include "pr2_lfd_vision/cyl_detector.h"
+#include "lfd_vision/cyl_detector.h"
 //-------------------------------------------------------------------------------------------
 #include <ros/ros.h>
 #include <sensor_msgs/PointCloud2.h>

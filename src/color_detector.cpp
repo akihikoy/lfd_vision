@@ -6,8 +6,8 @@
     \date    Jun.05, 2014
 */
 //-------------------------------------------------------------------------------------------
-#include "pr2_lfd_vision/color_detector.h"
-#include "pr2_lfd_vision/vision_util.h"
+#include "lfd_vision/color_detector.h"
+#include "lfd_vision/vision_util.h"
 //-------------------------------------------------------------------------------------------
 #include <opencv2/core/core.hpp>
 #include <opencv2/imgproc/imgproc.hpp>  // cvtColor

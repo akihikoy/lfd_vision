@@ -2,7 +2,7 @@
     We do NOT use the sentis_tof_m100 package.
     To check IP, go http://192.168.1.1/-->
 <launch>
-  <node name="flow_analyzer" pkg="pr2_lfd_vision" type="flow_analyzer_node">
+  <node name="flow_analyzer" pkg="lfd_vision" type="flow_analyzer_node">
     <param name="init_fps" value="1" />
     <param name="tcp_ip" value="192.168.111.20" />
     <!--<param name="tcp_ip" value="192.168.1.147" />-->

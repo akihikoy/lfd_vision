@@ -6,16 +6,16 @@
     \date    Feb.10, 2015
 */
 //-------------------------------------------------------------------------------------------
-#include "pr2_lfd_vision/raytrace/pose_estimator.h"
-#include "pr2_lfd_vision/pcl_util.h"
-#include "pr2_lfd_vision/vision_util.h"
+#include "lfd_vision/raytrace/pose_estimator.h"
+#include "lfd_vision/pcl_util.h"
+#include "lfd_vision/vision_util.h"
 //-------------------------------------------------------------------------------------------
-#include "pr2_lfd_vision/CreateScene.h"
-#include "pr2_lfd_vision/RemoveScene.h"
-#include "pr2_lfd_vision/RTLabeledPoseOpt.h"
-#include "pr2_lfd_vision/LabeledPose.h"
-#include "pr2_lfd_vision/LabeledPoseOptReq.h"
-#include "pr2_lfd_vision/LabeledPoseRevision.h"
+#include "lfd_vision/CreateScene.h"
+#include "lfd_vision/RemoveScene.h"
+#include "lfd_vision/RTLabeledPoseOpt.h"
+#include "lfd_vision/LabeledPose.h"
+#include "lfd_vision/LabeledPoseOptReq.h"
+#include "lfd_vision/LabeledPoseRevision.h"
 //-------------------------------------------------------------------------------------------
 #include <string>
 #include <map>
@@ -83,7 +83,7 @@ bool RemoveScene(const std::string &scene)
 }
 //-------------------------------------------------------------------------------------------
 
-bool CreateScene(pr2_lfd_vision::CreateScene::Request &req, pr2_lfd_vision::CreateScene::Response &res)
+bool CreateScene(lfd_vision::CreateScene::Request &req, lfd_vision::CreateScene::Response &res)
 {
   /*
   req.name
@@ -100,7 +100,7 @@ bool CreateScene(pr2_lfd_vision::CreateScene::Request &req, pr2_lfd_vision::Crea
   RayTracePoseEstimators[req.name]= TRayTracePoseEstimator();
   for(int i_model(0),i_model_end(req.models.size()); i_model<i_model_end; ++i_model)
   {
-    const pr2_lfd_vision::RayTraceModel &model(req.models[i_model]);
+    const lfd_vision::RayTraceModel &model(req.models[i_model]);
 
     double pose[]= {0.0,0.0,0.0, 0.0,0.0,0.0,1.0};
     GPoseToX(model.initial_pose, pose);
@@ -110,7 +110,7 @@ bool CreateScene(pr2_lfd_vision::CreateScene::Request &req, pr2_lfd_vision::Crea
     TRayTraceModel object;
     for(int i_prim(0),i_prim_end(model.primitives.size()); i_prim<i_prim_end; ++i_prim)
     {
-      const pr2_lfd_vision::RayTracePrimitive &prim(model.primitives[i_prim]);
+      const lfd_vision::RayTracePrimitive &prim(model.primitives[i_prim]);
       TRayTraceModel::TPrimitive primitive;
       primitive.Kind= StrToRTPrimitiveKind(prim.kind);
       for(int i_param(0),i_param_end(prim.param.size()); i_param<i_param_end; ++i_param)
@@ -137,7 +137,7 @@ bool CreateScene(pr2_lfd_vision::CreateScene::Request &req, pr2_lfd_vision::Crea
 }
 //-------------------------------------------------------------------------------------------
 
-bool RemoveScene(pr2_lfd_vision::RemoveScene::Request &req, pr2_lfd_vision::RemoveScene::Response &res)
+bool RemoveScene(lfd_vision::RemoveScene::Request &req, lfd_vision::RemoveScene::Response &res)
 {
   if(req.name=="")
   {
@@ -340,8 +340,8 @@ void CallbackPointCloud(const sensor_msgs::PointCloud2ConstPtr &msg)
 //-------------------------------------------------------------------------------------------
 
 void ExecLabeledPoseOptReq(
-    const pr2_lfd_vision::LabeledPoseOptReq &msg,
-    pr2_lfd_vision::LabeledPoseRevision &msg_pose_revision)
+    const lfd_vision::LabeledPoseOptReq &msg,
+    lfd_vision::LabeledPoseRevision &msg_pose_revision)
 {
   // Read the message:
   std::pair<std::string, int> scene_idx= LabelToSceneIdx[msg.lpose.label];
@@ -356,7 +356,7 @@ void ExecLabeledPoseOptReq(
   int n_stage(msg.stages.size()), n_succeeded_stage(0);
   for(int st(0); st<n_stage; ++st)
   {
-    const pr2_lfd_vision::RayTraceOptReq1 &stage(msg.stages[st]);
+    const lfd_vision::RayTraceOptReq1 &stage(msg.stages[st]);
     if(stage.type=="xyz_auto")
     {
       RayTracePoseEstimators[scene_idx.first].SetPose(scene_idx.second, pose);
@@ -472,28 +472,28 @@ void ExecLabeledPoseOptReq(
 }
 //-------------------------------------------------------------------------------------------
 
-void CallbackLabeledPose(const pr2_lfd_vision::LabeledPoseConstPtr &msg)
+void CallbackLabeledPose(const lfd_vision::LabeledPoseConstPtr &msg)
 {
-  pr2_lfd_vision::LabeledPoseOptReq msg_opt_req;
+  lfd_vision::LabeledPoseOptReq msg_opt_req;
   msg_opt_req.lpose= *msg;
   msg_opt_req.stages.resize(1);
   msg_opt_req.stages[0].type= "xyz_auto";
 
-  pr2_lfd_vision::LabeledPoseRevision msg_pose_revision;
+  lfd_vision::LabeledPoseRevision msg_pose_revision;
   ExecLabeledPoseOptReq(msg_opt_req, msg_pose_revision);
   PubLabeledPoseRevision.publish(msg_pose_revision);
 }
 //-------------------------------------------------------------------------------------------
 
-void CallbackLabeledPoseOptReq(const pr2_lfd_vision::LabeledPoseOptReqConstPtr &msg)
+void CallbackLabeledPoseOptReq(const lfd_vision::LabeledPoseOptReqConstPtr &msg)
 {
-  pr2_lfd_vision::LabeledPoseRevision msg_pose_revision;
+  lfd_vision::LabeledPoseRevision msg_pose_revision;
   ExecLabeledPoseOptReq(*msg, msg_pose_revision);
   PubLabeledPoseRevision.publish(msg_pose_revision);
 }
 //-------------------------------------------------------------------------------------------
 
-bool RTLabeledPoseOpt(pr2_lfd_vision::RTLabeledPoseOpt::Request &req, pr2_lfd_vision::RTLabeledPoseOpt::Response &res)
+bool RTLabeledPoseOpt(lfd_vision::RTLabeledPoseOpt::Request &req, lfd_vision::RTLabeledPoseOpt::Response &res)
 {
   ExecLabeledPoseOptReq(req.req, res.res);
 }
@@ -627,7 +627,7 @@ RayTracePoseEstimators["test"].AddObject(container,pose);
   /*############Done############*/
 
 
-  PubLabeledPoseRevision= node.advertise<pr2_lfd_vision::LabeledPoseRevision>(labeled_pose_out, 1);
+  PubLabeledPoseRevision= node.advertise<lfd_vision::LabeledPoseRevision>(labeled_pose_out, 1);
   ros::ServiceServer srv_create= node.advertiseService("create_scene", &CreateScene);
   ros::ServiceServer srv_remove= node.advertiseService("remove_scene", &RemoveScene);
   ros::ServiceServer srv_lpose_opt= node.advertiseService("lpose_opt", &RTLabeledPoseOpt);

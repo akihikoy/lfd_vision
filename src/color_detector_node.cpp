@@ -6,14 +6,14 @@
     \date    Jun.05, 2014
 */
 //-------------------------------------------------------------------------------------------
-#include "pr2_lfd_vision/color_detector.h"
-#include "pr2_lfd_vision/flow_finder.h"
-#include "pr2_lfd_vision/mov_detector.h"
-#include "pr2_lfd_vision/vision_util.h"
+#include "lfd_vision/color_detector.h"
+#include "lfd_vision/flow_finder.h"
+#include "lfd_vision/mov_detector.h"
+#include "lfd_vision/vision_util.h"
 //-------------------------------------------------------------------------------------------
-#include "pr2_lfd_vision/ColDetSensor.h"
-#include "pr2_lfd_vision/ColDetViz.h"
-#include "pr2_lfd_vision/ColDetVizPrimitive.h"
+#include "lfd_vision/ColDetSensor.h"
+#include "lfd_vision/ColDetViz.h"
+#include "lfd_vision/ColDetVizPrimitive.h"
 //-------------------------------------------------------------------------------------------
 #include <opencv2/highgui/highgui.hpp>
 #include <ros/ros.h>
@@ -52,7 +52,7 @@ TEasyVideoOut VideoOut;
 int VizMode(2);  // 0: camera only, 1: camera + detected, 2: 0.5*camera + detected, 3: 0.25*camera + detected, 4: detected only, 5: 0.5*camera + flow + flow-mask
 int FlowMaskMode(2);  // 0: none, 1: removing moving objects, 2: mask with colors
 
-std::vector<pr2_lfd_vision::ColDetVizPrimitive> VizObjs;  // External visualization requests.
+std::vector<lfd_vision::ColDetVizPrimitive> VizObjs;  // External visualization requests.
 }
 //-------------------------------------------------------------------------------------------
 using namespace std;
@@ -169,20 +169,20 @@ bool HandleKeyEvent()
 
 void DrawExternalViz(cv::Mat &disp_img)
 {
-  for(std::vector<pr2_lfd_vision::ColDetVizPrimitive>::const_iterator itr(VizObjs.begin()),itr_end(VizObjs.end());
+  for(std::vector<lfd_vision::ColDetVizPrimitive>::const_iterator itr(VizObjs.begin()),itr_end(VizObjs.end());
       itr!=itr_end; ++itr)
   {
     cv::Scalar col= CV_RGB(itr->color.r,itr->color.g,itr->color.b);
     const double &lw= itr->line_width;
     switch(itr->type)
     {
-    case pr2_lfd_vision::ColDetVizPrimitive::LINE :
+    case lfd_vision::ColDetVizPrimitive::LINE :
       cv::line(disp_img, cv::Point2d(itr->param[0],itr->param[1]), cv::Point2d(itr->param[2],itr->param[3]), col, lw);
       break;
-    case pr2_lfd_vision::ColDetVizPrimitive::CIRCLE :
+    case lfd_vision::ColDetVizPrimitive::CIRCLE :
       cv::circle(disp_img, cv::Point2d(itr->param[0],itr->param[1]), itr->param[2], col, lw);
       break;
-    case pr2_lfd_vision::ColDetVizPrimitive::RECTANGLE :
+    case lfd_vision::ColDetVizPrimitive::RECTANGLE :
       cv::rectangle(disp_img, cv::Rect(itr->param[0],itr->param[1],itr->param[2],itr->param[3]), col, lw);
       break;
     default:
@@ -193,7 +193,7 @@ void DrawExternalViz(cv::Mat &disp_img)
 }
 //-------------------------------------------------------------------------------------------
 
-void ColDetVizCallback(const pr2_lfd_vision::ColDetViz &msg)
+void ColDetVizCallback(const lfd_vision::ColDetViz &msg)
 {
   VizObjs= msg.objects;
 }
@@ -320,7 +320,7 @@ int main(int argc, char**argv)
   }
   if(pub_mode==1 || pub_mode==2)
   {
-    sensor_pub= node.advertise<pr2_lfd_vision::ColDetSensor>("sensor", 1);
+    sensor_pub= node.advertise<lfd_vision::ColDetSensor>("sensor", 1);
   }
 
   ros::Subscriber sub_viz= node.subscribe("viz", 1, &ColDetVizCallback);
@@ -440,7 +440,7 @@ int main(int argc, char**argv)
       }
       if(pub_mode==1 || pub_mode==2)
       {
-        pr2_lfd_vision::ColDetSensor  sensor_msg;
+        lfd_vision::ColDetSensor  sensor_msg;
 
         sensor_msg.num_cols= ColDetector.Size();
         sensor_msg.col_filled_ratio= ColDetector.DataRatio();

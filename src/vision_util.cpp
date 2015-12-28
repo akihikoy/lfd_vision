@@ -6,7 +6,7 @@
     \date    Oct.29, 2014
 */
 //-------------------------------------------------------------------------------------------
-#include "pr2_lfd_vision/vision_util.h"
+#include "lfd_vision/vision_util.h"
 //-------------------------------------------------------------------------------------------
 #include <opencv2/imgproc/imgproc.hpp>
 #include <iomanip>

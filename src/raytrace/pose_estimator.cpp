@@ -6,8 +6,8 @@
     \date    Feb.10, 2015
 */
 //-------------------------------------------------------------------------------------------
-#include "pr2_lfd_vision/raytrace/pose_estimator.h"
-#include "pr2_lfd_vision/pcl_util.h"
+#include "lfd_vision/raytrace/pose_estimator.h"
+#include "lfd_vision/pcl_util.h"
 //-------------------------------------------------------------------------------------------
 #include <iostream>
 #include <list>

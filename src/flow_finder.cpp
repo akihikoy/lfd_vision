@@ -6,7 +6,7 @@
     \date    Oct.29, 2014
 */
 //-------------------------------------------------------------------------------------------
-#include "pr2_lfd_vision/flow_finder.h"
+#include "lfd_vision/flow_finder.h"
 //-------------------------------------------------------------------------------------------
 #include <opencv2/legacy/legacy.hpp>
 #include <opencv2/imgproc/imgproc.hpp>

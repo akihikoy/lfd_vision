@@ -22,9 +22,7 @@ data/
 
 msg_gen
 srv_gen
-src/pr2_lfd_utils
-src/pr2_lfd_trick
-src/pr2_lfd_vision
+src/lfd_vision
 
 logIK.pickle
 default_colors1.dat
@@ -33,7 +31,7 @@ default_colors1.dat.old2
 frame/
 hdefault_colors1.dat
 hdefault_colors2.dat
-include/pr2_lfd_vision/old/
+include/lfd_vision/old/
 meshes/bkup/
 meshes/bkup2/
 meshes/bkup3/

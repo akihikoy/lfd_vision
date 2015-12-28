@@ -1,5 +1,5 @@
 <launch>
-  <node name="rt_pose_estimator_xtion" pkg="pr2_lfd_vision" type="rt_pose_estimator_node">
+  <node name="rt_pose_estimator_xtion" pkg="lfd_vision" type="rt_pose_estimator_node">
     <!--<remap from="/camera/depth/points_xyzrgb" to="/points_xyzrgb" />-->
     <param name="no_rgb_in_points" value="false" />
     <param name="remove_plane_from_cloud" value="false" />

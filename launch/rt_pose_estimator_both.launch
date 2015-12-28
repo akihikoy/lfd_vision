@@ -1,4 +1,4 @@
 <launch>
-  <include file="$(find pr2_lfd_vision)/launch/rt_pose_estimator_m100.launch" />
-  <include file="$(find pr2_lfd_vision)/launch/rt_pose_estimator_xtion.launch" />
+  <include file="$(find lfd_vision)/launch/rt_pose_estimator_m100.launch" />
+  <include file="$(find lfd_vision)/launch/rt_pose_estimator_xtion.launch" />
 </launch>

@@ -1,5 +1,5 @@
 <launch>
-  <node type="depth_detector_node" pkg="pr2_lfd_vision" name="depth_detector_node" output="screen">
+  <node type="depth_detector_node" pkg="lfd_vision" name="depth_detector_node" output="screen">
     <param name="init_fps" value="1" />
     <param name="tcp_ip" value="192.168.111.21" />
     <!--<param name="tcp_ip" value="192.168.1.147" />-->

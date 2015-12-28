@@ -6,7 +6,7 @@
     \date    Jul.14, 2015
 */
 //-------------------------------------------------------------------------------------------
-#include "pr2_lfd_vision/mov_detector.h"
+#include "lfd_vision/mov_detector.h"
 //-------------------------------------------------------------------------------------------
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>

@@ -6,12 +6,12 @@
     \date    Apr.22, 2015
 */
 //-------------------------------------------------------------------------------------------
-#include "pr2_lfd_vision/sentis_m100.h"
-// #include "pr2_lfd_vision/geom_util.h"
+#include "lfd_vision/sentis_m100.h"
+// #include "lfd_vision/geom_util.h"
 //-------------------------------------------------------------------------------------------
-#include "pr2_lfd_vision/ReadRegister.h"
-#include "pr2_lfd_vision/WriteRegister.h"
-#include "pr2_lfd_vision/SetFrameRate.h"
+#include "lfd_vision/ReadRegister.h"
+#include "lfd_vision/WriteRegister.h"
+#include "lfd_vision/SetFrameRate.h"
 //-------------------------------------------------------------------------------------------
 #include <ros/ros.h>
 #include <sensor_msgs/PointCloud2.h>
@@ -43,20 +43,20 @@ public:
       srv_set_frame_rate_= node_.advertiseService("set_frame_rate", &TSentisM100Node::SrvSetFrameRate, this);
     }
 
-  bool SrvWriteRegister(pr2_lfd_vision::WriteRegister::Request &req, pr2_lfd_vision::WriteRegister::Response &res)
+  bool SrvWriteRegister(lfd_vision::WriteRegister::Request &req, lfd_vision::WriteRegister::Response &res)
     {
       res.success= WriteRegister(req.address, req.value);
       return true;
     }
 
-  bool SrvReadRegister(pr2_lfd_vision::ReadRegister::Request &req, pr2_lfd_vision::ReadRegister::Response &res)
+  bool SrvReadRegister(lfd_vision::ReadRegister::Request &req, lfd_vision::ReadRegister::Response &res)
     {
       res.value= ReadRegister(req.address);
       res.success= IsNoError("");
       return true;
     }
 
-  bool SrvSetFrameRate(pr2_lfd_vision::SetFrameRate::Request &req, pr2_lfd_vision::SetFrameRate::Response &res)
+  bool SrvSetFrameRate(lfd_vision::SetFrameRate::Request &req, lfd_vision::SetFrameRate::Response &res)
     {
       res.success= SetFrameRate(req.frame_rate);
       return true;

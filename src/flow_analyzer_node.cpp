@@ -6,18 +6,18 @@
     \date    Oct.17, 2014
 */
 //-------------------------------------------------------------------------------------------
-#include "pr2_lfd_vision/flow_analyzer.h"
-#include "pr2_lfd_vision/sentis_m100.h"
-#include "pr2_lfd_vision/flow_finder.h"
-#include "pr2_lfd_vision/geom_util.h"
+#include "lfd_vision/flow_analyzer.h"
+#include "lfd_vision/sentis_m100.h"
+#include "lfd_vision/flow_finder.h"
+#include "lfd_vision/geom_util.h"
 //-------------------------------------------------------------------------------------------
-#include "pr2_lfd_vision/Int32Array.h"
-#include "pr2_lfd_vision/IndexedBoundingBox.h"
-#include "pr2_lfd_vision/SetBoundingBox.h"
-#include "pr2_lfd_vision/SetBBEquation.h"
-#include "pr2_lfd_vision/ReadRegister.h"
-#include "pr2_lfd_vision/WriteRegister.h"
-#include "pr2_lfd_vision/SetFrameRate.h"
+#include "lfd_vision/Int32Array.h"
+#include "lfd_vision/IndexedBoundingBox.h"
+#include "lfd_vision/SetBoundingBox.h"
+#include "lfd_vision/SetBBEquation.h"
+#include "lfd_vision/ReadRegister.h"
+#include "lfd_vision/WriteRegister.h"
+#include "lfd_vision/SetFrameRate.h"
 //-------------------------------------------------------------------------------------------
 #include <ros/ros.h>
 #include <sensor_msgs/PointCloud2.h>
@@ -50,7 +50,7 @@ public:
     {
       analyzer_.InitBoundingBoxes(20);
 
-      pub_count_= node_.advertise<pr2_lfd_vision::Int32Array>("bb_counts", 1);
+      pub_count_= node_.advertise<lfd_vision::Int32Array>("bb_counts", 1);
 
       srv_set_bb_= node_.advertiseService("set_bb", &TFlowAnalyzerNode::SetBoundingBox, this);
       srv_set_bbeq_= node_.advertiseService("set_bbeq", &TFlowAnalyzerNode::SetBBEquation, this);
@@ -60,7 +60,7 @@ public:
       sub_indexed_bb_= node_.subscribe("indexed_bb", /*queue_size=*/10, &TFlowAnalyzerNode::IndexedBBCallback, this);
     }
 
-  bool SetBoundingBox(pr2_lfd_vision::SetBoundingBox::Request &req, pr2_lfd_vision::SetBoundingBox::Response &res)
+  bool SetBoundingBox(lfd_vision::SetBoundingBox::Request &req, lfd_vision::SetBoundingBox::Response &res)
     {
       TBoundingBox bb;
       bb.Active= req.indexed_bb.active;
@@ -75,7 +75,7 @@ public:
       return true;
     }
 
-  bool SetBBEquation(pr2_lfd_vision::SetBBEquation::Request &req, pr2_lfd_vision::SetBBEquation::Response &res)
+  bool SetBBEquation(lfd_vision::SetBBEquation::Request &req, lfd_vision::SetBBEquation::Response &res)
     {
       TBoundingBox bb;
       bb.Active= req.indexed_bbeq.active;
@@ -123,13 +123,13 @@ public:
       // std::cerr<<"pt_min:"<<pt_min<<std::endl;
       // std::cerr<<"pt_max:"<<pt_max<<std::endl;
 
-      pr2_lfd_vision::Int32Array  out_counts;
+      lfd_vision::Int32Array  out_counts;
       analyzer_.AnalyzeBBs(cloud_orig, out_counts.data);
       for(size_t i(0);i<out_counts.data.size();++i)  std::cerr<<" "<<out_counts.data[i]; std::cerr<<std::endl;
       pub_count_.publish(out_counts);
     }
 
-  void IndexedBBCallback(const pr2_lfd_vision::IndexedBoundingBoxConstPtr &msg)
+  void IndexedBBCallback(const lfd_vision::IndexedBoundingBoxConstPtr &msg)
     {
       TBoundingBox bb;
       bb.Active= msg->active;
@@ -169,20 +169,20 @@ public:
       srv_set_frame_rate_= node_.advertiseService("set_frame_rate", &TSentisM100Node::SrvSetFrameRate, this);
     }
 
-  bool SrvWriteRegister(pr2_lfd_vision::WriteRegister::Request &req, pr2_lfd_vision::WriteRegister::Response &res)
+  bool SrvWriteRegister(lfd_vision::WriteRegister::Request &req, lfd_vision::WriteRegister::Response &res)
     {
       res.success= WriteRegister(req.address, req.value);
       return true;
     }
 
-  bool SrvReadRegister(pr2_lfd_vision::ReadRegister::Request &req, pr2_lfd_vision::ReadRegister::Response &res)
+  bool SrvReadRegister(lfd_vision::ReadRegister::Request &req, lfd_vision::ReadRegister::Response &res)
     {
       res.value= ReadRegister(req.address);
       res.success= IsNoError("");
       return true;
     }
 
-  bool SrvSetFrameRate(pr2_lfd_vision::SetFrameRate::Request &req, pr2_lfd_vision::SetFrameRate::Response &res)
+  bool SrvSetFrameRate(lfd_vision::SetFrameRate::Request &req, lfd_vision::SetFrameRate::Response &res)
     {
       res.success= SetFrameRate(req.frame_rate);
       return true;

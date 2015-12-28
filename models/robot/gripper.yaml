@@ -1,9 +1,0 @@
-#Left gripper
-wrist_l:
-  #Gripper pose
-  l_x_gripper: [0.16,0.0,0.0, 0.0,0.0,0.0,1.0]
-
-#Right gripper
-wrist_r:
-  #Gripper pose
-  l_x_gripper: [0.16,0.0,0.0, 0.0,0.0,0.0,1.0]

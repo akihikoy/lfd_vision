@@ -82,31 +82,10 @@ if(EXISTS /usr/include/libm100)
   target_link_libraries(sentis_m100_node ${OpenCV_LIBRARIES} m100)
 endif(EXISTS /usr/include/libm100)
 
-rosbuild_add_executable(ode_pour_sim_node
-      src/ode_pour_sim_node.cpp
-      src/ode_pour_sim.cpp)
-add_definitions(-DdDOUBLE)
-include_directories($ENV{HOME}/prg/libode/ode-latest/include)
-target_link_libraries(ode_pour_sim_node
-      $ENV{HOME}/prg/libode/ode-latest/ode/src/.libs/libode.a
-      $ENV{HOME}/prg/libode/ode-latest/drawstuff/src/.libs/libdrawstuff.a
-      SM ICE GL Xext X11 GLU)
-
-rosbuild_add_executable(ode_grpour_sim_node
-      src/ode_grpour_sim_node.cpp
-      src/ode_grpour_sim.cpp)
-add_definitions(-DdDOUBLE)
-include_directories($ENV{HOME}/prg/libode/ode-latest/include)
-target_link_libraries(ode_grpour_sim_node
-      $ENV{HOME}/prg/libode/ode-latest/ode/src/.libs/libode.a
-      $ENV{HOME}/prg/libode/ode-latest/drawstuff/src/.libs/libdrawstuff.a
-      SM ICE GL Xext X11 GLU)
-
-# -L/usr/X11R6/lib -ldl  -lpthread
 
 
-file(GLOB raytrace_srcs1 "include/pr2_lfd_vision/raytrace/doncross/*.cpp")
-file(GLOB raytrace_srcs2 "include/pr2_lfd_vision/raytrace/lodepng/*.cpp")
+file(GLOB raytrace_srcs1 "include/lfd_vision/raytrace/doncross/*.cpp")
+file(GLOB raytrace_srcs2 "include/lfd_vision/raytrace/lodepng/*.cpp")
 rosbuild_add_library(ray_trace ${raytrace_srcs1} ${raytrace_srcs2})
 
 rosbuild_add_executable(rt_pose_estimator_node

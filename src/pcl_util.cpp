@@ -8,8 +8,8 @@
     \date    Feb.10, 2015
 */
 //-------------------------------------------------------------------------------------------
-#include "pr2_lfd_vision/pcl_util.h"
-#include "pr2_lfd_vision/geom_util.h"
+#include "lfd_vision/pcl_util.h"
+#include "lfd_vision/geom_util.h"
 //-------------------------------------------------------------------------------------------
 #include <pcl/io/io.h>
 #include <pcl/sample_consensus/method_types.h>

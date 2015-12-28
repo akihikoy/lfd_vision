@@ -19,7 +19,7 @@
   <!--end of pr2_empty_world.launch-->
 
   <!--<include file="$(find pr2_description)/robots/upload_pr2.launch" />-->
-  <include file="$(find pr2_lfd_vision)/urdf/upload_pr2_m100.launch" />
+  <include file="$(find lfd_vision)/urdf/upload_pr2_m100.launch" />
 
   <!--Based on <include file="$(find pr2_gazebo)/launch/pr2_no_controllers.launch" />-->
     <!-- send pr2 urdf to param server -->
