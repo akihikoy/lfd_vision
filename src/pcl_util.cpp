@@ -17,6 +17,7 @@
 #include <pcl/segmentation/sac_segmentation.h>
 #include <pcl/segmentation/extract_clusters.h>
 #include <pcl_conversions/pcl_conversions.h>
+#include <pcl/ros/conversions.h>
 #include <limits>
 //-------------------------------------------------------------------------------------------
 namespace trick
@@ -54,6 +55,92 @@ ConvertROSMsgToPointCloud(const sensor_msgs::PointCloud2ConstPtr &msg, bool no_r
       throw std::runtime_error("The width and height do not match the cloud size!");
   }
 
+  return cloud;
+}
+//-------------------------------------------------------------------------------------------
+
+template<typename t_point>
+void ConvertPointCloudToROSMsg(
+    sensor_msgs::PointCloud2 &msg,
+    const typename pcl::PointCloud<t_point>::ConstPtr &cloud,
+    const std::string &frame_id, const ros::Time &time)
+{
+  pcl::toROSMsg(*cloud,msg);
+  msg.header.frame_id= frame_id;
+  msg.header.stamp= time;
+}
+// instantiation:
+template
+void ConvertPointCloudToROSMsg<pcl::PointXYZRGB>(
+    sensor_msgs::PointCloud2 &msg,
+    const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr &cloud,
+    const std::string &frame_id, const ros::Time &time);
+template
+void ConvertPointCloudToROSMsg<pcl::PointXYZ>(
+    sensor_msgs::PointCloud2 &msg,
+    const pcl::PointCloud<pcl::PointXYZ>::ConstPtr &cloud,
+    const std::string &frame_id, const ros::Time &time);
+//-------------------------------------------------------------------------------------------
+
+/* Convert an XYZ image to a point cloud.  */
+pcl::PointCloud<pcl::PointXYZRGB>::Ptr
+ConvertXYZImageToPointCloud(const cv::Mat &xyz_img, const cv::Mat &rgb_img)
+{
+  pcl::PointCloud<pcl::PointXYZRGB>::Ptr  cloud(new pcl::PointCloud<pcl::PointXYZRGB>);
+  cloud->height= xyz_img.rows;
+  cloud->width= xyz_img.cols;
+  cloud->is_dense= true;
+  cloud->points.resize(xyz_img.rows*xyz_img.cols);
+  for(int y(0),i(0); y<xyz_img.rows; ++y)
+  {
+    const cv::Point3f *xyz_ptr= xyz_img.ptr<cv::Point3f>(y);
+    const cv::Vec3b   *rgb_ptr= rgb_img.ptr<cv::Vec3b>(y);
+    for(int x(0); x<xyz_img.cols; ++x,++i)
+    {
+      // const cv::Point3f &xyz(xyz_ptr[x]);
+      // const cv::Vec3b   &rgb(rgb_ptr[x]);
+      const cv::Point3f &xyz(xyz_img.at<cv::Point3f>(y,x));
+      const cv::Vec3b   &rgb(rgb_img.at<cv::Vec3b>(y,x));
+      pcl::PointXYZRGB &point(cloud->points[i]);
+      // point.y= -xyz.x;
+      // point.z= -xyz.y;
+      // if(xyz.z>0.0 && !isinf(xyz.z))  point.x= xyz.z;
+      point.x= xyz.x;
+      point.y= xyz.y;
+      if(xyz.z>0.0 && !isinf(xyz.z))  point.z= xyz.z;
+      // if(!isinf(xyz.z))  point.z= xyz.z;
+      else  point.z= nanf("");
+      point.r= rgb[2];
+      point.g= rgb[1];
+      point.b= rgb[0];
+    }
+  }
+  return cloud;
+}
+//-------------------------------------------------------------------------------------------
+
+/* Convert 4D points (e.g. result of triangulatePoints) to a point cloud.  */
+pcl::PointCloud<pcl::PointXYZ>::Ptr
+Convert4DPointsToPointCloud(const cv::Mat &points4d)
+{
+  pcl::PointCloud<pcl::PointXYZ>::Ptr  cloud(new pcl::PointCloud<pcl::PointXYZ>);
+  cloud->height= 1;
+  cloud->width= points4d.cols;
+  cloud->is_dense= false;
+  cloud->points.resize(points4d.cols);
+  for(int i(0); i<points4d.cols; ++i)
+  {
+    const cv::Vec4f &xyz(points4d.col(i));
+    pcl::PointXYZ &point(cloud->points[i]);
+    // point.y= -xyz[0];
+    // point.z= -xyz[1];
+    // if(xyz[2]>0.0 && !isinf(xyz[2]))  point.x= xyz[2];
+    point.x= xyz[0];
+    point.y= xyz[1];
+    if(xyz[2]>0.0 && !isinf(xyz[2]))  point.z= xyz[2];
+    // if(!isinf(xyz[2]))  point.z= xyz[2];
+    else  point.z= nanf("");
+  }
   return cloud;
 }
 //-------------------------------------------------------------------------------------------

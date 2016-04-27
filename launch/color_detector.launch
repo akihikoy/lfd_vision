@@ -2,6 +2,8 @@
   <!--Camera 1: measure the amount-->
   <node type="color_detector_node" pkg="lfd_vision" name="color_detector" output="screen">
     <param name="camera" value="1" />
+    <param name="cap_width" value="640" />
+    <param name="cap_height" value="480" />
     <param name="rotate90n" value="0" />
     <param name="num_detectors" value="2" />
     <param name="block_area_min" value="10.0" />

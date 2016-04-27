@@ -40,6 +40,15 @@ rosbuild_add_executable(color_detector_node
       src/vision_util.cpp)
 target_link_libraries(color_detector_node ${OpenCV_LIBRARIES})
 
+rosbuild_add_executable(usb_stereo_node
+      src/usb_stereo_node.cpp
+      src/color_detector.cpp
+      src/flow_finder.cpp
+      src/usb_stereo.cpp
+      src/vision_util.cpp
+      src/pcl_util.cpp)
+target_link_libraries(usb_stereo_node ${OpenCV_LIBRARIES})
+
 # rosbuild_add_executable(test_col_flow
 #       test/test_col_flow.cpp
 #       src/color_detector.cpp

@@ -33,13 +33,16 @@ std::ostream& operator<<(std::ostream &lhs, const TFlowElement &rhs)
 
 TFlowFinder::TFlowFinder()
   :
+    proc_type_(0),
     optflow_win_size_(3,3),
     optflow_spd_threshold_(5.0),
     erode_dilate_(1),
     amount_min_(3.0),
     amount_max_(-1.0),
     speed_min_(-1.0),
-    speed_max_(-1.0)
+    speed_max_(-1.0),
+    flow_mask_filter_len_(0),
+    idx_mask_(-1)
 {
 }
 //-------------------------------------------------------------------------------------------
@@ -51,12 +54,39 @@ void TFlowFinder::Update(const cv::Mat &frame)
   else
     frame.convertTo(frame_,CV_8UC1);
 
-  UpdateProc1_FindFlow();
-  UpdateProc2_ContourAnalysis(mask_);
+  if(flow_mask_filter_len_>1 && idx_mask_<0)
+  {
+    idx_mask_= 0;
+    mask_queue_.resize(flow_mask_filter_len_);
+    for(int i(0); i<flow_mask_filter_len_; ++i)
+      mask_queue_[i]= cv::Mat::zeros(frame.size(), CV_8UC1);
+  }
+
+  // proc_type_ // 0: Full, 1: FlowMask only
+
+  // Update FlowMask (flow_mask_)
+  if(proc_type_==0 || proc_type_==1)
+  {
+    if(flow_mask_filter_len_<=1)
+      UpdateProc1_FindFlow(flow_mask_);
+    else
+    {
+      UpdateProc1_FindFlow(mask_queue_[idx_mask_]);
+      ++idx_mask_;
+      if(idx_mask_>=flow_mask_filter_len_)  idx_mask_= 0;
+      mask_queue_[0].copyTo(flow_mask_);
+      for(int i(1); i<flow_mask_filter_len_; ++i)
+        // flow_mask_+= mask_queue_[i];
+        cv::bitwise_or(flow_mask_, mask_queue_[i], flow_mask_);
+    }
+  }
+
+  if(proc_type_==0)
+    UpdateProc2_ContourAnalysis(flow_mask_);
 }
 //-------------------------------------------------------------------------------------------
 
-void TFlowFinder::UpdateProc1_FindFlow()
+void TFlowFinder::UpdateProc1_FindFlow(cv::Mat &mask)
 {
   if(frame_old_.size()!=frame_.size())  frame_old_= frame_.clone();
 
@@ -67,12 +97,12 @@ void TFlowFinder::UpdateProc1_FindFlow()
   GetAngleSpdImg(img_angle_, img_spd_);
 
 
-  cv::threshold(img_spd_, mask_, /*thresh=*/optflow_spd_threshold_, /*maxval=*/1.0, cv::THRESH_BINARY);
-  mask_.convertTo(mask_,CV_8UC1);
+  cv::threshold(img_spd_, mask, /*thresh=*/optflow_spd_threshold_, /*maxval=*/1.0, cv::THRESH_BINARY);
+  mask.convertTo(mask,CV_8UC1);
   if(erode_dilate_>0)
   {
-    cv::erode(mask_,mask_,cv::Mat(),cv::Point(-1,-1), erode_dilate_);
-    cv::dilate(mask_,mask_,cv::Mat(),cv::Point(-1,-1), erode_dilate_);
+    cv::erode(mask,mask,cv::Mat(),cv::Point(-1,-1), erode_dilate_);
+    cv::dilate(mask,mask,cv::Mat(),cv::Point(-1,-1), erode_dilate_);
   }
 }
 //-------------------------------------------------------------------------------------------

@@ -62,6 +62,20 @@ inline bool IsInvalid<double>(const double &x)
 pcl::PointCloud<pcl::PointXYZRGB>::Ptr
 ConvertROSMsgToPointCloud(const sensor_msgs::PointCloud2ConstPtr &msg, bool no_rgb=false);
 
+template<typename t_point>
+void ConvertPointCloudToROSMsg(
+    sensor_msgs::PointCloud2 &msg,
+    const typename pcl::PointCloud<t_point>::ConstPtr &cloud,
+    const std::string &frame_id, const ros::Time &time=ros::Time::now());
+
+/* Convert an XYZ image to a point cloud.  */
+pcl::PointCloud<pcl::PointXYZRGB>::Ptr
+ConvertXYZImageToPointCloud(const cv::Mat &xyz_img, const cv::Mat &rgb_img);
+
+/* Convert 4D points (e.g. result of triangulatePoints) to a point cloud.  */
+pcl::PointCloud<pcl::PointXYZ>::Ptr
+Convert4DPointsToPointCloud(const cv::Mat &points4d);
+
 /* Get RGB image and depth image from a Point Cloud.
     cf. pcl::PointXYZRGB Struct Reference
     http://docs.pointclouds.org/1.7.1/structpcl_1_1_point_x_y_z_r_g_b.html  */

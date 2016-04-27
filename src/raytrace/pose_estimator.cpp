@@ -372,6 +372,7 @@ bool TRayTracePoseEstimator::GetEvalDescription(
       /*DEBUG*-/if(IsInvalid(sq_diff_normal))
       {
         std::cerr<<"sq_diff_normal: "<<sq_diff_normal<<std::endl;
+        std::cerr<<"  py,px: "<<py<<", "<<px<<std::endl;
         std::cerr<<"  normal_img.at<cv::Vec3f>(py,px): "<<normal_img.at<cv::Vec3f>(py,px)<<std::endl;
         std::cerr<<"  normal: "<<normal<<std::endl;
       }//*/

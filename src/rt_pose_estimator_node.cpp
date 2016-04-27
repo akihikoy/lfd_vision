@@ -285,6 +285,9 @@ void CallbackPointCloud(const sensor_msgs::PointCloud2ConstPtr &msg)
     }
   }
 
+  // Convert depth image for good look:
+  cv::normalize(1.0/depth_img, depth_img, 0, 1.0, CV_MINMAX, CV_32FC1);
+
   // Rendering:
   // 0: 0.5*original+render, 1: 0.25*original+render, 2: render, 3: original, 4: camera_info error.
   if(DisplayMode==0 && RayTracePoseEstimators.size()>0)

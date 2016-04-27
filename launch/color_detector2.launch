@@ -2,9 +2,11 @@
   <!--Camera 1: measure the amount-->
   <node type="color_detector_node" pkg="lfd_vision" name="color_detector" output="screen">
     <param name="camera" value="1" />
+    <param name="cap_width" value="352" />
+    <param name="cap_height" value="288" />
     <param name="rotate90n" value="0" />
     <param name="num_detectors" value="2" />
-    <param name="block_area_min" value="10.0" />
+    <param name="block_area_min" value="1.0" />
     <!--<param name="mode" value="1" />-->
     <param name="mode" value="2" />
     <param name="pub_mode" value="1" />
@@ -14,9 +16,11 @@
   <!--Camera 1: measure the amount-->
   <node type="color_detector_node" pkg="lfd_vision" name="color_detector2" output="screen">
     <param name="camera" value="2" />
+    <param name="cap_width" value="352" />
+    <param name="cap_height" value="288" />
     <param name="rotate90n" value="0" />
     <param name="num_detectors" value="2" />
-    <param name="block_area_min" value="10.0" />
+    <param name="block_area_min" value="1.0" />
     <!--<param name="mode" value="1" />-->
     <param name="mode" value="2" />
     <param name="pub_mode" value="1" />

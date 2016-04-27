@@ -156,10 +156,11 @@ bool HandleKeyEvent()
     if(VizMode<0)  VizMode= 5;
     std::cerr<<"VizMode: "<<VizMode<<std::endl;
   }
-  else if(c=='f')
+  else if(c=='f' || c=='F')
   {
-    ++FlowMaskMode;
+    if(c=='f')  ++FlowMaskMode;  else  --FlowMaskMode;
     if(FlowMaskMode>2)  FlowMaskMode= 0;
+    if(FlowMaskMode<0)  FlowMaskMode= 2;
     std::cerr<<"FlowMaskMode: "<<FlowMaskMode<<std::endl;
   }
 
@@ -256,11 +257,14 @@ int main(int argc, char**argv)
   ros::init(argc, argv, "color_detector_node");
   ros::NodeHandle node("~");
   int camera(0);
+  int cap_width(640), cap_height(480);
   int mode(2);  // Ratio computation mode (1 or 2, 1:deprecated).
   int pub_mode(0);  // 0: original, 1: only ColDetSensor message, 2: both
   double block_area_min(10.0);
   std::string vout_base("/tmp/vout");
   node.param("camera",camera,0);
+  node.param("cap_width",cap_width,cap_width);
+  node.param("cap_height",cap_height,cap_height);
   node.param("mode",mode,mode);
   node.param("pub_mode",pub_mode,pub_mode);
   node.param("viz_mode",VizMode,VizMode);
@@ -278,6 +282,9 @@ int main(int argc, char**argv)
     return -1;
   }
   std::cerr<<"Camera opened"<<std::endl;
+
+  cap.set(CV_CAP_PROP_FRAME_WIDTH, cap_width);
+  cap.set(CV_CAP_PROP_FRAME_HEIGHT, cap_height);
 
   VideoOut.SetfilePrefix(vout_base);
 

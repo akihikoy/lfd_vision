@@ -36,7 +36,7 @@ public:
   TFlowFinder();
 
   void Update(const cv::Mat &frame);
-  void UpdateProc1_FindFlow();
+  void UpdateProc1_FindFlow(cv::Mat &mask);
   void UpdateProc2_ContourAnalysis(const cv::Mat &mask);
   void DrawFlow(cv::Mat &frame, const cv::Scalar &color, const double &len=1.0, int thickness=3);
 
@@ -51,6 +51,10 @@ public:
   const std::list<TFlowElement>& FlowElements() const {return flow_elmts_;}
   const std::vector<std::vector<cv::Point> >& Contours() const {return contours_;}
 
+  const cv::Mat& FlowMask() const {return flow_mask_;}
+
+  // 0: Full, 1: FlowMask only
+  void SetProcType(int pt)  {proc_type_= pt;}
   void SetOptFlowWinSize(const cv::Size &v)  {optflow_win_size_= v;}
   void SetOptFlowSpdThreshold(const double &v)  {optflow_spd_threshold_= v;}
   void SetErodeDilate(int n_itr)  {erode_dilate_= n_itr;}
@@ -60,22 +64,30 @@ public:
   // Set range of flow-speed to be added (negative value does not affect)
   void SetSpeedRange(const double &min=-1.0, const double &max=-1.0)
     {speed_min_=min; speed_max_=max;}
+  // Filter length of FlowMask (0: no filter)
+  void SetFlowMaskFilterLen(int l)  {flow_mask_filter_len_= l;}
 
 private:
   std::list<TFlowElement> flow_elmts_;
 
   // Parameters:
+  int proc_type_;  // 0: Full, 1: FlowMask only
   cv::Size optflow_win_size_;
   double optflow_spd_threshold_;
   int    erode_dilate_;
   double amount_min_, amount_max_;
   double speed_min_, speed_max_;
+  int flow_mask_filter_len_;  // Filter length of FlowMask (0: no filter)
 
   // Tmp variables:
   cv::Mat frame_, frame_old_;
   cv::Mat velx_, vely_;
   cv::Mat img_spd_, img_angle_;
-  cv::Mat mask_;
+  cv::Mat flow_mask_;
+
+  // Filter for flow_mask_
+  int idx_mask_;
+  std::vector<cv::Mat> mask_queue_;
 
   std::vector<std::vector<cv::Point> > contours_;
 

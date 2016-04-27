@@ -1,0 +1,35 @@
+<launch>
+  <node name="usbcam1_l" pkg="usb_cam" type="usb_cam_node">
+    <param name="video_device" value="/dev/video1" />
+    <param name="image_width" value="352" />
+    <param name="image_height" value="288" />
+    <!--<param name="image_width" value="480" />
+    <param name="image_height" value="420" />-->
+    <!--<param name="image_width" value="640" />
+    <param name="image_height" value="480" />-->
+    <param name="camera_name" value="ext_usbcam1_l" />
+    <param name="camera_frame_id" value="ext_usbcam1_l" />
+  </node>
+
+  <node name="usbcam1_r" pkg="usb_cam" type="usb_cam_node">
+    <param name="video_device" value="/dev/video2" />
+    <param name="image_width" value="352" />
+    <param name="image_height" value="288" />
+    <!--<param name="image_width" value="480" />
+    <param name="image_height" value="420" />-->
+    <!--<param name="image_width" value="640" />
+    <param name="image_height" value="480" />-->
+    <param name="camera_name" value="ext_usbcam1_r" />
+    <param name="camera_frame_id" value="ext_usbcam1_r" />
+  </node>
+
+  <!--<node name="view_l" pkg="image_view" type="image_view"
+    args="image:=/usbcam1_l/image_raw" />
+  <node name="view_r" pkg="image_view" type="image_view"
+    args="image:=/usbcam1_r/image_raw" />-->
+
+  <node name="cameracalibrator" pkg="lfd_vision" type="cameracalibrator.py"
+    output="screen"
+    args="--size 8x6 --square 0.0247 right:=/usbcam1_r/image_raw left:=/usbcam1_l/image_raw right_camera:=/usbcam1_r left_camera:=/usbcam1_l --approximate=0.1 -c '' " />
+
+</launch>
