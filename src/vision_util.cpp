@@ -9,6 +9,7 @@
 #include "lfd_vision/vision_util.h"
 //-------------------------------------------------------------------------------------------
 #include <opencv2/imgproc/imgproc.hpp>
+#include <opencv2/calib3d/calib3d.hpp>
 #include <iomanip>
 //-------------------------------------------------------------------------------------------
 namespace trick
@@ -40,6 +41,17 @@ void GetMedian(const cv::Mat &src, int &x_med, int &y_med)
   std::sort(arrayy.begin(),arrayy.end());
   x_med= arrayx[arrayx.size()/2];
   y_med= arrayy[arrayy.size()/2];
+}
+//-------------------------------------------------------------------------------------------
+
+// Extract rows of src and store to dst (works for &dst==&src)
+void ExtractRows(const cv::Mat &src, const cv::vector<int> &idx, cv::Mat &dst)
+{
+  cv::Mat buf(src);
+  dst.create(idx.size(),buf.cols,buf.type());
+  int r(0);
+  for(cv::vector<int>::const_iterator itr(idx.begin()),itr_end(idx.end()); itr!=itr_end; ++itr,++r)
+    buf.row(*itr).copyTo(dst.row(r));
 }
 //-------------------------------------------------------------------------------------------
 
@@ -85,6 +97,22 @@ void Rotate90N(const cv::Mat &src, cv::Mat &dst, int N)
     cv::transpose(dst, dst);
     cv::flip(dst, dst, /*horizontal*/1);
   }
+}
+//-------------------------------------------------------------------------------------------
+
+// Project points 3D onto a rectified image.
+void ProjectPointsToRectifiedImg(const cv::Mat &points3d, const cv::Mat &P, cv::Mat &points2d)
+{
+  cv::Mat P2;
+  P.convertTo(P2,points3d.type());
+  // cv::Mat points3dh, points2dh;
+  // cv::convertPointsToHomogeneous(points3d, points3dh);
+  // points2dh= points3dh*P2.t();
+  cv::Mat points2dh= points3d*P2(cv::Range(0,3),cv::Range(0,3)).t();
+  cv::Mat p3= P2.col(3).t();
+  for(int r(0),rows(points2dh.rows);r<rows;++r)
+    points2dh.row(r)+= p3;
+  cv::convertPointsFromHomogeneous(points2dh, points2d);
 }
 //-------------------------------------------------------------------------------------------
 

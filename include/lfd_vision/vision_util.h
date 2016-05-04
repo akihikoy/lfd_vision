@@ -53,6 +53,10 @@ inline bool FileExists(const std::string &filename)
 void GetMedian(const cv::Mat &src, int &x_med, int &y_med);
 //-------------------------------------------------------------------------------------------
 
+// Extract rows of src and store to dst (works for &dst==&src)
+void ExtractRows(const cv::Mat &src, const cv::vector<int> &idx, cv::Mat &dst);
+//-------------------------------------------------------------------------------------------
+
 // Find the largest contour and return info. bin_src should be a binary image.
 bool FindLargestContour(const cv::Mat &bin_src,
     double *area=NULL,
@@ -63,6 +67,10 @@ bool FindLargestContour(const cv::Mat &bin_src,
 
 // Rotate 90, 180, 270 degrees
 void Rotate90N(const cv::Mat &src, cv::Mat &dst, int N);
+//-------------------------------------------------------------------------------------------
+
+// Project points 3D onto a rectified image.
+void ProjectPointsToRectifiedImg(const cv::Mat &points3d, const cv::Mat &P, cv::Mat &points2d);
 //-------------------------------------------------------------------------------------------
 
 inline void DrawCrossOnCenter(cv::Mat &img, int size, const cv::Scalar &col, int thickness=1)

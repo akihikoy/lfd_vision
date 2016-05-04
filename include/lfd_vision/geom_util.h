@@ -9,6 +9,7 @@
 #ifndef geom_util_h
 #define geom_util_h
 //-------------------------------------------------------------------------------------------
+#include <iostream>
 #include <Eigen/Core>
 #include <Eigen/Geometry>
 //-------------------------------------------------------------------------------------------
@@ -124,6 +125,26 @@ inline void RotateAngleAxis(const t_value &angle, const t_value axis[3], const t
 {
   Eigen::Quaterniond q= Eigen::AngleAxisd(angle, Eigen::Vector3d(axis)) * QToEigMat(q_in);
   EigMatToQ(q, q_out);
+}
+//-------------------------------------------------------------------------------------------
+
+/* Return axis*angle with which v1 is rotated to v2's direction.
+    axis_angle: axis*angle (i.e. its norm is angle). */
+template <typename t_value, typename t_array>
+inline void GetAxisAngle(const t_value v1[3], const t_value v2[3], t_array &axis_angle)
+{
+  typedef Eigen::Matrix<t_value,3,1> Vector3;
+  Vector3 p1(v1), p2(v2);
+  Vector3 p1xp2= p1.cross(p2);
+  double p1xp2_norm= p1xp2.norm();
+  if(p1xp2_norm<1.0e-8)
+    {for(int d(0);d<3;++d) axis_angle[d]=0.0; return;}
+  Vector3 axis= p1xp2/p1xp2_norm;
+  Vector3 ex= p1.normalized();
+  Vector3 ey= axis.cross(ex);
+  double angle= std::atan2(ey.dot(p2), ex.dot(p2));
+  axis*= angle;
+  for(int d(0);d<3;++d)  axis_angle[d]= axis[d];
 }
 //-------------------------------------------------------------------------------------------
 

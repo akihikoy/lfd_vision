@@ -11,12 +11,14 @@
 #include "lfd_vision/color_detector.h"
 #include "lfd_vision/flow_finder.h"
 #include "lfd_vision/usb_stereo.h"
+#include "lfd_vision/geom_util.h"
 #include "lfd_vision/vision_util.h"
 #include "lfd_vision/pcl_util.h"
 //-------------------------------------------------------------------------------------------
 #include "lfd_vision/ColDetSensor.h"
 #include "lfd_vision/ColDetViz.h"
 #include "lfd_vision/ColDetVizPrimitive.h"
+#include "lfd_vision/ROI_3DProj.h"
 //-------------------------------------------------------------------------------------------
 #include <opencv2/highgui/highgui.hpp>
 #include <ros/ros.h>
@@ -62,6 +64,8 @@ std::vector<lfd_vision::ColDetVizPrimitive> VizObjs[2];  // External visualizati
 ros::Publisher CloudPub, FlowCloudPub;
 cv::Mat Frame[2];
 boost::mutex MutCamCapture;
+
+lfd_vision::ROI_3DProj ROIColDet, ROIStereoF;
 }
 //-------------------------------------------------------------------------------------------
 using namespace std;
@@ -199,6 +203,156 @@ void DrawExternalViz(int cam_idx, cv::Mat &disp_img)
 }
 //-------------------------------------------------------------------------------------------
 
+void ProjectROIToMask(const lfd_vision::ROI_3DProj &roi,
+    const cv::Size &size1, const cv::Size &size2, const TCameraParams &cam_params,
+    cv::Mat &mask1, cv::Mat &mask2)
+{
+  mask1.create(size1, CV_8U);
+  mask2.create(size2, CV_8U);
+  if(roi.type==roi.NONE)
+  {
+    mask1.setTo(255);
+    mask2.setTo(255);
+  }
+  else if(roi.type==roi.POLYGON)
+  {
+    cv::Mat points3d(roi.param.size()/3,3,CV_32F), points2d1, points2d2;
+    for(int i(0),i_end(roi.param.size()/3); i<i_end; ++i)
+    {
+      points3d.at<float>(i,0)= roi.param[3*i];
+      points3d.at<float>(i,1)= roi.param[3*i+1];
+      points3d.at<float>(i,2)= roi.param[3*i+2];
+    }
+// // Refine 3D points.  FIXME: This is inaccurate. Modify each line, not each point.
+// for(int r(0),rows(points3d.rows); r<rows; ++r)
+  // if(points3d.at<float>(r,2)<0.0)  points3d.at<float>(r,2)= 0.0;
+    cv::Vec3f rvec1(0.0,0.0,0.0), tvec1(0.0,0.0,0.0);
+    cv::projectPoints(points3d, rvec1, tvec1, cam_params.K1, cam_params.D1, points2d1);
+    cv::projectPoints(points3d, cam_params.R, cam_params.T, cam_params.K2, cam_params.D2, points2d2);
+    points2d1.convertTo(points2d1, CV_32S);
+    points2d2.convertTo(points2d2, CV_32S);
+    for(int r(0),rows(points2d1.rows); r<rows; ++r)
+    {
+      if(points2d1.at<int>(r,0)<-size1.width)   points2d1.at<int>(r,0)= -size1.width;
+      if(points2d1.at<int>(r,0)>2*size1.width)  points2d1.at<int>(r,0)= 2*size1.width;
+      if(points2d1.at<int>(r,1)<-size1.height)   points2d1.at<int>(r,1)= -size1.height;
+      if(points2d1.at<int>(r,1)>2*size1.height)  points2d1.at<int>(r,1)= 2*size1.height;
+    }
+    for(int r(0),rows(points2d2.rows); r<rows; ++r)
+    {
+      if(points2d2.at<int>(r,0)<-size2.width)   points2d2.at<int>(r,0)= -size2.width;
+      if(points2d2.at<int>(r,0)>2*size2.width)  points2d2.at<int>(r,0)= 2*size2.width;
+      if(points2d2.at<int>(r,1)<-size2.height)   points2d2.at<int>(r,1)= -size2.height;
+      if(points2d2.at<int>(r,1)>2*size2.height)  points2d2.at<int>(r,1)= 2*size2.height;
+    }
+
+    mask1.setTo(0);
+    mask2.setTo(0);
+    std::vector<cv::Mat> ppt1(1),ppt2(1);
+    ppt1[0]= points2d1;
+    ppt2[0]= points2d2;
+    cv::fillPoly(mask1, ppt1, cv::Scalar(255));
+    cv::fillPoly(mask2, ppt2, cv::Scalar(255));
+  }
+  else if(roi.type==roi.CONE)
+  {
+    int N= 16;
+    cv::Mat points3d(1+N,3,CV_32F), rot, points2d1, points2d2, hull1, hull2;
+    points3d.at<float>(0,0)= 0.0;
+    points3d.at<float>(0,1)= 0.0;
+    points3d.at<float>(0,2)= 0.0;
+    float rad= roi.param[7]*std::tan(roi.param[6]);
+    for(int i(0); i<N; ++i)
+    {
+      float th=(float)i*M_PI*2.0/(float)(N);
+      points3d.at<float>(1+i,0)= rad*std::cos(th);
+      points3d.at<float>(1+i,1)= rad*std::sin(th);
+      points3d.at<float>(1+i,2)= 0.0;
+    }
+    float v1[]={0.,0.,-1.}, v2[]={roi.param[3],roi.param[4],roi.param[5]};
+    cv::Vec3f axis_angle;
+    GetAxisAngle(v1, v2, axis_angle);
+    cv::Rodrigues(axis_angle, rot);
+// std::cerr<<"P-1 "<<axis_angle<<std::endl;
+// std::cerr<<"P-1 "<<rot<<std::endl;
+    points3d= points3d*rot.t();
+    points3d.at<float>(0,0)+= roi.param[0];
+    points3d.at<float>(0,1)+= roi.param[1];
+    points3d.at<float>(0,2)+= roi.param[2];
+    cv::Mat_<float> center= points3d.row(0)+roi.param[7]*cv::Mat(cv::Vec3f(roi.param[3],roi.param[4],roi.param[5])).t();
+    for(int i(0); i<N; ++i)
+      points3d.row(1+i)+= center;
+  // // Refine 3D points.  FIXME: This is inaccurate. Modify each line, not each point.
+  // float min_z(0.5);
+  // for(int r(0),rows(points3d.rows); r<rows; ++r)
+    // if(points3d.at<float>(r,2)<min_z)  points3d.at<float>(r,2)= min_z;
+// std::cerr<<"P0 "<<points3d<<std::endl;
+    // cv::Vec3f rvec1(0.0,0.0,0.0), tvec1(0.0,0.0,0.0);
+    // cv::projectPoints(points3d, rvec1, tvec1, cam_params.K1, cam_params.D1, points2d1);
+    // cv::projectPoints(points3d, cam_params.R, cam_params.T, cam_params.K2, cam_params.D2, points2d2);
+    ProjectPointsToRectifiedImg(points3d, cam_params.P1, points2d1);
+    ProjectPointsToRectifiedImg(points3d, cam_params.P2, points2d2);
+// std::cerr<<"P0.4 "<<points2d1<<std::endl;
+// std::cerr<<"P0.4 "<<points2d2<<std::endl;
+    points2d1.convertTo(points2d1, CV_32SC1);
+    points2d2.convertTo(points2d2, CV_32SC1);
+// std::cerr<<"P0.5 "<<points2d1<<std::endl;
+// std::cerr<<"P0.5 "<<points2d2<<std::endl;
+    // for(int r(0),rows(points2d1.rows); r<rows; ++r)
+    // {
+      // if(points2d1.at<int>(r,0)<-size1.width)   points2d1.at<int>(r,0)= -size1.width;
+      // if(points2d1.at<int>(r,0)>2*size1.width)  points2d1.at<int>(r,0)= 2*size1.width;
+      // if(points2d1.at<int>(r,1)<-size1.height)   points2d1.at<int>(r,1)= -size1.height;
+      // if(points2d1.at<int>(r,1)>2*size1.height)  points2d1.at<int>(r,1)= 2*size1.height;
+    // }
+    // for(int r(0),rows(points2d2.rows); r<rows; ++r)
+    // {
+      // if(points2d2.at<int>(r,0)<-size2.width)   points2d2.at<int>(r,0)= -size2.width;
+      // if(points2d2.at<int>(r,0)>2*size2.width)  points2d2.at<int>(r,0)= 2*size2.width;
+      // if(points2d2.at<int>(r,1)<-size2.height)   points2d2.at<int>(r,1)= -size2.height;
+      // if(points2d2.at<int>(r,1)>2*size2.height)  points2d2.at<int>(r,1)= 2*size2.height;
+    // }
+    // ver.2
+    // cv::vector<int> idx_valid;
+    // idx_valid.reserve(points2d1.rows);
+    // for(int r(0),rows(points2d1.rows); r<rows; ++r)
+    // {
+      // if(  points2d1.at<int>(r,0)>=-size1.width  && points2d1.at<int>(r,0)<2*size1.width
+        // && points2d1.at<int>(r,1)>=-size1.height && points2d1.at<int>(r,1)<2*size1.height
+        // && points2d2.at<int>(r,0)>=-size2.width  && points2d2.at<int>(r,0)<2*size2.width
+        // && points2d2.at<int>(r,1)>=-size2.height && points2d2.at<int>(r,1)<2*size2.height )
+        // idx_valid.push_back(r);
+    // }
+    // ExtractRows(points2d1,idx_valid,points2d1);
+    // ExtractRows(points2d2,idx_valid,points2d2);
+
+// std::cerr<<"P1 "<<points2d1.rows<<", "<<points2d1.cols<<std::endl;
+// std::cerr<<"P1 "<<points2d2.rows<<", "<<points2d2.cols<<std::endl;
+// std::cerr<<"P1 "<<points2d1<<std::endl;
+// std::cerr<<"P1 "<<points2d2<<std::endl;
+    cv::convexHull(points2d1, hull1);
+    cv::convexHull(points2d2, hull2);
+// std::cerr<<"P2 "<<hull1.rows<<", "<<hull1.cols<<std::endl;
+// std::cerr<<"P2 "<<hull2.rows<<", "<<hull2.cols<<std::endl;
+    mask1.setTo(0);
+    mask2.setTo(0);
+// std::cerr<<"P3 "<<mask1.rows<<", "<<mask1.cols<<std::endl;
+// std::cerr<<"P3 "<<mask2.rows<<", "<<mask2.cols<<std::endl;
+// std::cerr<<"P3 "<<hull1<<std::endl;
+// std::cerr<<"P3 "<<hull2<<std::endl;
+    std::vector<cv::Mat> ppt1(1),ppt2(1);
+    ppt1[0]= hull1;
+    ppt2[0]= hull2;
+    cv::fillPoly(mask1, ppt1, cv::Scalar(255));
+    cv::fillPoly(mask2, ppt2, cv::Scalar(255));
+// std::cerr<<"P4 "<<mask1.rows<<", "<<mask1.cols<<std::endl;
+// std::cerr<<"P4 "<<mask2.rows<<", "<<mask2.cols<<std::endl;
+// cv::imshow("mask1", mask1);
+// cv::imshow("mask2", mask2);
+  }
+}
+//-------------------------------------------------------------------------------------------
+
 class TColDetVizCallback
 {
 private:
@@ -210,6 +364,13 @@ public:
     VizObjs[cam_idx_]= msg->objects;
   }
 };
+//-------------------------------------------------------------------------------------------
+
+void ROICallback(const lfd_vision::ROI_3DProjPtr &msg)
+{
+  if(msg->target=="col_det")        ROIColDet= *msg;
+  else if(msg->target=="stereo_f")  ROIStereoF= *msg;
+}
 //-------------------------------------------------------------------------------------------
 
 bool ResetAmount(std_srvs::Empty::Request &req, std_srvs::Empty::Response &res)
@@ -326,7 +487,7 @@ struct TFlowStereo2
   cv::Mat Kernel;
 
   // Temporary containers:
-  cv::Mat frame1, frame2;
+  cv::Mat frame1, frame2, mask1, mask2;
   cv::Mat seg1, seg2, tmp;
   std::vector<int> matched;
   std::vector<cv::Point2f> points1,points2;
@@ -350,8 +511,11 @@ struct TFlowStereo2
     }
   void operator()()
     {
-      FlowFinder[0].FlowMask().copyTo(frame1);
-      FlowFinder[1].FlowMask().copyTo(frame2);
+      ProjectROIToMask(ROIStereoF, FlowFinder[0].FlowMask().size(), FlowFinder[1].FlowMask().size(), Stereo.CameraParams(), mask1, mask2);
+      frame1.setTo(0);
+      frame2.setTo(0);
+      FlowFinder[0].FlowMask().copyTo(frame1, mask1);
+      FlowFinder[1].FlowMask().copyTo(frame2, mask2);
       frame1*= 200;
       frame2*= 200;
 
@@ -495,6 +659,9 @@ int main(int argc, char**argv)
 
   node.param("vout_base",vout_base,vout_base);
 
+  ROIColDet.type= ROIColDet.NONE;
+  ROIStereoF.type= ROIStereoF.NONE;
+
   cv::VideoCapture cap1(camera[0]), cap2(camera[1]);
   if(!cap1.isOpened() || !cap2.isOpened())  // check if we succeeded
   {
@@ -503,6 +670,7 @@ int main(int argc, char**argv)
   }
   std::cerr<<"Camera opened"<<std::endl;
 
+  cv::Size img_size(cap_width,cap_height);
   cap1.set(CV_CAP_PROP_FRAME_WIDTH, cap_width);
   cap1.set(CV_CAP_PROP_FRAME_HEIGHT, cap_height);
   cap2.set(CV_CAP_PROP_FRAME_WIDTH, cap_width);
@@ -533,11 +701,11 @@ int main(int argc, char**argv)
   }
 
   Stereo.LoadCameraParametersFromYAML(stereo_param_yaml);
-  Stereo.SetImageSize(cv::Size(cap_width,cap_height));
+  Stereo.SetImageSize(img_size);
   Stereo.SetRecommendedStereoParams();
   Stereo.Init();
   // StereoF.LoadCameraParametersFromYAML(stereo_param_yaml);
-  // StereoF.SetImageSize(cv::Size(cap_width,cap_height));
+  // StereoF.SetImageSize(img_size);
   // StereoF.SetRecommendedStereoParams();
   // StereoF.StereoParams().StereoMethod= TStereoSGBMParams::smBM;
   // StereoF.Init();
@@ -559,12 +727,13 @@ int main(int argc, char**argv)
 
   ros::Subscriber sub_viz1= node.subscribe<lfd_vision::ColDetViz>("viz1", 1, TColDetVizCallback(0));
   ros::Subscriber sub_viz2= node.subscribe<lfd_vision::ColDetViz>("viz2", 1, TColDetVizCallback(1));
+  ros::Subscriber sub_roi= node.subscribe("roi", 1, &ROICallback);
 
   ros::ServiceServer srv_reset= node.advertiseService("reset", &ResetAmount);
   ros::ServiceServer srv_pause= node.advertiseService("pause", &Pause);
   ros::ServiceServer srv_resume= node.advertiseService("resume", &Resume);
 
-  cv::Mat frame[2], disp_img[2];
+  cv::Mat frame[2], disp_img[2], mask[2];
   for(int j(0);j<2;++j)
     ColDetector[j].SetCameraWindow(frame[j]);
 
@@ -602,11 +771,15 @@ int main(int argc, char**argv)
   {
     if(Running)
     {
+      ProjectROIToMask(ROIColDet, img_size, img_size, Stereo.CameraParams(), mask[0], mask[1]);
+      frame[0].setTo(0);
+      frame[1].setTo(0);
+
       cap1 >> Frame[0]; // get a new frame from camera
       cap2 >> Frame[1]; // get a new frame from camera
       {
         boost::mutex::scoped_lock lock(MutCamCapture);
-        for(int j(0);j<2;++j)  Frame[j].copyTo(frame[j]);
+        for(int j(0);j<2;++j)  Frame[j].copyTo(frame[j], mask[j]);
       }
 
       for(int cam_idx(0); cam_idx<2; ++cam_idx)
