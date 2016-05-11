@@ -1,4 +1,9 @@
 cmake_minimum_required(VERSION 2.4.6)
+# # set(ENV{PKG_CONFIG_PATH} $ENV{HOME}/.local/lib/pkgconfig/:$ENV{PKG_CONFIG_PATH} )
+# # find_package(PkgConfig)
+# # pkg_check_modules(OPENCV opencv)
+# include($ENV{HOME}/.local/share/OpenCV/OpenCVConfig.cmake)
+# include_directories(${OpenCV_INCLUDE_DIRS})
 include($ENV{ROS_ROOT}/core/rosbuild/rosbuild.cmake)
 
 # Set the build type.  Options are:
@@ -21,8 +26,11 @@ rosbuild_genmsg()
 #uncomment if you have defined services
 rosbuild_gensrv()
 
-find_package(OpenCV)
-include_directories(${OpenCV_INCLUDE_DIRS})
+# # set(CMAKE_MODULE_PATH $ENV{HOME}/.local/share/OpenCV/ ${CMAKE_MODULE_PATH})
+# # include(OpenCVConfig)
+# # include(OpenCVModules)
+# # find_package(OpenCV 2.4.13 EXACT REQUIRED)
+message("OpenCV_INCLUDE_DIRS: ${OpenCV_INCLUDE_DIRS}")
 
 #common commands for building c++ executables and libraries
 #rosbuild_add_library(${PROJECT_NAME} src/example.cpp)
@@ -48,6 +56,19 @@ rosbuild_add_executable(usb_stereo_node
       src/vision_util.cpp
       src/pcl_util.cpp)
 target_link_libraries(usb_stereo_node ${OpenCV_LIBRARIES})
+
+rosbuild_add_executable(cv_usb_node
+      src/cv_usb_node.cpp
+      src/vision_util.cpp)
+target_link_libraries(cv_usb_node ${OpenCV_LIBRARIES})
+
+rosbuild_add_executable(visual_skin_node
+      src/visual_skin_node.cpp
+      src/blob_tracker.cpp
+      src/usb_stereo.cpp
+      src/vision_util.cpp
+      src/pcl_util.cpp)
+target_link_libraries(visual_skin_node ${OpenCV_LIBRARIES})
 
 # rosbuild_add_executable(test_col_flow
 #       test/test_col_flow.cpp

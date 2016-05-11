@@ -342,7 +342,7 @@ void ExecStereo()
       }
       Stereo.Proc(frame[0],frame[1]);
       // Stereo.StereoParams().GrayScale= false;
-      // Stereo.StereoParams().StereoMethod= TStereoSGBMParams::smBM;
+      // Stereo.StereoParams().StereoMethod= TStereoParams::smBM;
       // Stereo.Proc(FlowFinder[0].FlowMask(),FlowFinder[1].FlowMask());
       cv::normalize(Stereo.Disparity(), disparity, 0, 255, CV_MINMAX, CV_8U);
 
@@ -630,13 +630,13 @@ int main(int argc, char**argv)
   }
 
   Stereo.LoadCameraParametersFromYAML(stereo_param_yaml);
-  Stereo.SetImageSize(img_size);
+  Stereo.SetImageSize(img_size,img_size);
   Stereo.SetRecommendedStereoParams();
   Stereo.Init();
   // StereoF.LoadCameraParametersFromYAML(stereo_param_yaml);
-  // StereoF.SetImageSize(img_size);
+  // StereoF.SetImageSize(img_size,img_size);
   // StereoF.SetRecommendedStereoParams();
-  // StereoF.StereoParams().StereoMethod= TStereoSGBMParams::smBM;
+  // StereoF.StereoParams().StereoMethod= TStereoParams::smBM;
   // StereoF.Init();
   TFlowStereo2 stereo_f;
   stereo_f.We= stereo_f_We;

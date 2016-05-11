@@ -1,0 +1,7 @@
+<launch>
+  <node type="visual_skin_node" pkg="lfd_vision" name="visual_skin_node" output="screen">
+    <param name="pkg_dir" value="$(find lfd_vision)/" />
+    <param name="cam_config" value="config/usb_cams4g.yaml" />
+    <param name="stereo_config" value="config/usbcam4g1.yaml" />
+  </node>
+</launch>

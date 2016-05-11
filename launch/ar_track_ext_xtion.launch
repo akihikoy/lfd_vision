@@ -1,5 +1,9 @@
 <launch>
   <include file="$(find openni2_launch)/launch/openni2.launch"/>
+  <!--rosrun dynamic_reconfigure dynparam set /camera/driver data_skip 30
+    Change 30 to 0 for max speed -->
+  <node name="slowdown_xtion" pkg="dynamic_reconfigure" type="dynparam"
+        respawn="false" output="screen" args="set /camera/driver data_skip 30" />
 
   <arg name="marker_size" default="4.8" />
   <!--<arg name="max_new_marker_error" default="0.08" />-->

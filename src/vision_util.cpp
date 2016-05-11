@@ -239,6 +239,138 @@ void TEasyVideoOut::VizRec(cv::Mat &frame, int pos, int rad, int margin) const
 //-------------------------------------------------------------------------------------------
 
 
+void Print(const std::vector<TCameraInfo> &cam_info)
+{
+  int i(0);
+  for(std::vector<TCameraInfo>::const_iterator itr(cam_info.begin()),itr_end(cam_info.end()); itr!=itr_end; ++itr,++i)
+  {
+    std::cout<<"No. "<<i<<std::endl;
+    #define PROC_VAR(x)  std::cout<<"  "#x": "<<itr->x<<std::endl;
+    PROC_VAR(DevID       );
+    PROC_VAR(Width       );
+    PROC_VAR(Height      );
+    PROC_VAR(PixelFormat );
+    PROC_VAR(NRotate90   );
+    PROC_VAR(Name        );
+    #undef PROC_VAR
+  }
+}
+//-------------------------------------------------------------------------------------------
+
+void WriteToYAML(const std::vector<TCameraInfo> &cam_info, const std::string &file_name)
+{
+  cv::FileStorage fs(file_name, cv::FileStorage::WRITE);
+  fs<<"CameraInfo"<<"[";
+  for(std::vector<TCameraInfo>::const_iterator itr(cam_info.begin()),itr_end(cam_info.end()); itr!=itr_end; ++itr)
+  {
+    #define PROC_VAR(x)  fs<<#x<<itr->x;
+    fs<<"{";
+    PROC_VAR(DevID       );
+    PROC_VAR(Width       );
+    PROC_VAR(Height      );
+    PROC_VAR(PixelFormat );
+    PROC_VAR(NRotate90   );
+    PROC_VAR(Name        );
+    fs<<"}";
+    #undef PROC_VAR
+  }
+  fs<<"]";
+  fs.release();
+}
+//-------------------------------------------------------------------------------------------
+
+void ReadFromYAML(std::vector<TCameraInfo> &cam_info, const std::string &file_name)
+{
+  cam_info.clear();
+  cv::FileStorage fs(file_name, cv::FileStorage::READ);
+  cv::FileNode data= fs["CameraInfo"];
+  for(cv::FileNodeIterator itr(data.begin()),itr_end(data.end()); itr!=itr_end; ++itr)
+  {
+    TCameraInfo cf;
+    #define PROC_VAR(x)  (*itr)[#x]>>cf.x;
+    PROC_VAR(DevID       );
+    PROC_VAR(Width       );
+    PROC_VAR(Height      );
+    PROC_VAR(PixelFormat );
+    PROC_VAR(NRotate90   );
+    PROC_VAR(Name        );
+    #undef PROC_VAR
+    cam_info.push_back(cf);
+  }
+  fs.release();
+}
+//-------------------------------------------------------------------------------------------
+
+
+void Print(const std::vector<TStereoInfo> &stereo_info)
+{
+  int i(0);
+  for(std::vector<TStereoInfo>::const_iterator itr(stereo_info.begin()),itr_end(stereo_info.end()); itr!=itr_end; ++itr,++i)
+  {
+    std::cout<<"No. "<<i<<std::endl;
+    #define PROC_VAR(x)  std::cout<<"  "#x": "<<itr->x<<std::endl;
+    PROC_VAR(Name        );
+    PROC_VAR(Name        );
+    PROC_VAR(CamL        );
+    PROC_VAR(CamR        );
+    PROC_VAR(Width       );
+    PROC_VAR(Height      );
+    PROC_VAR(StereoParam );
+    PROC_VAR(LensType    );
+    #undef PROC_VAR
+  }
+}
+//-------------------------------------------------------------------------------------------
+
+void WriteToYAML(const std::vector<TStereoInfo> &stereo_info, const std::string &file_name)
+{
+  cv::FileStorage fs(file_name, cv::FileStorage::WRITE);
+  fs<<"StereoInfo"<<"[";
+  for(std::vector<TStereoInfo>::const_iterator itr(stereo_info.begin()),itr_end(stereo_info.end()); itr!=itr_end; ++itr)
+  {
+    #define PROC_VAR(x)  fs<<#x<<itr->x;
+    fs<<"{";
+    PROC_VAR(Name        );
+    PROC_VAR(Name        );
+    PROC_VAR(CamL        );
+    PROC_VAR(CamR        );
+    PROC_VAR(Width       );
+    PROC_VAR(Height      );
+    PROC_VAR(StereoParam );
+    PROC_VAR(LensType    );
+    fs<<"}";
+    #undef PROC_VAR
+  }
+  fs<<"]";
+  fs.release();
+}
+//-------------------------------------------------------------------------------------------
+
+void ReadFromYAML(std::vector<TStereoInfo> &stereo_info, const std::string &file_name)
+{
+  stereo_info.clear();
+  cv::FileStorage fs(file_name, cv::FileStorage::READ);
+  cv::FileNode data= fs["StereoInfo"];
+  for(cv::FileNodeIterator itr(data.begin()),itr_end(data.end()); itr!=itr_end; ++itr)
+  {
+    TStereoInfo cf;
+    #define PROC_VAR(x)  (*itr)[#x]>>cf.x;
+    PROC_VAR(Name        );
+    PROC_VAR(Name        );
+    PROC_VAR(CamL        );
+    PROC_VAR(CamR        );
+    PROC_VAR(Width       );
+    PROC_VAR(Height      );
+    PROC_VAR(StereoParam );
+    PROC_VAR(LensType    );
+    #undef PROC_VAR
+    stereo_info.push_back(cf);
+  }
+  fs.release();
+}
+//-------------------------------------------------------------------------------------------
+
+
 //-------------------------------------------------------------------------------------------
 }  // end of trick
 //-------------------------------------------------------------------------------------------

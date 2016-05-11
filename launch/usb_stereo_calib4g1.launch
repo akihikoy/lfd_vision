@@ -1,0 +1,17 @@
+<launch>
+  <node name="cv_usb_node" pkg="lfd_vision" type="cv_usb_node"
+        args="$(find lfd_vision)/config/usb_cams4g.yaml" />
+
+  <arg name="caml" default="usbcam4g1_tl" />
+  <arg name="camr" default="usbcam4g1_tr" />
+
+  <node name="cameracalibrator" pkg="lfd_vision" type="cameracalibrator.py"
+    output="screen"
+    args="--size 8x6 --square 0.0247 --approximate=0.1 -c ''
+    left:=/cv_usb_node/$(arg caml)/image_raw
+    right:=/cv_usb_node/$(arg camr)/image_raw
+    left_camera:=/cv_usb_node/$(arg caml)
+    right_camera:=/cv_usb_node/$(arg camr)
+    " />-->
+
+</launch>

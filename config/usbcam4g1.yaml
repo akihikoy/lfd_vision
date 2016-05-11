@@ -1,0 +1,32 @@
+%YAML:1.0
+StereoInfo:
+  -
+    Name: usbcam4g1_tltr
+    CamL: 0
+    CamR: 1
+    Width: 320
+    Height: 240
+    StereoParam: config/usbcam4g1_tltr3.yaml
+    LensType: fisheye
+    We: 2
+    Wd: 3
+    XFilter: 1
+    YFilter: 32
+    XStep:   1
+    YStep:   16
+    ThMatch: 16
+  -
+    Name: usbcam4g1_blbr
+    CamL: 2
+    CamR: 3
+    Width: 320
+    Height: 240
+    StereoParam: config/usbcam4g1_blbr1.yaml
+    LensType: fisheye
+    We: 2
+    Wd: 3
+    XFilter: 1
+    YFilter: 32
+    XStep:   1
+    YStep:   16
+    ThMatch: 16

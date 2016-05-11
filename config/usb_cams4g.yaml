@@ -1,0 +1,30 @@
+%YAML:1.0
+CameraInfo:
+  -
+    Name: usbcam4g1_tl
+    DevID: 1
+    Width: 640
+    Height: 480
+    PixelFormat: MJPG
+    NRotate90: 0
+  -
+    Name: usbcam4g1_tr
+    DevID: 2
+    Width: 640
+    Height: 480
+    PixelFormat: MJPG
+    NRotate90: 0
+  -
+    Name: usbcam4g1_bl
+    DevID: 3
+    Width: 640
+    Height: 480
+    PixelFormat: MJPG
+    NRotate90: 2
+  -
+    Name: usbcam4g1_br
+    DevID: 4
+    Width: 640
+    Height: 480
+    PixelFormat: MJPG
+    NRotate90: 2

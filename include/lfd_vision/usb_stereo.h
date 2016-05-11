@@ -29,7 +29,7 @@ struct TCameraParams
   cv::Mat R, T;  // rotation, translation between cameras
 };
 
-struct TStereoSGBMParams
+struct TStereoParams
 {
   // For cv::StereoBM and cv::StereoSGBM
   int minDisparity;
@@ -50,6 +50,8 @@ struct TStereoSGBMParams
   enum TStereoMethod {smBM=1, smSGBM=2};
   int StereoMethod;  // 1: StereoBM, 2: StereoSGBM
   bool GrayScale;
+  enum TLensType {ltBasic=1, ltFisheye=2};
+  int LensType;
 };
 
 
@@ -65,9 +67,10 @@ public:
   bool LoadCameraParametersFromYAML(const std::string &file_name);
 
   // cv::Size(width,height)
-  void SetImageSize(cv::Size img_size)  {img_size_= img_size;};
+  void SetImageSize(cv::Size size_in, cv::Size size_out)
+    {img_size_in_= size_in; img_size_out_= size_out;}
 
-  // img_size_ must be set before using this.
+  // img_size_in_,img_size_out_ must be set before using this.
   void SetRecommendedStereoParams();
 
   // Initialize stereo operation.
@@ -78,6 +81,10 @@ public:
 
   // Rectify images for stereo process (used in Proc).
   void Rectify(cv::Mat &frame1, cv::Mat &frame2, bool gray_scale=true);
+  // Rectify left(1) image.
+  void RectifyL(cv::Mat &frame1, bool gray_scale=false);
+  // Rectify right(2) image.
+  void RectifyR(cv::Mat &frame2, bool gray_scale=false);
 
   // Reproject disparity to 3D. Use after Proc.
   void ReprojectTo3D();
@@ -85,7 +92,7 @@ public:
   // Get and set camera parameters.
   TCameraParams& CameraParams(void)  {return cp_;}
   // Get and set stereo parameters.
-  TStereoSGBMParams& StereoParams(void)  {return sp_;}
+  TStereoParams& StereoParams(void)  {return sp_;}
   // Get disparity image.
   const cv::Mat& Disparity(void) const {return disparity_;}
   // Get 3D (XYZ) image.
@@ -97,9 +104,9 @@ public:
   const cv::Mat& FrameR(void) const {return frame2_;}
 
 private:
-  cv::Size img_size_;  // cv::Size(width,height)
+  cv::Size img_size_in_, img_size_out_;  // cv::Size(width,height)
   TCameraParams cp_;
-  TStereoSGBMParams sp_;
+  TStereoParams sp_;
   cv::StereoBM stereo_bm_;
   cv::StereoSGBM stereo_sgbm_;
 

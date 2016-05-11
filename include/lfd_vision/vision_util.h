@@ -21,6 +21,13 @@ namespace trick
 {
 //-------------------------------------------------------------------------------------------
 
+inline float Dist(const cv::Point2f &p, const cv::Point2f &q)
+{
+  cv::Point2f d= p-q;
+  return cv::sqrt(d.x*d.x + d.y*d.y);
+}
+//-------------------------------------------------------------------------------------------
+
 inline std::string ToString(const std::string &prefix, int num, const std::string &posix="")
 {
   std::stringstream ss;
@@ -35,6 +42,14 @@ inline double GetCurrentTime(void)
   gettimeofday (&time, NULL);
   return static_cast<double>(time.tv_sec) + static_cast<double>(time.tv_usec)*1.0e-6;
   // return ros::Time::now().toSec();
+}
+//-------------------------------------------------------------------------------------------
+
+inline long GetCurrentTimeL(void)
+{
+  struct timeval time;
+  gettimeofday (&time, NULL);
+  return time.tv_sec*1e6l + time.tv_usec;
 }
 //-------------------------------------------------------------------------------------------
 
@@ -138,6 +153,34 @@ private:
   double fps_;
   double time_prev_, fps_alpha_;
 };
+//-------------------------------------------------------------------------------------------
+
+struct TCameraInfo
+{
+  int DevID;
+  int Width, Height;
+  std::string PixelFormat;
+  int NRotate90;
+  std::string Name;
+};
+//-------------------------------------------------------------------------------------------
+void Print(const std::vector<TCameraInfo> &cam_info);
+void WriteToYAML(const std::vector<TCameraInfo> &cam_info, const std::string &file_name);
+void ReadFromYAML(std::vector<TCameraInfo> &cam_info, const std::string &file_name);
+//-------------------------------------------------------------------------------------------
+
+struct TStereoInfo
+{
+  std::string Name;
+  int CamL, CamR;
+  int Width, Height;
+  std::string StereoParam;
+  std::string LensType;
+};
+//-------------------------------------------------------------------------------------------
+void Print(const std::vector<TStereoInfo> &cam_info);
+void WriteToYAML(const std::vector<TStereoInfo> &cam_info, const std::string &file_name);
+void ReadFromYAML(std::vector<TStereoInfo> &cam_info, const std::string &file_name);
 //-------------------------------------------------------------------------------------------
 
 
