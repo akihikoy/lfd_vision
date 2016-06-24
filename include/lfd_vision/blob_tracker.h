@@ -67,23 +67,29 @@ struct TBlobTrackerParams
   float DPEmp;  // Emphasize (scale) ratio of DP to draw
   // For calibration:
   int NCalibPoints;  // Number of points for calibration
+
+  TBlobTrackerParams();
 };
-void SetRecommendedBlobTrackerParams(TBlobTrackerParams &params);
+void WriteToYAML(const std::vector<TBlobTrackerParams> &blob_params, const std::string &file_name);
+void ReadFromYAML(std::vector<TBlobTrackerParams> &blob_params, const std::string &file_name);
 //-------------------------------------------------------------------------------------------
 
 class TBlobTracker
 {
 public:
-  TBlobTracker()
-    {SetRecommendedBlobTrackerParams(params_);}
   void Init();
   void Step(const cv::Mat &img);
   void Draw(cv::Mat &img);
   void Calibrate(cv::VideoCapture &cap, boost::function<void(cv::Mat&)> modifier=NULL);
   void Calibrate(const std::vector<cv::Mat> &images);
 
+  void SaveCalib(const std::string &file_name) const;
+  void LoadCalib(const std::string &file_name);
+
   TBlobTrackerParams& Params()  {return params_;}
   const TBlobTrackerParams& Params() const {return params_;}
+
+  const std::vector<TPointMove>& Data() const {return keypoints_move_;}
 
 private:
   TBlobTrackerParams params_;

@@ -315,7 +315,9 @@ void CallbackPointCloud(const sensor_msgs::PointCloud2ConstPtr &msg)
       if(!itr->second.GetImageROI(roi))  continue;
       cv::rectangle(depth_img,cv::Point(roi.Min[0],roi.Min[1]), cv::Point(roi.Max[0],roi.Max[1]), cv::Scalar(255), 1, 8, 0);
       cv::rectangle(normal_img,cv::Point(roi.Min[0],roi.Min[1]), cv::Point(roi.Max[0],roi.Max[1]), cv::Scalar(255,255,255), 1, 8, 0);
+std::cerr<<"DEBUG-1:"<<roi.Min[0]<<","<<roi.Min[1]<<",  "<<roi.Max[0]<<","<<roi.Max[1]<<std::endl;
       itr->second.Render(depth_img, normal_img);
+std::cerr<<"DEBUG-2:"<<std::endl;
     }
   }
   if(DisplayMode==4)

@@ -10,12 +10,23 @@
 #define vision_util_h
 //-------------------------------------------------------------------------------------------
 #include <opencv2/core/core.hpp>
+#include <opencv2/features2d/features2d.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include <string>
 #include <iostream>
 #include <sstream>
 #include <fstream>
 #include <sys/time.h>  // gettimeofday
+//-------------------------------------------------------------------------------------------
+namespace cv
+{
+void write(cv::FileStorage &fs, const std::string&, const cv::Point2f &x);
+void read(const cv::FileNode &data, cv::Point2f &x, const cv::Point2f &default_value=cv::Point2f());
+void write(cv::FileStorage &fs, const std::string&, const cv::KeyPoint &x);
+void read(const cv::FileNode &data, cv::KeyPoint &x, const cv::KeyPoint &default_value=cv::KeyPoint());
+// void write(cv::FileStorage &fs, const std::string&, const cv::SimpleBlobDetector::Params &x);
+// void read(const cv::FileNode &data, cv::SimpleBlobDetector::Params &x, const cv::SimpleBlobDetector::Params &default_value=cv::SimpleBlobDetector::Params());
+}  // namespace cv
 //-------------------------------------------------------------------------------------------
 namespace trick
 {
@@ -96,6 +107,15 @@ inline void DrawCrossOnCenter(cv::Mat &img, int size, const cv::Scalar &col, int
 }
 //-------------------------------------------------------------------------------------------
 
+// Convert a mask to a color image.
+inline cv::Mat ColorMask(cv::Mat mask, const cv::Scalar &col)
+{
+  cv::Mat cmask(mask.size(),CV_8UC3,cv::Scalar(0,0,0));
+  cmask.setTo(col,mask);
+  return cmask;
+}
+//-------------------------------------------------------------------------------------------
+
 bool OpenVideoOut(cv::VideoWriter &vout, const char *file_name, int fps, const cv::Size &size);
 //-------------------------------------------------------------------------------------------
 
@@ -155,6 +175,10 @@ private:
 };
 //-------------------------------------------------------------------------------------------
 
+void WriteToYAML(const std::vector<cv::KeyPoint> &keypoints, const std::string &file_name);
+void ReadFromYAML(std::vector<cv::KeyPoint> &keypoints, const std::string &file_name);
+//-------------------------------------------------------------------------------------------
+
 struct TCameraInfo
 {
   int DevID;
@@ -162,6 +186,11 @@ struct TCameraInfo
   std::string PixelFormat;
   int NRotate90;
   std::string Name;
+  int Rectification;  // Whether rectify image or not
+  double Alpha;     // Scaling factor
+  cv::Mat K, D, R;  // Camera, distortion, and rectification matrices
+  TCameraInfo()
+      : NRotate90(0), Rectification(0), Alpha(1.0) {}
 };
 //-------------------------------------------------------------------------------------------
 void Print(const std::vector<TCameraInfo> &cam_info);
@@ -174,8 +203,8 @@ struct TStereoInfo
   std::string Name;
   int CamL, CamR;
   int Width, Height;
-  std::string StereoParam;
-  std::string LensType;
+  std::string StereoParam;  // Stereo camera parameters
+  std::string StereoConfig;  // Stereo algorithm configurations
 };
 //-------------------------------------------------------------------------------------------
 void Print(const std::vector<TStereoInfo> &cam_info);
@@ -183,6 +212,13 @@ void WriteToYAML(const std::vector<TStereoInfo> &cam_info, const std::string &fi
 void ReadFromYAML(std::vector<TStereoInfo> &cam_info, const std::string &file_name);
 //-------------------------------------------------------------------------------------------
 
+struct TCameraRectifier
+{
+  cv::Mat map1_, map2_;
+  void Setup(const cv::Mat &K, const cv::Mat &D, const cv::Mat &R, const cv::Size &size_in, const double &alpha, const cv::Size &size_out);
+  void Rectify(cv::Mat &frame);
+};
+//-------------------------------------------------------------------------------------------
 
 //-------------------------------------------------------------------------------------------
 }  // end of trick

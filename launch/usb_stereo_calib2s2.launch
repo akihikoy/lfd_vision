@@ -1,0 +1,15 @@
+<launch>
+  <node name="cv_usb_node" pkg="lfd_vision" type="cv_usb_node"
+        args="$(find lfd_vision)/config/usbcam2s2.yaml" />
+
+  <!--USE SMALL CALIB BOARD-->
+  <node name="cameracalibrator" pkg="lfd_vision" type="cameracalibrator.py"
+    output="screen"
+    args="--size 6x4 --square 0.0191 --approximate=0.1 -c ''
+    left:=/cv_usb_node/usbcam2s2_l/image_raw
+    right:=/cv_usb_node/usbcam2s2_r/image_raw
+    left_camera:=/cv_usb_node/usbcam2s2_l
+    right_camera:=/cv_usb_node/usbcam2s2_r
+    " />
+
+</launch>

@@ -1,0 +1,49 @@
+%YAML:1.0
+CameraInfo:
+  -
+    Name: usbcam2s2_l
+    DevID: 1
+    Width: 640
+    Height: 480
+    PixelFormat: MJPG
+    NRotate90: 0
+  -
+    Name: usbcam2s2_r
+    DevID: 2
+    Width: 640
+    Height: 480
+    PixelFormat: MJPG
+    NRotate90: 0
+
+StereoInfo:
+  -
+    Name: usbcam2s2
+    CamL: 0
+    CamR: 1
+#     Width: 320
+#     Height: 240
+    Width: 400
+    Height: 300
+    StereoParam: config/usbcam2s2_stereo.yaml
+    StereoConfig: config/usbcam2s2.yaml
+
+StereoConfig:
+#   LensType: fisheye
+  LensType: basic
+  minDisparity: 0
+  numberOfDisparities: 64
+  SADWindowSize: 7
+  P1: 216  #8*3*w_size*w_size
+  P2: 864  #32*3*w_size*w_size
+#   StereoMethod: bm
+#   SADWindowSize: 11
+
+FlowStereoInfo:
+  -
+    We: 2
+    Wd: 3
+    XFilter: 1
+    YFilter: 20
+    XStep: 1
+    YStep: 10
+    ThMatch: 16

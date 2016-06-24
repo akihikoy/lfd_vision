@@ -1,2 +1,86 @@
 %YAML:1.0
+CameraInfo:
+  -
+    Name: usbcam2f1_l
+    DevID: 3
+    Width: 640
+    Height: 480
+    PixelFormat: MJPG
+    NRotate90: 0
+    Rectification: 1
+    Alpha: 0.8
+    K: !!opencv-matrix
+      rows: 3
+      cols: 3
+      dt: d
+      data: [ 3.8293834221467699e+02, 0., 3.1026317605816627e+02, 0.,
+          3.8293834221467699e+02, 2.4947612517173192e+02, 0., 0., 1. ]
+    D: !!opencv-matrix
+      rows: 1
+      cols: 5
+      dt: d
+      data: [ -4.6510529183355342e-01, 1.3198761779602841e-01, 0., 0., 0. ]
+    R: !!opencv-matrix
+      rows: 3
+      cols: 3
+      dt: d
+      data: [ 1.0, 0.0, 0.0,  0.0, 1.0, 0.0,  0.0, 0.0, 1.0 ]
+  -
+    Name: usbcam2f1_r
+    DevID: 4
+    Width: 640
+    Height: 480
+    PixelFormat: MJPG
+    NRotate90: 0
+    Rectification: 1
+    Alpha: 0.8
+    K: !!opencv-matrix
+      rows: 3
+      cols: 3
+      dt: d
+      data: [ 3.8293834221467699e+02, 0., 3.1026317605816627e+02, 0.,
+          3.8293834221467699e+02, 2.4947612517173192e+02, 0., 0., 1. ]
+    D: !!opencv-matrix
+      rows: 1
+      cols: 5
+      dt: d
+      data: [ -4.6510529183355342e-01, 1.3198761779602841e-01, 0., 0., 0. ]
+    R: !!opencv-matrix
+      rows: 3
+      cols: 3
+      dt: d
+      data: [ 1.0, 0.0, 0.0,  0.0, 1.0, 0.0,  0.0, 0.0, 1.0 ]
+
+BlobTracker:
+  -
+    # SBDParams_filterByColor: 0
+    # SBDParams_blobColor: 0
+    # SBDParams_minThreshold : 30
+    # SBDParams_maxThreshold : 200
+    # SBDParams_filterByArea : true
+    # SBDParams_minArea : 40
+    # SBDParams_filterByCircularity : true
+    # SBDParams_minCircularity : 0.10
+    # SBDParams_filterByConvexity : true
+    # SBDParams_minConvexity : 0.87
+    # SBDParams_filterByInertia : true
+    # SBDParams_minInertiaRatio : 0.01
+    DistNeighbor: 20.0
+    DistMin: 0.0
+    DistMax: 10.0
+    DSMin: 0.0
+    DSMax: 10.0
+    DSEmp: 4.0
+    DPEmp: 10.0
+    NCalibPoints: 20
+  -
+    DistNeighbor: 20.0
+    DistMin: 0.0
+    DistMax: 10.0
+    DSMin: 0.0
+    DSMax: 10.0
+    DSEmp: 4.0
+    DPEmp: 10.0
+    NCalibPoints: 20
+
 StereoInfo:{}

@@ -12,6 +12,8 @@
 #include "lfd_vision/vision_util.h"
 #include "lfd_vision/pcl_util.h"
 //-------------------------------------------------------------------------------------------
+#include "lfd_vision/BlobMoves.h"
+//-------------------------------------------------------------------------------------------
 #include <opencv2/highgui/highgui.hpp>
 #include <ros/ros.h>
 #include <std_srvs/Empty.h>
@@ -28,16 +30,20 @@
 namespace trick
 {
 bool Running(true), Shutdown(false), DoCalibrate(false);
+std::string BlobCalibPrefix("blob_");
 std::vector<TCameraInfo> CamInfo;
 std::vector<TStereoInfo> StereoInfo;
 std::vector<TStereo> Stereo;  // Standard stereo
 std::vector<TStereo> StereoB;  // Stereo for blob
 std::vector<TBlobTracker> BlobTracker;
+std::vector<TCameraRectifier> SingleCamRectifier;
 std::vector<boost::function<void(cv::Mat&)> > CamRectifier;  // Functions to rectify camera images.
+void DummyRectify(cv::Mat&) {}  // Do nothing function
 
 std::vector<TEasyVideoOut> VideoOut;
 
 std::vector<ros::Publisher> CloudPub;
+std::vector<ros::Publisher> BlobPub;
 std::vector<cv::Mat> Frame;
 std::vector<long>    CapTime;
 std::vector<boost::shared_ptr<boost::mutex> > MutCamCapture;
@@ -90,6 +96,21 @@ bool HandleKeyEvent()
   else if(c=='c')
   {
     DoCalibrate= true;
+  }
+  else if(c=='s')
+  {
+    for(int j(0),j_end(BlobTracker.size());j<j_end;++j)
+    {
+      BlobTracker[j].SaveCalib(BlobCalibPrefix+CamInfo[j].Name+".yaml");
+    }
+  }
+  else if(c=='l')
+  {
+    for(int j(0),j_end(BlobTracker.size());j<j_end;++j)
+    {
+      if(FileExists(BlobCalibPrefix+CamInfo[j].Name+".yaml"))
+        BlobTracker[j].LoadCalib(BlobCalibPrefix+CamInfo[j].Name+".yaml");
+    }
   }
   // else if(c=='m' || c=='M')
   // {
@@ -187,7 +208,7 @@ void ExecBlobTrack(int i_cam)
         Frame[i_cam].copyTo(frame);
         t_cap= CapTime[i_cam];
       }
-      // CamRectifier[i_cam](frame);
+      CamRectifier[i_cam](frame);
       tracker.Step(frame);
       tracker.Draw(frame);
 
@@ -200,6 +221,29 @@ void ExecBlobTrack(int i_cam)
         // cv::imshow(info.Name, frame);
         boost::mutex::scoped_lock lock(*IMShowStuff[info.Name].Mutex);
         frame.copyTo(IMShowStuff[info.Name].Frame);
+      }
+
+      // Publish as BlobMoves
+      {
+        const std::vector<TPointMove> &data(tracker.Data());
+        lfd_vision::BlobMoves blob_moves;
+        blob_moves.camera_index= i_cam;
+        blob_moves.camera_name= info.Name;
+        blob_moves.width= info.Width;
+        blob_moves.height= info.Height;
+        blob_moves.data.resize(data.size());
+        int i(0);
+        for(std::vector<TPointMove>::const_iterator itr(data.begin()),itr_end(data.end()); itr!=itr_end; ++itr,++i)
+        {
+          lfd_vision::BlobMove &m(blob_moves.data[i]);
+          m.Pox= itr->Po.x;
+          m.Poy= itr->Po.y;
+          m.So = itr->So;
+          m.DPx= itr->DP.x;
+          m.DPy= itr->DP.y;
+          m.DS = itr->DS;
+        }
+        BlobPub[i_cam].publish(blob_moves);
       }
       // usleep(10*1000);
     }  // Running
@@ -217,35 +261,61 @@ int main(int argc, char**argv)
   ros::init(argc, argv, "visual_skin_node");
   ros::NodeHandle node("~");
   std::string pkg_dir(".");
-  std::string cam_config("config/usb_cams4g.yaml");
+  std::string cam_config("config/usbcam4g1.yaml");
   std::string stereo_config("config/usbcam4g1.yaml");
+  std::string blobtrack_config("config/usbcam4g1.yaml");
+  std::string blob_calib_prefix("blob_");
   std::string vout_base("/tmp/vout");
 
   node.param("pkg_dir",pkg_dir,pkg_dir);
   node.param("cam_config",cam_config,cam_config);
   node.param("stereo_config",stereo_config,stereo_config);
+  node.param("blobtrack_config",blobtrack_config,blobtrack_config);
+  node.param("blob_calib_prefix",blob_calib_prefix,blob_calib_prefix);
   node.param("vout_base",vout_base,vout_base);
   std::cerr<<"pkg_dir: "<<pkg_dir<<std::endl;
   std::cerr<<"cam_config: "<<cam_config<<std::endl;
   std::cerr<<"stereo_config: "<<stereo_config<<std::endl;
+  std::cerr<<"blobtrack_config: "<<blobtrack_config<<std::endl;
+  std::cerr<<"blob_calib_prefix: "<<blob_calib_prefix<<std::endl;
 
+  std::vector<TBlobTrackerParams> blobtrack_info;
   ReadFromYAML(CamInfo, pkg_dir+"/"+cam_config);
   ReadFromYAML(StereoInfo, pkg_dir+"/"+stereo_config);
+  ReadFromYAML(blobtrack_info, pkg_dir+"/"+blobtrack_config);
+  BlobCalibPrefix= pkg_dir+"/"+blob_calib_prefix;
 
   std::vector<cv::VideoCapture> cap(CamInfo.size());
+  SingleCamRectifier.resize(CamInfo.size());
+  CamRectifier.resize(CamInfo.size());
   for(int i_cam(0), i_cam_end(CamInfo.size()); i_cam<i_cam_end; ++i_cam)
   {
-    std::string &fourcc(CamInfo[i_cam].PixelFormat);
-    cap[i_cam].open(CamInfo[i_cam].DevID);
+    const TCameraInfo &info(CamInfo[i_cam]);
+    const std::string &fourcc(info.PixelFormat);
+    cap[i_cam].open(info.DevID); cap[i_cam].release();  // DEBUG:TEST
+    cap[i_cam].open(info.DevID);
     if(!cap[i_cam].isOpened())
     {
-      std::cerr<<"Failed to open camera: "<<CamInfo[i_cam].DevID<<std::endl;
+      std::cerr<<"Failed to open camera: "<<info.DevID<<std::endl;
       return -1;
     }
-    cap[i_cam].set(CV_CAP_PROP_FOURCC,CV_FOURCC(fourcc[0],fourcc[1],fourcc[2],fourcc[3]));
-    cap[i_cam].set(CV_CAP_PROP_FRAME_WIDTH, CamInfo[i_cam].Width);
-    cap[i_cam].set(CV_CAP_PROP_FRAME_HEIGHT, CamInfo[i_cam].Height);
+    if(fourcc.size()>0)  cap[i_cam].set(CV_CAP_PROP_FOURCC,CV_FOURCC(fourcc[0],fourcc[1],fourcc[2],fourcc[3]));
+    cap[i_cam].set(CV_CAP_PROP_FRAME_WIDTH, info.Width);
+    cap[i_cam].set(CV_CAP_PROP_FRAME_HEIGHT, info.Height);
     MutCamCapture.push_back(boost::shared_ptr<boost::mutex>(new boost::mutex));
+
+    if(info.Rectification)
+    {
+      // Setup rectification
+      // NOTE: The rectification of StereoInfo overwrites this rectification.
+      cv::Size size_in(info.Width,info.Height), size_out(info.Width,info.Height);
+      SingleCamRectifier[i_cam].Setup(info.K, info.D, info.R, size_in, info.Alpha, size_out);
+      CamRectifier[i_cam]= boost::bind(&TCameraRectifier::Rectify, SingleCamRectifier[i_cam], _1);
+    }
+    else
+    {
+      CamRectifier[i_cam]= &DummyRectify;
+    }
   }
   std::cerr<<"Opened camera(s)"<<std::endl;
 
@@ -255,19 +325,15 @@ int main(int argc, char**argv)
 
   Stereo.resize(StereoInfo.size());
   StereoB.resize(StereoInfo.size());
-  CamRectifier.resize(CamInfo.size());
   for(int j(0),j_end(Stereo.size());j<j_end;++j)
   {
     const TStereoInfo &info(StereoInfo[j]);
-    int LensType(0);
-    if(info.LensType=="basic")  LensType= TStereoParams::ltBasic;
-    else if(info.LensType=="fisheye")  LensType= TStereoParams::ltFisheye;
     Stereo[j].LoadCameraParametersFromYAML(pkg_dir+"/"+info.StereoParam);
     Stereo[j].SetImageSize(
         cv::Size(CamInfo[info.CamL].Width,CamInfo[info.CamL].Height),
         cv::Size(info.Width,info.Height) );
     Stereo[j].SetRecommendedStereoParams();
-    Stereo[j].StereoParams().LensType= LensType;
+    Stereo[j].LoadConfigurationsFromYAML(pkg_dir+"/"+info.StereoConfig);
     Stereo[j].Init();
     cv::namedWindow(info.Name,1);
     cv::setMouseCallback(info.Name, OnMouseSimple);
@@ -277,7 +343,8 @@ int main(int argc, char**argv)
     StereoB[j].SetImageSize(
         cv::Size(CamInfo[info.CamL].Width,CamInfo[info.CamL].Height),
         cv::Size(CamInfo[info.CamL].Width,CamInfo[info.CamL].Height) );
-    StereoB[j].StereoParams().LensType= LensType;
+    StereoB[j].SetRecommendedStereoParams();
+    StereoB[j].LoadConfigurationsFromYAML(pkg_dir+"/"+info.StereoConfig);
     StereoB[j].Init();
     CamRectifier[info.CamL]= boost::bind(&TStereo::RectifyL, StereoB[j], _1, /*gray_scale=*/false);
     CamRectifier[info.CamR]= boost::bind(&TStereo::RectifyR, StereoB[j], _1, /*gray_scale=*/false);
@@ -286,7 +353,10 @@ int main(int argc, char**argv)
   BlobTracker.resize(CamInfo.size());
   for(int j(0),j_end(CamInfo.size());j<j_end;++j)
   {
+    BlobTracker[j].Params()= blobtrack_info[j];
     BlobTracker[j].Init();
+    if(FileExists(BlobCalibPrefix+CamInfo[j].Name+".yaml"))
+      BlobTracker[j].LoadCalib(BlobCalibPrefix+CamInfo[j].Name+".yaml");
     cv::namedWindow(CamInfo[j].Name,1);
     cv::setMouseCallback(CamInfo[j].Name, OnMouseSimple);
     IMShowStuff[CamInfo[j].Name].Mutex= boost::shared_ptr<boost::mutex>(new boost::mutex);
@@ -294,7 +364,11 @@ int main(int argc, char**argv)
 
   CloudPub.resize(Stereo.size());
   for(int j(0),j_end(Stereo.size());j<j_end;++j)
-    CloudPub[j]= node.advertise<sensor_msgs::PointCloud2>(ToString("point_cloud",j), 1);
+    CloudPub[j]= node.advertise<sensor_msgs::PointCloud2>(std::string("point_cloud_")+StereoInfo[j].Name, 1);
+
+  BlobPub.resize(BlobTracker.size());
+  for(int j(0),j_end(BlobTracker.size());j<j_end;++j)
+    BlobPub[j]= node.advertise<lfd_vision::BlobMoves>(std::string("blob_moves_")+CamInfo[j].Name, 1);
 
   ros::ServiceServer srv_pause= node.advertiseService("pause", &Pause);
   ros::ServiceServer srv_resume= node.advertiseService("resume", &Resume);
@@ -355,6 +429,7 @@ int main(int argc, char**argv)
             boost::mutex::scoped_lock lock(*MutCamCapture[i_cam]);
             cap[i_cam] >> frame;
             Rotate90N(frame,frame,CamInfo[i_cam].NRotate90);
+            CamRectifier[i_cam](frame);
             frames[i_cam].push_back(frame.clone());
           }
         }

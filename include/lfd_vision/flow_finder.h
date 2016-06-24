@@ -67,6 +67,8 @@ public:
   // Filter length of FlowMask (0: no filter)
   void SetFlowMaskFilterLen(int l)  {flow_mask_filter_len_= l;}
 
+  const int& FlowMaskFilterLen() const {return flow_mask_filter_len_;}
+
 private:
   std::list<TFlowElement> flow_elmts_;
 
@@ -83,7 +85,8 @@ private:
   cv::Mat frame_, frame_old_;
   cv::Mat velx_, vely_;
   cv::Mat img_spd_, img_angle_;
-  cv::Mat flow_mask_;
+  cv::Mat flow_mask_;  // Filtered flow-mask
+  cv::Mat raw_flow_mask_;  // Non-filtered flow-mask
 
   // Filter for flow_mask_
   int idx_mask_;

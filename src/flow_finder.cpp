@@ -68,10 +68,14 @@ void TFlowFinder::Update(const cv::Mat &frame)
   if(proc_type_==0 || proc_type_==1)
   {
     if(flow_mask_filter_len_<=1)
+    {
       UpdateProc1_FindFlow(flow_mask_);
+      raw_flow_mask_= flow_mask_;
+    }
     else
     {
       UpdateProc1_FindFlow(mask_queue_[idx_mask_]);
+      raw_flow_mask_= mask_queue_[idx_mask_];
       ++idx_mask_;
       if(idx_mask_>=flow_mask_filter_len_)  idx_mask_= 0;
       mask_queue_[0].copyTo(flow_mask_);
@@ -193,21 +197,35 @@ void TFlowFinder::DrawFlow(cv::Mat &frame, const cv::Scalar &color, const double
 {
   cv::Scalar col2(color*0.5);
   cv::Scalar col3(color*0.8);
-  for(std::list<TFlowElement>::const_iterator itr(flow_elmts_.begin()),itr_end(flow_elmts_.end());
-      itr!=itr_end; ++itr)
+  // proc_type_ // 0: Full, 1: FlowMask only
+  if(proc_type_==0)
   {
-    // Draw contour:
-    if(itr->Contour!=NULL && itr->Contour->size()>0)
+    for(std::list<TFlowElement>::const_iterator itr(flow_elmts_.begin()),itr_end(flow_elmts_.end());
+        itr!=itr_end; ++itr)
     {
-      const cv::Point *pts= (const cv::Point*) cv::Mat(*itr->Contour).data;
-      int npts= itr->Contour->size();
-      cv::fillPoly(frame, &pts, &npts, /*ncontours=*/1, col2, /*lineType=*/8);
-      cv::polylines(frame, &pts, &npts, /*ncontours=*/1, /*isClosed=*/true, col3, /*thickness=*/1, /*lineType=*/8);
+      // Draw contour:
+      if(itr->Contour!=NULL && itr->Contour->size()>0)
+      {
+        const cv::Point *pts= (const cv::Point*) cv::Mat(*itr->Contour).data;
+        int npts= itr->Contour->size();
+        cv::fillPoly(frame, &pts, &npts, /*ncontours=*/1, col2, /*lineType=*/8);
+        cv::polylines(frame, &pts, &npts, /*ncontours=*/1, /*isClosed=*/true, col3, /*thickness=*/1, /*lineType=*/8);
+      }
+      // Draw flow:
+      cv::Point2d center(itr->X, itr->Y);
+      cv::Point2d vel(itr->VX, itr->VY);
+      cv::line(frame, center, center+len*vel, color, thickness, /*line_type=*/CV_AA, 0);
     }
-    // Draw flow:
-    cv::Point2d center(itr->X, itr->Y);
-    cv::Point2d vel(itr->VX, itr->VY);
-    cv::line(frame, center, center+len*vel, color, thickness, /*line_type=*/CV_AA, 0);
+  }
+  else if(proc_type_==1)
+  {
+    cv::MatIterator_<cv::Vec3b> itr_f(frame.begin<cv::Vec3b>());
+    cv::MatIterator_<cv::Vec3b> itr_f_end(frame.end<cv::Vec3b>());
+    // cv::MatIterator_<unsigned char> itr_m(raw_flow_mask_.begin<unsigned char>());
+    cv::MatIterator_<unsigned char> itr_m(flow_mask_.begin<unsigned char>());
+    cv::Vec3b vcol2(col2[0],col2[1],col2[2]);
+    for(; itr_f!=itr_f_end; ++itr_f,++itr_m)
+      if(*itr_m>0)  (*itr_f)+= vcol2;
   }
 }
 //-------------------------------------------------------------------------------------------

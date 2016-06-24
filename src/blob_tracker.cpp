@@ -46,8 +46,9 @@ void TrackKeyPoints(
   )
 {
   std::vector<TPointMove> old_move(move);  // for filter
-  move.clear();
-  move.reserve(prev.size());
+  // move.clear();
+  // move.reserve(prev.size());
+  move.resize(prev.size());
   typedef std::pair<int,float> TTracked;
   std::vector<TTracked> tracked;  // [idx of curr]=(idx of prev, dist)
   tracked.resize(curr.size(), TTracked(-1,0.0));
@@ -67,7 +68,8 @@ void TrackKeyPoints(
         c_min_idx= c_idx;
       }
     }
-    TPointMove m;
+    // TPointMove m;
+    TPointMove &m(move[p_idx]);
     m.Po= p->pt;
     m.So= p->size;
     cv::Point2f dp= c_min->pt - m.Po;
@@ -91,7 +93,7 @@ void TrackKeyPoints(
       m.DP= cv::Point2f(0.0,0.0);
       m.DS= 0.0;
     }
-    move.push_back(m);
+    // move.push_back(m);
   }
 }
 //-------------------------------------------------------------------------------------------
@@ -135,39 +137,115 @@ std::vector<cv::KeyPoint> CalibrateOrigin(
 }
 //-------------------------------------------------------------------------------------------
 
-void SetRecommendedBlobTrackerParams(TBlobTrackerParams &params)
+TBlobTrackerParams::TBlobTrackerParams()
 {
-  params.SBDParams.filterByColor= 0;
-  params.SBDParams.blobColor= 0;
+  SBDParams.filterByColor= 0;
+  SBDParams.blobColor= 0;
   // Change thresholds
-  params.SBDParams.minThreshold = 5;
-  params.SBDParams.maxThreshold = 200;
+  SBDParams.minThreshold = 5;
+  SBDParams.maxThreshold = 200;
   // Filter by Area.
-  params.SBDParams.filterByArea = true;
-  params.SBDParams.minArea = 40;
+  SBDParams.filterByArea = true;
+  SBDParams.minArea = 40;
   // Filter by Circularity
-  params.SBDParams.filterByCircularity = true;
-  params.SBDParams.minCircularity = 0.10;
+  SBDParams.filterByCircularity = true;
+  SBDParams.minCircularity = 0.10;
   // Filter by Convexity
-  params.SBDParams.filterByConvexity = true;
-  params.SBDParams.minConvexity = 0.87;
+  SBDParams.filterByConvexity = true;
+  SBDParams.minConvexity = 0.87;
   // Filter by Inertia
-  params.SBDParams.filterByInertia = true;
-  params.SBDParams.minInertiaRatio = 0.01;
+  SBDParams.filterByInertia = true;
+  SBDParams.minInertiaRatio = 0.01;
 
   // For blob detection:
-  params.DistNeighbor= 20.0;
+  DistNeighbor= 20.0;
   // For blob tracking:
-  params.DistMin= 2.0;
-  params.DistMax= 10.0;
-  params.DSMin= 0.0;
-  params.DSMax= 10.0;
+  DistMin= 2.0;
+  DistMax= 10.0;
+  DSMin= 0.0;
+  DSMax= 10.0;
   // For visualization:
-  params.DSEmp= 4.0;
-  params.DPEmp= 10.0;
+  DSEmp= 4.0;
+  DPEmp= 10.0;
 
   // For calibration:
-  params.NCalibPoints= 20;
+  NCalibPoints= 20;
+}
+//-------------------------------------------------------------------------------------------
+
+void WriteToYAML(const std::vector<TBlobTrackerParams> &blob_params, const std::string &file_name)
+{
+  cv::FileStorage fs(file_name, cv::FileStorage::WRITE);
+  fs<<"BlobTracker"<<"[";
+  for(std::vector<TBlobTrackerParams>::const_iterator itr(blob_params.begin()),itr_end(blob_params.end()); itr!=itr_end; ++itr)
+  {
+    fs<<"{";
+    #define PROC_VAR(x,y)  fs<<#x"_"#y<<itr->x.y;
+    PROC_VAR(SBDParams,filterByColor       );
+    PROC_VAR(SBDParams,blobColor           );
+    PROC_VAR(SBDParams,minThreshold        );
+    PROC_VAR(SBDParams,maxThreshold        );
+    PROC_VAR(SBDParams,filterByArea        );
+    PROC_VAR(SBDParams,minArea             );
+    PROC_VAR(SBDParams,filterByCircularity );
+    PROC_VAR(SBDParams,minCircularity      );
+    PROC_VAR(SBDParams,filterByConvexity   );
+    PROC_VAR(SBDParams,minConvexity        );
+    PROC_VAR(SBDParams,filterByInertia     );
+    PROC_VAR(SBDParams,minInertiaRatio     );
+    #undef PROC_VAR
+    #define PROC_VAR(x)  fs<<#x<<itr->x;
+    PROC_VAR(DistNeighbor );
+    PROC_VAR(DistMin      );
+    PROC_VAR(DistMax      );
+    PROC_VAR(DSMin        );
+    PROC_VAR(DSMax        );
+    PROC_VAR(DSEmp        );
+    PROC_VAR(DPEmp        );
+    PROC_VAR(NCalibPoints );
+    fs<<"}";
+    #undef PROC_VAR
+  }
+  fs<<"]";
+  fs.release();
+}
+//-------------------------------------------------------------------------------------------
+
+void ReadFromYAML(std::vector<TBlobTrackerParams> &blob_params, const std::string &file_name)
+{
+  blob_params.clear();
+  cv::FileStorage fs(file_name, cv::FileStorage::READ);
+  cv::FileNode data= fs["BlobTracker"];
+  for(cv::FileNodeIterator itr(data.begin()),itr_end(data.end()); itr!=itr_end; ++itr)
+  {
+    TBlobTrackerParams cf;
+    #define PROC_VAR(x,y)  if(!(*itr)[#x"_"#y].empty())  (*itr)[#x"_"#y]>>cf.x.y;
+    PROC_VAR(SBDParams,filterByColor       );
+    PROC_VAR(SBDParams,blobColor           );
+    PROC_VAR(SBDParams,minThreshold        );
+    PROC_VAR(SBDParams,maxThreshold        );
+    PROC_VAR(SBDParams,filterByArea        );
+    PROC_VAR(SBDParams,minArea             );
+    PROC_VAR(SBDParams,filterByCircularity );
+    PROC_VAR(SBDParams,minCircularity      );
+    PROC_VAR(SBDParams,filterByConvexity   );
+    PROC_VAR(SBDParams,minConvexity        );
+    PROC_VAR(SBDParams,filterByInertia     );
+    PROC_VAR(SBDParams,minInertiaRatio     );
+    #undef PROC_VAR
+    #define PROC_VAR(x)  if(!(*itr)[#x].empty())  (*itr)[#x]>>cf.x;
+    PROC_VAR(DistNeighbor );
+    PROC_VAR(DistMin      );
+    PROC_VAR(DistMax      );
+    PROC_VAR(DSMin        );
+    PROC_VAR(DSMax        );
+    PROC_VAR(DSEmp        );
+    PROC_VAR(DPEmp        );
+    PROC_VAR(NCalibPoints );
+    #undef PROC_VAR
+    blob_params.push_back(cf);
+  }
+  fs.release();
 }
 //-------------------------------------------------------------------------------------------
 
@@ -228,6 +306,18 @@ void TBlobTracker::Calibrate(const std::vector<cv::Mat> &images)
   }
   keypoints_orig_= CalibrateOrigin(data, params_.DistNeighbor,
       params_.DistMin, params_.DistMax, params_.DSMin, params_.DSMax);
+}
+//-------------------------------------------------------------------------------------------
+
+void TBlobTracker::SaveCalib(const std::string &file_name) const
+{
+  WriteToYAML(keypoints_orig_, file_name);
+}
+//-------------------------------------------------------------------------------------------
+
+void TBlobTracker::LoadCalib(const std::string &file_name)
+{
+  ReadFromYAML(keypoints_orig_, file_name);
 }
 //-------------------------------------------------------------------------------------------
 

@@ -65,6 +65,8 @@ public:
 
   // Load camera parameters from a YAML file.
   bool LoadCameraParametersFromYAML(const std::string &file_name);
+  // Load stereo parameters from a YAML file.
+  bool LoadConfigurationsFromYAML(const std::string &file_name);
 
   // cv::Size(width,height)
   void SetImageSize(cv::Size size_in, cv::Size size_out)

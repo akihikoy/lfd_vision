@@ -31,17 +31,60 @@ bool TStereo::LoadCameraParametersFromYAML(const std::string &file_name)
     std::cerr<<"Failed to open file"<<std::endl;
     return false;
   }
-  fs["D1"] >> cp_.D1;
-  fs["K1"] >> cp_.K1;
-  fs["P1"] >> cp_.P1;
-  fs["R1"] >> cp_.R1;
-  fs["D2"] >> cp_.D2;
-  fs["K2"] >> cp_.K2;
-  fs["P2"] >> cp_.P2;
-  fs["R2"] >> cp_.R2;
-  fs["R"] >> cp_.R;
-  fs["T"] >> cp_.T;
+  #define PROC_VAR(x)  if(!fs[#x].empty())  fs[#x]>>cp_.x;
+  PROC_VAR( D1 );
+  PROC_VAR( K1 );
+  PROC_VAR( P1 );
+  PROC_VAR( R1 );
+  PROC_VAR( D2 );
+  PROC_VAR( K2 );
+  PROC_VAR( P2 );
+  PROC_VAR( R2 );
+  PROC_VAR( R  );
+  PROC_VAR( T  );
+  #undef PROC_VAR
   return true;
+}
+//-------------------------------------------------------------------------------------------
+
+// Load stereo parameters from a YAML file.
+bool TStereo::LoadConfigurationsFromYAML(const std::string &file_name)
+{
+  cv::FileStorage fs(file_name, cv::FileStorage::READ);
+  if(!fs.isOpened())
+  {
+    std::cerr<<"Failed to open file"<<std::endl;
+    return false;
+  }
+  cv::FileNode data= fs["StereoConfig"];
+  #define PROC_VAR(x)  if(!data[#x].empty())  data[#x]>>sp_.x;
+  PROC_VAR( minDisparity        );
+  PROC_VAR( numberOfDisparities );
+  PROC_VAR( preset              );
+  PROC_VAR( SADWindowSize       );
+  PROC_VAR( preFilterCap        );
+  PROC_VAR( uniquenessRatio     );
+  PROC_VAR( P1                  );
+  PROC_VAR( P2                  );
+  PROC_VAR( speckleWindowSize   );
+  PROC_VAR( speckleRange        );
+  PROC_VAR( disp12MaxDiff       );
+  PROC_VAR( fullDP              );
+  PROC_VAR( GrayScale           );
+  #undef PROC_VAR
+  std::string StereoMethod, LensType;
+  if     (sp_.StereoMethod==TStereoParams::smBM  )  StereoMethod= "bm"  ;
+  else if(sp_.StereoMethod==TStereoParams::smSGBM)  StereoMethod= "sgbm";
+  if     (sp_.LensType==TStereoParams::ltBasic  )  LensType= "basic"  ;
+  else if(sp_.LensType==TStereoParams::ltFisheye)  LensType= "fisheye";
+  #define PROC_VAR(x)  if(!data[#x].empty())  data[#x]>>x;
+  PROC_VAR( StereoMethod        );
+  PROC_VAR( LensType            );
+  #undef PROC_VAR
+  if     (StereoMethod=="bm"  )  sp_.StereoMethod= TStereoParams::smBM  ;
+  else if(StereoMethod=="sgbm")  sp_.StereoMethod= TStereoParams::smSGBM;
+  if     (LensType=="basic"  )  sp_.LensType= TStereoParams::ltBasic  ;
+  else if(LensType=="fisheye")  sp_.LensType= TStereoParams::ltFisheye;
 }
 //-------------------------------------------------------------------------------------------
 
@@ -68,6 +111,13 @@ void TStereo::SetRecommendedStereoParams()
   sp_.StereoMethod          = TStereoParams::smSGBM;
   sp_.GrayScale             = true;
   sp_.LensType              = TStereoParams::ltBasic;
+
+  #define print(x)  std::cerr<<"Recommended parameter["#x"]= "<<sp_.x<<std::endl
+  print( minDisparity          );
+  print( numberOfDisparities   );
+  print( SADWindowSize         );
+  print( P1                    );
+  print( P2                    );
 }
 //-------------------------------------------------------------------------------------------
 
@@ -82,7 +132,6 @@ void TStereo::Init()
         /*flags=*/cv::CALIB_ZERO_DISPARITY, /*alpha=*/0.0,
         img_size_out_/*, Rect* validPixROI1=0, Rect* validPixROI2=0*/);
         // FIXME: alpha is important to be tuned!!!
-    std::cerr<<"cp_.Q="<<cp_.Q<<std::endl;
     cv::initUndistortRectifyMap(cp_.K1, cp_.D1, cp_.R1, cp_.P1, img_size_out_, CV_16SC2, map11_, map12_);
     cv::initUndistortRectifyMap(cp_.K2, cp_.D2, cp_.R2, cp_.P2, img_size_out_, CV_16SC2, map21_, map22_);
   }
@@ -93,10 +142,12 @@ void TStereo::Init()
         /*flags=*/cv::CALIB_ZERO_DISPARITY, img_size_out_,
         /*balance=*/0.0, /*fov_scale=*/0.55);
         // FIXME: balance, fov_scale are important to be tuned!!!
-    std::cerr<<"cp_.Q="<<cp_.Q<<std::endl;
     cv::fisheye::initUndistortRectifyMap(cp_.K1, cp_.D1, cp_.R1, cp_.P1, img_size_out_, CV_16SC2, map11_, map12_);
     cv::fisheye::initUndistortRectifyMap(cp_.K2, cp_.D2, cp_.R2, cp_.P2, img_size_out_, CV_16SC2, map21_, map22_);
   }
+  std::cerr<<"cp_.Q="<<cp_.Q<<std::endl;
+  std::cerr<<"cp_.P1="<<cp_.P1<<std::endl;
+  std::cerr<<"cp_.P2="<<cp_.P2<<std::endl;
 
   if(sp_.StereoMethod==TStereoParams::smBM)
   {
@@ -127,6 +178,7 @@ void TStereo::Proc(const cv::Mat &frame_l, const cv::Mat &frame_r)
   frame_r.copyTo(frame2_);
 
   Rectify(frame1_, frame2_, sp_.GrayScale);
+  RectifyL(rgb_, /*gray_scale=*/false);
 
   // TODO:FIXME: REDUCE THE IMAGE SIZES...?
 

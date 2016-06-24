@@ -35,6 +35,41 @@
 //-------------------------------------------------------------------------------------------
 namespace trick
 {
+// Get point cloud of flow by flow-stereo algorithm
+struct TFlowStereo2
+{
+  int We;
+  int Wd;
+  int XFilter, YFilter;
+  int XStep, YStep;
+  int ThMatch;
+
+  // Filter kernel:
+  cv::Mat Kernel;
+
+  // Temporary containers:
+  cv::Mat frame1, frame2, mask1, mask2;
+  cv::Mat seg1, seg2, tmp;
+  std::vector<int> matched;
+  std::vector<cv::Point2f> points1,points2;
+  cv::Mat points4d;
+  cv::Mat frame1c,frame2c;  // For visualization
+
+  TFlowStereo2()
+    {
+      We= 2;
+      Wd= 3;
+      XFilter= 1;
+      YFilter= 32;
+      XStep= 1;
+      YStep= 16;
+      ThMatch= 16;
+    }
+  void Init();
+  void operator()(cv::Mat flow_mask1, cv::Mat flow_mask2);  // implementation is below
+};
+//-------------------------------------------------------------------------------------------
+
 const char *ColFileNames[]={
     "default_colors1.dat",
     "default_colors2.dat",
@@ -45,25 +80,37 @@ const char *ColFileNames[]={
     "default_colors7.dat"};
 std::string ColorFilesBase[]={"x","x2"};
 
+std::vector<TCameraInfo> CamInfo;  // Using two elements only (0,1)
+std::vector<TStereoInfo> StereoInfo;  // Using the first element only
+std::vector<TFlowStereo2> StereoFInfo;  // Using the first element only
+
 int  CameraIdx(0), CDIdx(0);  // Focused camera index, color index in ColDetector
 bool Running(true), Shutdown(false);
 TMultipleColorDetector ColDetector[2];
 TFlowFinder FlowFinder[2];
 TStereo Stereo;
+TStereo Rectifier;
 // TStereo StereoF;
 
 int NumColDetectors(1);
-int NRotate90(0);
-TEasyVideoOut VideoOut[2];
+TEasyVideoOut VideoOut[2], VideoOutF[2];
 int VizMode[]= {2,2};  // 0: camera only, 1: camera + detected, 2: 0.5*camera + detected, 3: 0.25*camera + detected, 4: detected only
 
+int SendRawFlow(0);  // 1: Send raw flow sensing data as sensor_msg
 std::string ImgWin("1100111");  // 1:show, 0:hide; order=color1,color2,stereo1,stereo2,disparity,flow1,flow2
 
 std::vector<lfd_vision::ColDetVizPrimitive> VizObjs[2];  // External visualization requests.
 
-ros::Publisher CloudPub, FlowCloudPub;
-cv::Mat Frame[2];
-boost::mutex MutCamCapture;
+ros::Publisher CloudPub, FlowCloudPub, SensorPub[2];
+cv::Mat Frame[2], FlowMask[2];
+std::vector<long> CapTime, FlowFindTime;  // Using two elements only (0,1)
+boost::mutex MutCamCapture, MutFlowFind;
+struct TIMShowStuff
+{
+  boost::shared_ptr<boost::mutex> Mutex;
+  cv::Mat Frame;
+};
+std::map<std::string, TIMShowStuff> IMShowStuff;
 
 lfd_vision::ROI_3DProj ROIColDet, ROIStereoF;
 }
@@ -121,8 +168,6 @@ bool HandleKeyEvent()
   // keyboard interface:
   char c(cv::waitKey(1));
   if(c=='\x1b'||c=='q') return false;
-  if(c=='[') {--NRotate90; std::cerr<<"NRotate90= "<<NRotate90<<std::endl;}
-  if(c==']') {++NRotate90; std::cerr<<"NRotate90= "<<NRotate90<<std::endl;}
   else if(c=='r')
   {
     for(int j(0);j<2;++j)
@@ -157,8 +202,8 @@ bool HandleKeyEvent()
   }
   else if(c=='W')
   {
-    for(int j(0);j<2;++j)
-      VideoOut[j].Switch();
+    for(int j(0);j<2;++j)  VideoOut[j].Switch();
+    for(int j(0);j<2;++j)  VideoOutF[j].Switch();
   }
   else if(c==' ')
   {
@@ -347,9 +392,21 @@ void ExecStereo()
       cv::normalize(Stereo.Disparity(), disparity, 0, 255, CV_MINMAX, CV_8U);
 
       // 1:show, 0:hide; order=color1,color2,stereo1,stereo2,disparity,flow1,flow2
-      if(ImgWin[2]=='1')  cv::imshow("stereo_frame_l", Stereo.FrameL());
-      if(ImgWin[3]=='1')  cv::imshow("stereo_frame_r", Stereo.FrameR());
-      if(ImgWin[4]=='1')  cv::imshow("stereo_disparity", disparity);
+      // if(ImgWin[2]=='1')  cv::imshow("stereo_frame_l", Stereo.FrameL());
+      // if(ImgWin[3]=='1')  cv::imshow("stereo_frame_r", Stereo.FrameR());
+      // if(ImgWin[4]=='1')  cv::imshow("stereo_disparity", disparity);
+      if(ImgWin[2]=='1') {
+        boost::mutex::scoped_lock lock(*IMShowStuff["stereo_frame_l"].Mutex);
+        Stereo.FrameL().copyTo(IMShowStuff["stereo_frame_l"].Frame);
+      }
+      if(ImgWin[3]=='1') {
+        boost::mutex::scoped_lock lock(*IMShowStuff["stereo_frame_r"].Mutex);
+        Stereo.FrameR().copyTo(IMShowStuff["stereo_frame_r"].Frame);
+      }
+      if(ImgWin[4]=='1') {
+        boost::mutex::scoped_lock lock(*IMShowStuff["stereo_disparity"].Mutex);
+        disparity.copyTo(IMShowStuff["stereo_disparity"].Frame);
+      }
 
       // Publish as point cloud.
       Stereo.ReprojectTo3D();
@@ -403,320 +460,293 @@ void FlowStereo(int we, int wd)
 #endif
 //-------------------------------------------------------------------------------------------
 
-// Get point cloud of flow by flow-stereo algorithm
-struct TFlowStereo2
+
+void TFlowStereo2::Init()
 {
-  int We;
-  int Wd;
-  int XFilter, YFilter;
-  int XStep, YStep;
-  int ThMatch;
-
-  // Filter kernel:
-  cv::Mat Kernel;
-
-  // Temporary containers:
-  cv::Mat frame1, frame2, mask1, mask2;
-  cv::Mat seg1, seg2, tmp;
-  std::vector<int> matched;
-  std::vector<cv::Point2f> points1,points2;
-  cv::Mat points4d;
-  cv::Mat frame1c,frame2c;  // For visualization
-
-  TFlowStereo2()
-    {
-      We= 2;
-      Wd= 3;
-      XFilter= 1;
-      YFilter= 32;
-      XStep= 1;
-      YStep= 16;
-      ThMatch= 16;
-    }
-  void Init()
-    {
-      Kernel.create(cv::Size(XFilter,YFilter),CV_32F);
-      Kernel= cv::Mat::ones(Kernel.size(),CV_32F)/(float)(Kernel.rows*Kernel.cols);
-    }
-  void operator()()
-    {
-      ProjectROIToMask(ROIStereoF, FlowFinder[0].FlowMask().size(), FlowFinder[1].FlowMask().size(), Stereo.CameraParams(), mask1, mask2);
-      frame1.setTo(0);
-      frame2.setTo(0);
-      FlowFinder[0].FlowMask().copyTo(frame1, mask1);
-      FlowFinder[1].FlowMask().copyTo(frame2, mask2);
-      frame1*= 200;
-      frame2*= 200;
-
-      // Remove noise, make remaining pixels bigger:
-      cv::erode(frame1,frame1,cv::Mat(),cv::Point(-1,-1), We);
-      cv::dilate(frame1,frame1,cv::Mat(),cv::Point(-1,-1), Wd);
-      cv::erode(frame2,frame2,cv::Mat(),cv::Point(-1,-1), We);
-      cv::dilate(frame2,frame2,cv::Mat(),cv::Point(-1,-1), Wd);
-      // Vertical filter to make detecting flow easier:
-      cv::filter2D(frame1, frame1, /*ddepth=*/-1, Kernel);
-      cv::filter2D(frame2, frame2, /*ddepth=*/-1, Kernel);
-
-      matched.resize(frame1.rows);
-      for(int y(0),y_end(std::min(frame1.rows,frame2.rows)-YStep); y<y_end; y+=YStep)
-      {
-        cv::Mat seg1(frame1,cv::Rect(0,y,frame1.cols,1));
-        cv::Mat seg2(frame2,cv::Rect(0,y,frame2.cols,1));
-        int dx(0);
-        double match(0.0), max_match(0.0), x_match(0);
-        for(int x(0),x_end(frame1.cols); x<x_end; x+=XStep)
-        {
-          dx= frame1.cols-x;
-          cv::bitwise_and(seg1(cv::Rect(x,0,dx,1)), seg2(cv::Rect(0,0,dx,1)), tmp);
-          match= cv::sum(tmp)[0];
-          if(match>max_match)  {x_match=x; max_match=match;}
-        }
-        if(max_match>ThMatch)
-          for(int y2(y);y2<y+YStep;++y2)  matched[y2]= x_match;
-        else
-          for(int y2(y);y2<y+YStep;++y2)  matched[y2]= -1;
-        // std::cerr<<" "<<matched[y];
-      }
-      // std::cerr<<std::endl;
-
-      points1.clear();
-      points2.clear();
-      cv::cvtColor(frame1, frame1c, CV_GRAY2BGR);
-      cv::cvtColor(frame2, frame2c, CV_GRAY2BGR);
-      frame1c/=2;
-      frame2c/=2;
-      for(int y(0),y_end(matched.size()); y<y_end; y+=YStep)
-      {
-        int dx= matched[y];
-        if(dx>=0)
-        {
-          for(int x(dx),x_end(frame1.cols); x<x_end; x+=XStep)
-          {
-            if(frame1.at<unsigned char>(y,x)>10 && frame2.at<unsigned char>(y,x-dx)>10)
-            {
-              for(int y2(y);y2<y+YStep;++y2)
-              {
-                frame1c.at<cv::Vec3b>(y2,x)+= cv::Vec3b(x%128,0,128-(x%128));
-                frame2c.at<cv::Vec3b>(y2,x-dx)+= cv::Vec3b(x%128,0,128-(x%128));
-              }
-              points1.push_back(cv::Point2f(x,y));
-              points2.push_back(cv::Point2f(x-dx,y));
-            }
-          }
-        }
-      }
-
-      if(points1.size()>0)
-      {
-        cv::triangulatePoints(Stereo.CameraParams().P1, Stereo.CameraParams().P2,
-            points1, points2, points4d);
-        //*DBG*/std::cerr<<"points4d[0]="<<points4d.col(0)<<std::endl;
-      }
-      else
-        points4d= cv::Mat::zeros(0,0,CV_32F);
-
-      // cv::normalize(disparity, disparity, 0, 255, CV_MINMAX, CV_8U);
-      // 1:show, 0:hide; order=color1,color2,stereo1,stereo2,disparity,flow1,flow2
-      if(ImgWin[5]=='1')  cv::imshow("stereof_frame_l", frame1c);
-      if(ImgWin[6]=='1')  cv::imshow("stereof_frame_r", frame2c);
-      // cv::imshow("stereof_disparity", disparity);
-
-      // Publish as point cloud.
-      sensor_msgs::PointCloud2 cloud_msg;
-      ConvertPointCloudToROSMsg<pcl::PointXYZ>(cloud_msg,
-          Convert4DPointsToPointCloud(points4d),
-          /*frame_id=*/"usb_stereo");
-      FlowCloudPub.publish(cloud_msg);
-    }
-};
+  Kernel.create(cv::Size(XFilter,YFilter),CV_32F);
+  Kernel= cv::Mat::ones(Kernel.size(),CV_32F)/(float)(Kernel.rows*Kernel.cols);
+}
 //-------------------------------------------------------------------------------------------
 
-int main(int argc, char**argv)
+void TFlowStereo2::operator()(cv::Mat flow_mask1, cv::Mat flow_mask2)
 {
-  ros::init(argc, argv, "usb_stereo_node");
-  ros::NodeHandle node("~");
-  int camera[]= {0,1};
-  int cap_width(640), cap_height(480);
-  double block_area_min(10.0);
+  ProjectROIToMask(ROIStereoF, flow_mask1.size(), flow_mask2.size(), Rectifier.CameraParams(), mask1, mask2);
+  frame1.setTo(0);
+  frame2.setTo(0);
+  flow_mask1.copyTo(frame1, mask1);
+  flow_mask2.copyTo(frame2, mask2);
+  frame1*= 200;
+  frame2*= 200;
 
-  int    ff_ofl_win(3);  // FlowFinder.OptFlowWinSize
-  double ff_ofl_spd_min(2.0);  // FlowFinder.OptFlowSpdThreshold
-  int    ff_er_dl(1);  // FlowFinder.ErodeDilate
-  double ff_amt_min(1.0), ff_amt_max(3000.0);  // FlowFinder.AmountRange
-  double ff_spd_min(1.0), ff_spd_max(-1.0);  // FlowFinder.SpeedRange
-  int    ff_mask_flen(5);  // FlowFinder.FlowMaskFilterLen
+  // Remove noise, make remaining pixels bigger:
+  cv::erode(frame1,frame1,cv::Mat(),cv::Point(-1,-1), We);
+  cv::dilate(frame1,frame1,cv::Mat(),cv::Point(-1,-1), Wd);
+  cv::erode(frame2,frame2,cv::Mat(),cv::Point(-1,-1), We);
+  cv::dilate(frame2,frame2,cv::Mat(),cv::Point(-1,-1), Wd);
+  // Vertical filter to make detecting flow easier:
+  cv::filter2D(frame1, frame1, /*ddepth=*/-1, Kernel);
+  cv::filter2D(frame2, frame2, /*ddepth=*/-1, Kernel);
 
-  std::string stereo_param_yaml("config/ext_usbcam1_stereo3.yaml");
-  int stereo_f_We(2);
-  int stereo_f_Wd(3);
-  int stereo_f_XFilter(1), stereo_f_YFilter(32);
-  int stereo_f_XStep(1), stereo_f_YStep(16);
-  int stereo_f_ThMatch(16);
-
-  std::string vout_base("/tmp/vout");
-
-  node.param("camera1",camera[0],camera[0]);
-  node.param("camera2",camera[1],camera[1]);
-  node.param("cap_width",cap_width,cap_width);
-  node.param("cap_height",cap_height,cap_height);
-  node.param("viz_mode1",VizMode[0],VizMode[0]);
-  node.param("viz_mode2",VizMode[1],VizMode[1]);
-  node.param("num_detectors",NumColDetectors,NumColDetectors);
-  node.param("block_area_min",block_area_min,block_area_min);
-  node.param("color_files_base1",ColorFilesBase[0],ColorFilesBase[0]);
-  node.param("color_files_base2",ColorFilesBase[1],ColorFilesBase[1]);
-  node.param("rotate90n",NRotate90,NRotate90);
-  node.param("img_win",ImgWin,ImgWin);
-
-  node.param("ff_ofl_win",ff_ofl_win,ff_ofl_win);
-  node.param("ff_ofl_spd_min",ff_ofl_spd_min,ff_ofl_spd_min);
-  node.param("ff_er_dl",ff_er_dl,ff_er_dl);
-  node.param("ff_amt_min",ff_amt_min,ff_amt_min);
-  node.param("ff_amt_max",ff_amt_max,ff_amt_max);
-  node.param("ff_spd_min",ff_spd_min,ff_spd_min);
-  node.param("ff_spd_max",ff_spd_max,ff_spd_max);
-  node.param("ff_mask_flen",ff_mask_flen,ff_mask_flen);
-
-  node.param("stereo_param_yaml",stereo_param_yaml,stereo_param_yaml);
-  node.param("stereo_f_We",stereo_f_We,stereo_f_We);
-  node.param("stereo_f_Wd",stereo_f_Wd,stereo_f_Wd);
-  node.param("stereo_f_XFilter",stereo_f_XFilter,stereo_f_XFilter);
-  node.param("stereo_f_YFilter",stereo_f_YFilter,stereo_f_YFilter);
-  node.param("stereo_f_XStep",stereo_f_XStep,stereo_f_XStep);
-  node.param("stereo_f_YStep",stereo_f_YStep,stereo_f_YStep);
-  node.param("stereo_f_ThMatch",stereo_f_ThMatch,stereo_f_ThMatch);
-
-  node.param("vout_base",vout_base,vout_base);
-
-  ROIColDet.type= ROIColDet.NONE;
-  ROIStereoF.type= ROIStereoF.NONE;
-
-  cv::VideoCapture cap1(camera[0]), cap2(camera[1]);
-  if(!cap1.isOpened() || !cap2.isOpened())  // check if we succeeded
+  matched.resize(frame1.rows);
+  for(int y(0),y_end(std::min(frame1.rows,frame2.rows)-YStep); y<y_end; y+=YStep)
   {
-    std::cerr<<"Cannot open one of/both: "<<camera[0]<<", "<<camera[1]<<std::endl;
-    return -1;
+    cv::Mat seg1(frame1,cv::Rect(0,y,frame1.cols,1));
+    cv::Mat seg2(frame2,cv::Rect(0,y,frame2.cols,1));
+    int dx(0);
+    double match(0.0), max_match(0.0), x_match(0);
+    for(int x(0),x_end(frame1.cols); x<x_end; x+=XStep)
+    {
+      dx= frame1.cols-x;
+      cv::bitwise_and(seg1(cv::Rect(x,0,dx,1)), seg2(cv::Rect(0,0,dx,1)), tmp);
+      match= cv::sum(tmp)[0];
+      if(match>max_match)  {x_match=x; max_match=match;}
+    }
+    if(max_match>ThMatch)
+      for(int y2(y);y2<y+YStep;++y2)  matched[y2]= x_match;
+    else
+      for(int y2(y);y2<y+YStep;++y2)  matched[y2]= -1;
+    // std::cerr<<" "<<matched[y];
   }
-  std::cerr<<"Camera opened"<<std::endl;
+  // std::cerr<<std::endl;
 
-  cv::Size img_size(cap_width,cap_height);
-  cap1.set(CV_CAP_PROP_FRAME_WIDTH, cap_width);
-  cap1.set(CV_CAP_PROP_FRAME_HEIGHT, cap_height);
-  cap2.set(CV_CAP_PROP_FRAME_WIDTH, cap_width);
-  cap2.set(CV_CAP_PROP_FRAME_HEIGHT, cap_height);
-
-  for(int j(0);j<2;++j)
-    VideoOut[j].SetfilePrefix(vout_base);
-
-  for(int j(0); j<2; ++j)
+  points1.clear();
+  points2.clear();
+  cv::cvtColor(frame1, frame1c, CV_GRAY2BGR);
+  cv::cvtColor(frame2, frame2c, CV_GRAY2BGR);
+  frame1c/=2;
+  frame2c/=2;
+  for(int y(0),y_end(matched.size()); y<y_end; y+=YStep)
   {
-    ColDetector[j].Setup(NumColDetectors);
-    for(int i(0); i<NumColDetectors; ++i)
-      ColDetector[j].LoadColors(i, ColorFilesBase[j]+ColFileNames[i]);
-    ColDetector[j].SetBlockAreaMin(block_area_min);
-  }
-  CDIdx= 0;
-
-  for(int j(0); j<2; ++j)
-  {
-    // 0: Full, 1: FlowMask only
-    // FlowFinder[j].SetProcType(1);
-    FlowFinder[j].SetOptFlowWinSize(cv::Size(ff_ofl_win,ff_ofl_win));
-    FlowFinder[j].SetOptFlowSpdThreshold(ff_ofl_spd_min);
-    FlowFinder[j].SetErodeDilate(ff_er_dl);
-    FlowFinder[j].SetAmountRange(/*min=*/ff_amt_min, /*max=*/ff_amt_max);
-    FlowFinder[j].SetSpeedRange(/*min=*/ff_spd_min, /*max=*/ff_spd_max);
-    FlowFinder[j].SetFlowMaskFilterLen(ff_mask_flen);
+    int dx= matched[y];
+    if(dx>=0)
+    {
+      for(int x(dx),x_end(frame1.cols); x<x_end; x+=XStep)
+      {
+        if(frame1.at<unsigned char>(y,x)>10 && frame2.at<unsigned char>(y,x-dx)>10)
+        {
+          for(int y2(y);y2<y+YStep;++y2)
+          {
+            frame1c.at<cv::Vec3b>(y2,x)+= 2*cv::Vec3b(x%128,0,128-(x%128));
+            frame2c.at<cv::Vec3b>(y2,x-dx)+= 2*cv::Vec3b(x%128,0,128-(x%128));
+          }
+          points1.push_back(cv::Point2f(x,y));
+          points2.push_back(cv::Point2f(x-dx,y));
+        }
+      }
+    }
   }
 
-  Stereo.LoadCameraParametersFromYAML(stereo_param_yaml);
-  Stereo.SetImageSize(img_size,img_size);
-  Stereo.SetRecommendedStereoParams();
-  Stereo.Init();
-  // StereoF.LoadCameraParametersFromYAML(stereo_param_yaml);
-  // StereoF.SetImageSize(img_size,img_size);
-  // StereoF.SetRecommendedStereoParams();
-  // StereoF.StereoParams().StereoMethod= TStereoParams::smBM;
-  // StereoF.Init();
-  TFlowStereo2 stereo_f;
-  stereo_f.We= stereo_f_We;
-  stereo_f.Wd= stereo_f_Wd;
-  stereo_f.XFilter= stereo_f_XFilter;
-  stereo_f.YFilter= stereo_f_YFilter;
-  stereo_f.XStep= stereo_f_XStep;
-  stereo_f.YStep= stereo_f_YStep;
-  stereo_f.ThMatch= stereo_f_ThMatch;
-  stereo_f.Init();
+  if(points1.size()>0)
+  {
+    cv::triangulatePoints(Rectifier.CameraParams().P1, Rectifier.CameraParams().P2,
+        points1, points2, points4d);
+    //*DBG*/std::cerr<<"points4d[0]="<<points4d.col(0)<<std::endl;
+  }
+  else
+    points4d= cv::Mat::zeros(0,0,CV_32F);
 
-  ros::Publisher sensor_pub[2];
-  sensor_pub[0]= node.advertise<lfd_vision::ColDetSensor>("sensor1", 1);
-  sensor_pub[1]= node.advertise<lfd_vision::ColDetSensor>("sensor2", 1);
-  CloudPub= node.advertise<sensor_msgs::PointCloud2>("point_cloud", 1);
-  FlowCloudPub= node.advertise<sensor_msgs::PointCloud2>("flow_cloud", 1);
+  // Publish as point cloud.
+  sensor_msgs::PointCloud2 cloud_msg;
+  ConvertPointCloudToROSMsg<pcl::PointXYZ>(cloud_msg,
+      Convert4DPointsToPointCloud(points4d),
+      /*frame_id=*/"usb_stereo");
+  FlowCloudPub.publish(cloud_msg);
+}
+//-------------------------------------------------------------------------------------------
 
-  ros::Subscriber sub_viz1= node.subscribe<lfd_vision::ColDetViz>("viz1", 1, TColDetVizCallback(0));
-  ros::Subscriber sub_viz2= node.subscribe<lfd_vision::ColDetViz>("viz2", 1, TColDetVizCallback(1));
-  ros::Subscriber sub_roi= node.subscribe("roi", 1, &ROICallback);
-
-  ros::ServiceServer srv_reset= node.advertiseService("reset", &ResetAmount);
-  ros::ServiceServer srv_pause= node.advertiseService("pause", &Pause);
-  ros::ServiceServer srv_resume= node.advertiseService("resume", &Resume);
-
-  cv::Mat frame[2], disp_img[2], mask[2];
-  for(int j(0);j<2;++j)
-    ColDetector[j].SetCameraWindow(frame[j]);
-
-  // 1:show, 0:hide; order=color1,color2,stereo1,stereo2,disparity,flow1,flow2
-  int camera_indexes[]= {0,1};
-  if(ImgWin[0]=='1')  cv::namedWindow("color_detector1",1);
-  if(ImgWin[0]=='1')  cv::setMouseCallback("color_detector1", OnMouse, &camera_indexes[0]);
-  if(ImgWin[1]=='1')  cv::namedWindow("color_detector2",1);
-  if(ImgWin[1]=='1')  cv::setMouseCallback("color_detector2", OnMouse, &camera_indexes[1]);
-
-  if(ImgWin[2]=='1')  cv::namedWindow("stereo_frame_l",1);
-  if(ImgWin[2]=='1')  cv::setMouseCallback("stereo_frame_l", OnMouseSimple);
-  if(ImgWin[3]=='1')  cv::namedWindow("stereo_frame_r",1);
-  if(ImgWin[3]=='1')  cv::setMouseCallback("stereo_frame_r", OnMouseSimple);
-  if(ImgWin[4]=='1')  cv::namedWindow("stereo_disparity",1);
-  if(ImgWin[4]=='1')  cv::setMouseCallback("stereo_disparity", OnMouseSimple);
-
-  if(ImgWin[5]=='1')  cv::namedWindow("stereof_frame_l",1);
-  if(ImgWin[5]=='1')  cv::setMouseCallback("stereof_frame_l", OnMouseSimple);
-  if(ImgWin[6]=='1')  cv::namedWindow("stereof_frame_r",1);
-  if(ImgWin[6]=='1')  cv::setMouseCallback("stereof_frame_r", OnMouseSimple);
-  // cv::namedWindow("stereof_disparity",1);
-  // cv::setMouseCallback("stereof_disparity", OnMouseSimple);
-
-  int show_fps(0);
-
-  // Dummy capture.
-  cap1 >> Frame[0];
-  cap2 >> Frame[1];
-
-  boost::thread th_stereo(&ExecStereo);
-
-  // ros::Rate loop_rate(5);  // 5 Hz
-  for(int f(0);ros::ok();++f)
+void ExecFlowFind(int i_cam)
+{
+  cv::Mat frame, flow_mask;
+  long t_cap=0;
+  while(!Shutdown)
   {
     if(Running)
     {
+      if(CapTime[i_cam]==t_cap)
+      {
+        usleep(10*1000);
+        continue;
+      }
+
+// double t_start=GetCurrentTime();
+// if(i_cam==0)std::cerr<<"DBG: a "<<1000.0*(GetCurrentTime()-t_start);
+      {
+        boost::mutex::scoped_lock lock(MutCamCapture);
+        Frame[i_cam].copyTo(frame);
+        t_cap= CapTime[i_cam];
+      }
+
+      // Rectify image before flow-find? OR after??
+      // if(i_cam==0)       Rectifier.RectifyL(frame);
+      // else if(i_cam==1)  Rectifier.RectifyR(frame);
+// if(i_cam==0)std::cerr<<"DBG: b "<<1000.0*(GetCurrentTime()-t_start);
+      // Flow detection from image
+      FlowFinder[i_cam].Update(frame);
+      FlowFinder[i_cam].FlowMask().copyTo(flow_mask);
+      if(i_cam==0)       Rectifier.RectifyL(flow_mask);
+      else if(i_cam==1)  Rectifier.RectifyR(flow_mask);
+
+// if(i_cam==0)std::cerr<<"DBG: c "<<1000.0*(GetCurrentTime()-t_start);
+      {
+        boost::mutex::scoped_lock lock(MutFlowFind);
+        flow_mask.copyTo(FlowMask[i_cam]);
+        FlowFindTime[i_cam]= GetCurrentTimeL();
+      }
+// if(i_cam==0)std::cerr<<"DBG: d "<<1000.0*(GetCurrentTime()-t_start);
+
+    }  // Running
+    else
+    {
+      usleep(200*1000);
+    }
+  }
+}
+//-------------------------------------------------------------------------------------------
+
+void ExecFlowStereo()
+{
+  TFlowStereo2 &stereo_f(StereoFInfo[0]);
+  cv::Mat frame[2], disp_img[2];
+  int show_fps(0), do_stereo_f(0);
+  long t_ff[2]={0,0};
+  while(!Shutdown)
+  {
+    if(Running)
+    {
+      if(FlowFindTime[0]<0 || FlowFindTime[1]<0
+        || FlowFindTime[0]==t_ff[0] || FlowFindTime[1]==t_ff[1])
+      {
+        usleep(5*1000);
+// std::cerr<<"DBG: 10.0"<<std::endl;
+        continue;
+      }
+
+// double t_start=GetCurrentTime();
+// std::cerr<<"DBG: a "<<1000.0*(GetCurrentTime()-t_start);
+      {
+        boost::mutex::scoped_lock lock(MutFlowFind);
+        for(int i_cam(0);i_cam<2;++i_cam)
+        {
+          FlowMask[i_cam].copyTo(frame[i_cam]);
+          t_ff[i_cam]= FlowFindTime[i_cam];
+        }
+      }
+
+// std::cerr<<" c "<<1000.0*(GetCurrentTime()-t_start);
+      if(do_stereo_f==0)
+      {
+        // stereo_f(FlowFinder[0].FlowMask(), FlowFinder[1].FlowMask());
+        stereo_f(frame[0], frame[1]);
+        do_stereo_f= FlowFinder[0].FlowMaskFilterLen()/2;
+      }
+      --do_stereo_f;
+
+// std::cerr<<" d "<<1000.0*(GetCurrentTime()-t_start);
+      // stereo_f.frame1c.copyTo(disp_img[0]);
+      // stereo_f.frame2c.copyTo(disp_img[1]);
+      // FlowFinder[0].DrawFlow(disp_img[0], CV_RGB(0,255,255), /*len=*/1.0, /*thickness=*/1);
+      // FlowFinder[1].DrawFlow(disp_img[1], CV_RGB(0,255,255), /*len=*/1.0, /*thickness=*/1);
+      disp_img[0]= ColorMask(frame[0], CV_RGB(0,128,128));
+      disp_img[1]= ColorMask(frame[1], CV_RGB(0,128,128));
+      disp_img[0]+= stereo_f.frame1c;
+      disp_img[1]+= stereo_f.frame2c;
+
+// std::cerr<<" e "<<1000.0*(GetCurrentTime()-t_start);
+      VideoOutF[0].Step(disp_img[0]);
+      VideoOutF[0].VizRec(disp_img[0]);
+      VideoOutF[1].Step(disp_img[1]);
+      VideoOutF[1].VizRec(disp_img[1]);
+
+// std::cerr<<" f "<<1000.0*(GetCurrentTime()-t_start);
+      // cv::normalize(disparity, disparity, 0, 255, CV_MINMAX, CV_8U);
+      // 1:show, 0:hide; order=color1,color2,stereo1,stereo2,disparity,flow1,flow2
+      // if(ImgWin[5]=='1')  cv::imshow("stereof_frame_l", disp_img[0]);
+      // if(ImgWin[6]=='1')  cv::imshow("stereof_frame_r", disp_img[1]);
+      // // cv::imshow("stereof_disparity", disparity);
+      if(ImgWin[5]=='1') {
+        boost::mutex::scoped_lock lock(*IMShowStuff["stereof_frame_l"].Mutex);
+        disp_img[0].copyTo(IMShowStuff["stereof_frame_l"].Frame);
+      }
+      if(ImgWin[6]=='1') {
+        boost::mutex::scoped_lock lock(*IMShowStuff["stereof_frame_r"].Mutex);
+        disp_img[1].copyTo(IMShowStuff["stereof_frame_r"].Frame);
+      }
+
+// std::cerr<<" g "<<1000.0*(GetCurrentTime()-t_start)<<std::endl;
+      if(show_fps==0)
+      {
+        std::cerr<<"FPS(flow): "<<VideoOutF[0].FPS()<<", "<<VideoOutF[1].FPS()<<std::endl;
+        show_fps=VideoOutF[0].FPS()*4;
+      }
+      --show_fps;
+
+    }  // Running
+    else
+    {
+      usleep(200*1000);
+    }
+  }
+}
+//-------------------------------------------------------------------------------------------
+
+void ReadFromYAML(std::vector<TFlowStereo2> &stereof_info, const std::string &file_name)
+{
+  stereof_info.clear();
+  cv::FileStorage fs(file_name, cv::FileStorage::READ);
+  cv::FileNode data= fs["FlowStereoInfo"];
+  for(cv::FileNodeIterator itr(data.begin()),itr_end(data.end()); itr!=itr_end; ++itr)
+  {
+    TFlowStereo2 cf;
+    #define PROC_VAR(x)  (*itr)[#x]>>cf.x;
+    PROC_VAR(We      );
+    PROC_VAR(Wd      );
+    PROC_VAR(XFilter );
+    PROC_VAR(YFilter );
+    PROC_VAR(XStep   );
+    PROC_VAR(YStep   );
+    PROC_VAR(ThMatch );
+    #undef PROC_VAR
+    stereof_info.push_back(cf);
+  }
+  fs.release();
+}
+//-------------------------------------------------------------------------------------------
+
+void ExecColDet()
+{
+  cv::Size img_size[2]={cv::Size(CamInfo[0].Width,CamInfo[0].Height),
+                        cv::Size(CamInfo[1].Width,CamInfo[1].Height)};
+  cv::Mat frame[2], disp_img[2], mask[2];
+  int show_fps(0);
+  long t_cap[2]={0,0};
+  while(!Shutdown)
+  {
+    if(Running)
+    {
+      if(CapTime[0]==t_cap[0] || CapTime[1]==t_cap[1])
+      {
+        usleep(10*1000);
+        continue;
+      }
+
       // FIXME:TODO: The masks are drawn on rectified image plane.
       // So we should rectify the captured frames with stereo camera parameters.
-      ProjectROIToMask(ROIColDet, img_size, img_size, Stereo.CameraParams(), mask[0], mask[1]);
+      ProjectROIToMask(ROIColDet, img_size[0], img_size[1], Rectifier.CameraParams(), mask[0], mask[1]);
       frame[0].setTo(0);
       frame[1].setTo(0);
 
-      cap1 >> Frame[0]; // get a new frame from camera
-      cap2 >> Frame[1]; // get a new frame from camera
       {
         boost::mutex::scoped_lock lock(MutCamCapture);
-        for(int j(0);j<2;++j)  Frame[j].copyTo(frame[j], mask[j]);
+        for(int i_cam(0);i_cam<2;++i_cam)
+        {
+          Frame[i_cam].copyTo(frame[i_cam], mask[i_cam]);
+          t_cap[i_cam]= CapTime[i_cam];
+        }
       }
+
 
       for(int cam_idx(0); cam_idx<2; ++cam_idx)
       {
-        if(NRotate90!=0)  Rotate90N(frame[cam_idx],frame[cam_idx],NRotate90);
-
         // Visualization setup
         // 0: camera only, 1: camera + detected, 2: 0.5*camera + detected, 3: 0.25*camera + detected, 4: detected only
         if(VizMode[cam_idx]==0 || VizMode[cam_idx]==1)
@@ -748,11 +778,6 @@ int main(int argc, char**argv)
             cv::rectangle(disp_img[cam_idx], ColDetector[cam_idx].Bound(CDIdx), CV_RGB(0,255,0), 2);
         }
 
-        // Flow detection from image
-        FlowFinder[cam_idx].Update(frame[cam_idx]);
-        if(VizMode[cam_idx]!=0)
-          FlowFinder[cam_idx].DrawFlow(disp_img[cam_idx], CV_RGB(0,255,255), /*len=*/1.0, /*thickness=*/3);
-
         if(VizMode[cam_idx]!=0)
           DrawExternalViz(cam_idx, disp_img[cam_idx]);
 
@@ -776,33 +801,37 @@ int main(int argc, char**argv)
           sensor_msg.blocks_center_xy.resize(ColDetector[cam_idx].BlocksCenterXY().size());
           std::copy(ColDetector[cam_idx].BlocksCenterXY().begin(),ColDetector[cam_idx].BlocksCenterXY().end(), sensor_msg.blocks_center_xy.begin());
 
-          const std::list<TFlowElement> &flow(FlowFinder[cam_idx].FlowElements());
-          sensor_msg.num_flows= flow.size();
-          sensor_msg.flows_xy     .resize(2*flow.size());
-          sensor_msg.flows_vxy    .resize(2*flow.size());
-          sensor_msg.flows_spddir .resize(2*flow.size());
-          sensor_msg.flows_amount .resize(flow.size());
-          int i(0);
-          for(std::list<TFlowElement>::const_iterator itr(flow.begin()),itr_end(flow.end());
-              itr!=itr_end; ++itr,++i)
+          if(SendRawFlow)
           {
-            sensor_msg.flows_xy[2*i+0]= itr->X;
-            sensor_msg.flows_xy[2*i+1]= itr->Y;
-            sensor_msg.flows_vxy[2*i+0]= itr->VX;
-            sensor_msg.flows_vxy[2*i+1]= itr->VY;
-            sensor_msg.flows_spddir[2*i+0]= itr->Speed;
-            sensor_msg.flows_spddir[2*i+1]= itr->Angle;
-            sensor_msg.flows_amount[i]= itr->Amount;
+            std::list<TFlowElement> flow= FlowFinder[cam_idx].FlowElements();
+            sensor_msg.num_flows= flow.size();
+            sensor_msg.flows_xy     .resize(2*flow.size());
+            sensor_msg.flows_vxy    .resize(2*flow.size());
+            sensor_msg.flows_spddir .resize(2*flow.size());
+            sensor_msg.flows_amount .resize(flow.size());
+            int i(0);
+            for(std::list<TFlowElement>::const_iterator itr(flow.begin()),itr_end(flow.end());
+                itr!=itr_end; ++itr,++i)
+            {
+              sensor_msg.flows_xy[2*i+0]= itr->X;
+              sensor_msg.flows_xy[2*i+1]= itr->Y;
+              sensor_msg.flows_vxy[2*i+0]= itr->VX;
+              sensor_msg.flows_vxy[2*i+1]= itr->VY;
+              sensor_msg.flows_spddir[2*i+0]= itr->Speed;
+              sensor_msg.flows_spddir[2*i+1]= itr->Angle;
+              sensor_msg.flows_amount[i]= itr->Amount;
+            }
           }
 
           // DEPRECATED: sensor_msg.{flow_avr_xy,flow_avr_vxy,flow_avr_spddir}
 
-          sensor_pub[cam_idx].publish(sensor_msg);
+          SensorPub[cam_idx].publish(sensor_msg);
         }
 
         // VideoOut[cam_idx].Step(disp_img[cam_idx]);
         // VideoOut[cam_idx].VizRec(disp_img[cam_idx]);
       }  // for cam_idx
+
 
       std::cerr<<"ratio:";
       for(int cam_idx(0); cam_idx<2; ++cam_idx)
@@ -813,30 +842,256 @@ int main(int argc, char**argv)
       }
       std::cerr<<std::endl;
 
-      // TEST
-      // FlowFinder[0].FlowMask().copyTo(disp_img[0]);
-      // FlowFinder[1].FlowMask().copyTo(disp_img[1]);
-      // disp_img[0]*= 200;
-      // disp_img[1]*= 200;
-      // Stereo.Rectify(disp_img[0],disp_img[1]);
-      // FlowStereo(/*we*/2, /*wd*/3);
-      stereo_f();
-
       VideoOut[0].Step(disp_img[0]);
       VideoOut[0].VizRec(disp_img[0]);
       VideoOut[1].Step(disp_img[1]);
       VideoOut[1].VizRec(disp_img[1]);
 
       // 1:show, 0:hide; order=color1,color2,stereo1,stereo2,disparity,flow1,flow2
-      if(ImgWin[0]=='1')  cv::imshow("color_detector1", disp_img[0]);
-      if(ImgWin[1]=='1')  cv::imshow("color_detector2", disp_img[1]);
+      // if(ImgWin[0]=='1')  cv::imshow("color_detector1", disp_img[0]);
+      // if(ImgWin[1]=='1')  cv::imshow("color_detector2", disp_img[1]);
+      if(ImgWin[0]=='1') {
+        boost::mutex::scoped_lock lock(*IMShowStuff["color_detector1"].Mutex);
+        disp_img[0].copyTo(IMShowStuff["color_detector1"].Frame);
+      }
+      if(ImgWin[1]=='1') {
+        boost::mutex::scoped_lock lock(*IMShowStuff["color_detector2"].Mutex);
+        disp_img[1].copyTo(IMShowStuff["color_detector2"].Frame);
+      }
 
       if(show_fps==0)
       {
-        std::cerr<<"FPS: "<<VideoOut[0].FPS()<<", "<<VideoOut[1].FPS()<<std::endl;
+        std::cerr<<"FPS(coldet): "<<VideoOut[0].FPS()<<", "<<VideoOut[1].FPS()<<std::endl;
         show_fps=VideoOut[0].FPS()*4;
       }
       --show_fps;
+
+    }  // Running
+    else
+    {
+      usleep(200*1000);
+    }
+  }
+}
+//-------------------------------------------------------------------------------------------
+
+int main(int argc, char**argv)
+{
+  ros::init(argc, argv, "usb_stereo_node");
+  ros::NodeHandle node("~");
+  std::string pkg_dir(".");
+  std::string cam_config("config/ext_usbcam1.yaml");
+  std::string stereo_config("config/ext_usbcam1.yaml");
+  std::string stereof_config("config/ext_usbcam1.yaml");
+  double block_area_min(10.0);
+
+  int    ff_ofl_win(3);  // FlowFinder.OptFlowWinSize
+  double ff_ofl_spd_min(2.0);  // FlowFinder.OptFlowSpdThreshold
+  int    ff_er_dl(1);  // FlowFinder.ErodeDilate
+  double ff_amt_min(1.0), ff_amt_max(3000.0);  // FlowFinder.AmountRange
+  double ff_spd_min(1.0), ff_spd_max(-1.0);  // FlowFinder.SpeedRange
+  int    ff_mask_flen(5);  // FlowFinder.FlowMaskFilterLen
+
+  std::string vout_base("/tmp/vout"), voutf_base("/tmp/vout");
+
+  node.param("pkg_dir",pkg_dir,pkg_dir);
+  node.param("cam_config",cam_config,cam_config);
+  node.param("stereo_config",stereo_config,stereo_config);
+  node.param("stereof_config",stereof_config,stereof_config);
+
+  node.param("viz_mode1",VizMode[0],VizMode[0]);
+  node.param("viz_mode2",VizMode[1],VizMode[1]);
+  node.param("num_detectors",NumColDetectors,NumColDetectors);
+  node.param("block_area_min",block_area_min,block_area_min);
+  node.param("color_files_base1",ColorFilesBase[0],ColorFilesBase[0]);
+  node.param("color_files_base2",ColorFilesBase[1],ColorFilesBase[1]);
+  node.param("img_win",ImgWin,ImgWin);
+
+  node.param("ff_ofl_win",ff_ofl_win,ff_ofl_win);
+  node.param("ff_ofl_spd_min",ff_ofl_spd_min,ff_ofl_spd_min);
+  node.param("ff_er_dl",ff_er_dl,ff_er_dl);
+  node.param("ff_amt_min",ff_amt_min,ff_amt_min);
+  node.param("ff_amt_max",ff_amt_max,ff_amt_max);
+  node.param("ff_spd_min",ff_spd_min,ff_spd_min);
+  node.param("ff_spd_max",ff_spd_max,ff_spd_max);
+  node.param("ff_mask_flen",ff_mask_flen,ff_mask_flen);
+  node.param("send_raw_flow",SendRawFlow,SendRawFlow);
+
+  node.param("vout_base",vout_base,vout_base);
+  node.param("voutf_base",voutf_base,voutf_base);
+
+  ReadFromYAML(CamInfo, pkg_dir+"/"+cam_config);
+  ReadFromYAML(StereoInfo, pkg_dir+"/"+stereo_config);
+  ReadFromYAML(StereoFInfo, pkg_dir+"/"+stereof_config);
+
+  ROIColDet.type= ROIColDet.NONE;
+  ROIStereoF.type= ROIStereoF.NONE;
+
+  std::vector<cv::VideoCapture> cap(CamInfo.size());
+  for(int i_cam(0), i_cam_end(CamInfo.size()); i_cam<i_cam_end; ++i_cam)
+  {
+    std::string &fourcc(CamInfo[i_cam].PixelFormat);
+    cap[i_cam].open(CamInfo[i_cam].DevID); cap[i_cam].release();  // Trick of robust open
+    cap[i_cam].open(CamInfo[i_cam].DevID);
+    if(!cap[i_cam].isOpened())
+    {
+      std::cerr<<"Failed to open camera: "<<CamInfo[i_cam].DevID<<std::endl;
+      return -1;
+    }
+    if(fourcc.size()>0)  cap[i_cam].set(CV_CAP_PROP_FOURCC,CV_FOURCC(fourcc[0],fourcc[1],fourcc[2],fourcc[3]));
+    cap[i_cam].set(CV_CAP_PROP_FRAME_WIDTH, CamInfo[i_cam].Width);
+    cap[i_cam].set(CV_CAP_PROP_FRAME_HEIGHT, CamInfo[i_cam].Height);
+    // MutCamCapture.push_back(boost::shared_ptr<boost::mutex>(new boost::mutex));
+  }
+  std::cerr<<"Opened camera(s)"<<std::endl;
+
+  for(int j(0);j<2;++j)
+    VideoOut[j].SetfilePrefix(vout_base);
+  for(int j(0);j<2;++j)
+    VideoOutF[j].SetfilePrefix(voutf_base);
+
+  for(int j(0); j<2; ++j)
+  {
+    ColDetector[j].Setup(NumColDetectors);
+    for(int i(0); i<NumColDetectors; ++i)
+      ColDetector[j].LoadColors(i, ColorFilesBase[j]+ColFileNames[i]);
+    ColDetector[j].SetBlockAreaMin(block_area_min);
+  }
+  CDIdx= 0;
+
+  for(int j(0); j<2; ++j)
+  {
+    // 0: Full, 1: FlowMask only
+    if(SendRawFlow)  FlowFinder[j].SetProcType(0);
+    else             FlowFinder[j].SetProcType(1);
+    FlowFinder[j].SetOptFlowWinSize(cv::Size(ff_ofl_win,ff_ofl_win));
+    FlowFinder[j].SetOptFlowSpdThreshold(ff_ofl_spd_min);
+    FlowFinder[j].SetErodeDilate(ff_er_dl);
+    FlowFinder[j].SetAmountRange(/*min=*/ff_amt_min, /*max=*/ff_amt_max);
+    FlowFinder[j].SetSpeedRange(/*min=*/ff_spd_min, /*max=*/ff_spd_max);
+    FlowFinder[j].SetFlowMaskFilterLen(ff_mask_flen);
+  }
+
+  // Stereo.resize(StereoInfo.size());
+  // Rectifier.resize(StereoInfo.size());
+  for(int j(0);j<1;++j)
+  {
+    const TStereoInfo &info(StereoInfo[j]);
+    Stereo.LoadCameraParametersFromYAML(pkg_dir+"/"+info.StereoParam);
+    Stereo.SetImageSize(
+        cv::Size(CamInfo[info.CamL].Width,CamInfo[info.CamL].Height),
+        cv::Size(info.Width,info.Height) );
+    Stereo.SetRecommendedStereoParams();
+    Stereo.LoadConfigurationsFromYAML(pkg_dir+"/"+info.StereoConfig);
+    Stereo.Init();
+
+    Rectifier.LoadCameraParametersFromYAML(pkg_dir+"/"+info.StereoParam);
+    Rectifier.SetImageSize(cv::Size(CamInfo[0].Width,CamInfo[0].Height),
+                           cv::Size(CamInfo[0].Width,CamInfo[0].Height));
+    Rectifier.SetRecommendedStereoParams();
+    Rectifier.LoadConfigurationsFromYAML(pkg_dir+"/"+info.StereoConfig);
+    Rectifier.Init();
+  }
+  // StereoF.LoadCameraParametersFromYAML(stereo_param_yaml);
+  // StereoF.SetImageSize(img_size,img_size);
+  // StereoF.SetRecommendedStereoParams();
+  // StereoF.StereoParams().StereoMethod= TStereoParams::smBM;
+  // StereoF.Init();
+  TFlowStereo2 &stereo_f(StereoFInfo[0]);
+  stereo_f.Init();
+
+  SensorPub[0]= node.advertise<lfd_vision::ColDetSensor>("sensor1", 1);
+  SensorPub[1]= node.advertise<lfd_vision::ColDetSensor>("sensor2", 1);
+  CloudPub= node.advertise<sensor_msgs::PointCloud2>("point_cloud", 1);
+  FlowCloudPub= node.advertise<sensor_msgs::PointCloud2>("flow_cloud", 1);
+
+  ros::Subscriber sub_viz1= node.subscribe<lfd_vision::ColDetViz>("viz1", 1, TColDetVizCallback(0));
+  ros::Subscriber sub_viz2= node.subscribe<lfd_vision::ColDetViz>("viz2", 1, TColDetVizCallback(1));
+  ros::Subscriber sub_roi= node.subscribe("roi", 1, &ROICallback);
+
+  ros::ServiceServer srv_reset= node.advertiseService("reset", &ResetAmount);
+  ros::ServiceServer srv_pause= node.advertiseService("pause", &Pause);
+  ros::ServiceServer srv_resume= node.advertiseService("resume", &Resume);
+
+  for(int j(0);j<2;++j)
+    ColDetector[j].SetCameraWindow(Frame[j]);
+
+  // 1:show, 0:hide; order=color1,color2,stereo1,stereo2,disparity,flow1,flow2
+  int camera_indexes[]= {0,1};
+  if(ImgWin[0]=='1')  cv::namedWindow("color_detector1",1);
+  if(ImgWin[0]=='1')  cv::setMouseCallback("color_detector1", OnMouse, &camera_indexes[0]);
+  if(ImgWin[0]=='1')  IMShowStuff["color_detector1"].Mutex= boost::shared_ptr<boost::mutex>(new boost::mutex);
+  if(ImgWin[1]=='1')  cv::namedWindow("color_detector2",1);
+  if(ImgWin[1]=='1')  cv::setMouseCallback("color_detector2", OnMouse, &camera_indexes[1]);
+  if(ImgWin[1]=='1')  IMShowStuff["color_detector2"].Mutex= boost::shared_ptr<boost::mutex>(new boost::mutex);
+
+  if(ImgWin[2]=='1')  cv::namedWindow("stereo_frame_l",1);
+  if(ImgWin[2]=='1')  cv::setMouseCallback("stereo_frame_l", OnMouseSimple);
+  if(ImgWin[2]=='1')  IMShowStuff["stereo_frame_l"].Mutex= boost::shared_ptr<boost::mutex>(new boost::mutex);
+  if(ImgWin[3]=='1')  cv::namedWindow("stereo_frame_r",1);
+  if(ImgWin[3]=='1')  cv::setMouseCallback("stereo_frame_r", OnMouseSimple);
+  if(ImgWin[3]=='1')  IMShowStuff["stereo_frame_r"].Mutex= boost::shared_ptr<boost::mutex>(new boost::mutex);
+  if(ImgWin[4]=='1')  cv::namedWindow("stereo_disparity",1);
+  if(ImgWin[4]=='1')  cv::setMouseCallback("stereo_disparity", OnMouseSimple);
+  if(ImgWin[4]=='1')  IMShowStuff["stereo_disparity"].Mutex= boost::shared_ptr<boost::mutex>(new boost::mutex);
+
+  if(ImgWin[5]=='1')  cv::namedWindow("stereof_frame_l",1);
+  if(ImgWin[5]=='1')  cv::setMouseCallback("stereof_frame_l", OnMouseSimple);
+  if(ImgWin[5]=='1')  IMShowStuff["stereof_frame_l"].Mutex= boost::shared_ptr<boost::mutex>(new boost::mutex);
+  if(ImgWin[6]=='1')  cv::namedWindow("stereof_frame_r",1);
+  if(ImgWin[6]=='1')  cv::setMouseCallback("stereof_frame_r", OnMouseSimple);
+  if(ImgWin[6]=='1')  IMShowStuff["stereof_frame_r"].Mutex= boost::shared_ptr<boost::mutex>(new boost::mutex);
+  // cv::namedWindow("stereof_disparity",1);
+  // cv::setMouseCallback("stereof_disparity", OnMouseSimple);
+
+  cv::Mat frame[2];
+  std::vector<long> cap_time(CamInfo.size());
+  CapTime.resize(CamInfo.size());
+  FlowFindTime.resize(CamInfo.size());
+  FlowFindTime[0]= -1; FlowFindTime[1]= -1;
+
+  // Dummy capture.
+  for(int i_cam(0); i_cam<2; ++i_cam)
+  {
+    cap[i_cam] >> Frame[i_cam];
+    CapTime[i_cam]= GetCurrentTimeL();
+  }
+
+  boost::thread th_col_det(&ExecColDet);
+  boost::thread th_flow_find0(boost::bind(&ExecFlowFind,0));
+  boost::thread th_flow_find1(boost::bind(&ExecFlowFind,1));
+  boost::thread th_stereo(&ExecStereo);
+  boost::thread th_stereo_f(&ExecFlowStereo);
+
+  // ros::Rate loop_rate(5);  // 5 Hz
+  for(int f(0);ros::ok();++f)
+  {
+    if(Running)
+    {
+      // Capture from cameras:
+      for(int j(0);j<2;++j)
+      {
+        cap[j] >> frame[j]; // get a new frame from camera
+        Rotate90N(frame[j],frame[j],CamInfo[j].NRotate90);
+        cap_time[j]= GetCurrentTimeL();
+      }
+      // Copy frames to global buffer:
+      {
+        boost::mutex::scoped_lock lock(MutCamCapture);
+        for(int j(0);j<2;++j)
+        {
+          frame[j].copyTo(Frame[j]);
+          CapTime[j]= cap_time[j];
+        }
+      }
+
+      // Show windows
+      for(std::map<std::string, TIMShowStuff>::iterator itr(IMShowStuff.begin()),itr_end(IMShowStuff.end()); itr!=itr_end; ++itr)
+      {
+        boost::mutex::scoped_lock lock(*itr->second.Mutex);
+        if(itr->second.Frame.total()>0)
+          cv::imshow(itr->first, itr->second.Frame);
+      }
 
     }  // Running
     else
@@ -849,7 +1104,11 @@ int main(int argc, char**argv)
     ros::spinOnce();
   }
   Shutdown= true;
+  th_col_det.join();
+  th_flow_find0.join();
+  th_flow_find1.join();
   th_stereo.join();
+  th_stereo_f.join();
 
 
   usleep(500*1000);

@@ -12,6 +12,6 @@
     right:=/cv_usb_node/$(arg camr)/image_raw
     left_camera:=/cv_usb_node/$(arg caml)
     right_camera:=/cv_usb_node/$(arg camr)
-    " />-->
+    " />
 
 </launch>

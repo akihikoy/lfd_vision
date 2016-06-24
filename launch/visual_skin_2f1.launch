@@ -1,7 +1,9 @@
 <launch>
   <node type="visual_skin_node" pkg="lfd_vision" name="visual_skin_node" output="screen">
     <param name="pkg_dir" value="$(find lfd_vision)/" />
-    <param name="cam_config" value="config/usb_cams2f.yaml" />
+    <param name="cam_config" value="config/usbcam2f1.yaml" />
     <param name="stereo_config" value="config/usbcam2f1.yaml" />
+    <param name="blobtrack_config" value="config/usbcam2f1.yaml" />
+    <param name="blob_calib_prefix" value="blob_" />
   </node>
 </launch>

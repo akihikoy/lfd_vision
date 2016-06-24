@@ -9,8 +9,67 @@
 #include "lfd_vision/vision_util.h"
 //-------------------------------------------------------------------------------------------
 #include <opencv2/imgproc/imgproc.hpp>
+#include <opencv2/features2d/features2d.hpp>
 #include <opencv2/calib3d/calib3d.hpp>
 #include <iomanip>
+//-------------------------------------------------------------------------------------------
+namespace cv
+{
+void write(cv::FileStorage &fs, const std::string&, const cv::Point2f &x)
+{
+  #define PROC_VAR(v)  fs<<#v<<x.v;
+  fs<<"{";
+  PROC_VAR(x);
+  PROC_VAR(y);
+  fs<<"}";
+  #undef PROC_VAR
+}
+//-------------------------------------------------------------------------------------------
+void read(const cv::FileNode &data, cv::Point2f &x, const cv::Point2f &default_value)
+{
+  #define PROC_VAR(v)  if(!data[#v].empty()) data[#v]>>x.v;
+  PROC_VAR(x);
+  PROC_VAR(y);
+  #undef PROC_VAR
+}
+//-------------------------------------------------------------------------------------------
+void write(cv::FileStorage &fs, const std::string&, const cv::KeyPoint &x)
+{
+  #define PROC_VAR(v)  fs<<#v<<x.v;
+  fs<<"{";
+  PROC_VAR(angle);
+  PROC_VAR(class_id);
+  PROC_VAR(octave);
+  PROC_VAR(pt);
+  PROC_VAR(response);
+  PROC_VAR(size);
+  fs<<"}";
+  #undef PROC_VAR
+}
+//-------------------------------------------------------------------------------------------
+void read(const cv::FileNode &data, cv::KeyPoint &x, const cv::KeyPoint &default_value)
+{
+  #define PROC_VAR(v)  if(!data[#v].empty()) data[#v]>>x.v;
+  PROC_VAR(angle);
+  PROC_VAR(class_id);
+  PROC_VAR(octave);
+  PROC_VAR(pt);
+  PROC_VAR(response);
+  PROC_VAR(size);
+  #undef PROC_VAR
+}
+//-------------------------------------------------------------------------------------------
+// void write(cv::FileStorage &fs, const std::string&, const cv::SimpleBlobDetector::Params &x)
+// {
+  // x.write(fs);
+// }
+// //-------------------------------------------------------------------------------------------
+// void read(const cv::FileNode &data, cv::SimpleBlobDetector::Params &x, const cv::SimpleBlobDetector::Params &default_value)
+// {
+  // x.read(data);
+// }
+//-------------------------------------------------------------------------------------------
+}  // namespace cv
 //-------------------------------------------------------------------------------------------
 namespace trick
 {
@@ -239,6 +298,31 @@ void TEasyVideoOut::VizRec(cv::Mat &frame, int pos, int rad, int margin) const
 //-------------------------------------------------------------------------------------------
 
 
+void WriteToYAML(const std::vector<cv::KeyPoint> &keypoints, const std::string &file_name)
+{
+  cv::FileStorage fs(file_name, cv::FileStorage::WRITE);
+  // fs<<"KeyPoints"<<keypoints;
+  fs<<"KeyPoints"<<"[";
+  for(std::vector<cv::KeyPoint>::const_iterator itr(keypoints.begin()),itr_end(keypoints.end()); itr!=itr_end; ++itr)
+  {
+    fs<<*itr;
+  }
+  fs<<"]";
+  fs.release();
+}
+//-------------------------------------------------------------------------------------------
+
+void ReadFromYAML(std::vector<cv::KeyPoint> &keypoints, const std::string &file_name)
+{
+  keypoints.clear();
+  cv::FileStorage fs(file_name, cv::FileStorage::READ);
+  cv::FileNode data= fs["KeyPoints"];
+  data>>keypoints;
+  fs.release();
+}
+//-------------------------------------------------------------------------------------------
+
+
 void Print(const std::vector<TCameraInfo> &cam_info)
 {
   int i(0);
@@ -252,6 +336,11 @@ void Print(const std::vector<TCameraInfo> &cam_info)
     PROC_VAR(PixelFormat );
     PROC_VAR(NRotate90   );
     PROC_VAR(Name        );
+    PROC_VAR(Rectification);
+    PROC_VAR(Alpha        );
+    PROC_VAR(K            );
+    PROC_VAR(D            );
+    PROC_VAR(R            );
     #undef PROC_VAR
   }
 }
@@ -271,6 +360,11 @@ void WriteToYAML(const std::vector<TCameraInfo> &cam_info, const std::string &fi
     PROC_VAR(PixelFormat );
     PROC_VAR(NRotate90   );
     PROC_VAR(Name        );
+    PROC_VAR(Rectification);
+    PROC_VAR(Alpha        );
+    PROC_VAR(K            );
+    PROC_VAR(D            );
+    PROC_VAR(R            );
     fs<<"}";
     #undef PROC_VAR
   }
@@ -287,13 +381,18 @@ void ReadFromYAML(std::vector<TCameraInfo> &cam_info, const std::string &file_na
   for(cv::FileNodeIterator itr(data.begin()),itr_end(data.end()); itr!=itr_end; ++itr)
   {
     TCameraInfo cf;
-    #define PROC_VAR(x)  (*itr)[#x]>>cf.x;
+    #define PROC_VAR(x)  if(!(*itr)[#x].empty())  (*itr)[#x]>>cf.x;
     PROC_VAR(DevID       );
     PROC_VAR(Width       );
     PROC_VAR(Height      );
     PROC_VAR(PixelFormat );
     PROC_VAR(NRotate90   );
     PROC_VAR(Name        );
+    PROC_VAR(Rectification);
+    PROC_VAR(Alpha        );
+    PROC_VAR(K            );
+    PROC_VAR(D            );
+    PROC_VAR(R            );
     #undef PROC_VAR
     cam_info.push_back(cf);
   }
@@ -310,13 +409,12 @@ void Print(const std::vector<TStereoInfo> &stereo_info)
     std::cout<<"No. "<<i<<std::endl;
     #define PROC_VAR(x)  std::cout<<"  "#x": "<<itr->x<<std::endl;
     PROC_VAR(Name        );
-    PROC_VAR(Name        );
     PROC_VAR(CamL        );
     PROC_VAR(CamR        );
     PROC_VAR(Width       );
     PROC_VAR(Height      );
     PROC_VAR(StereoParam );
-    PROC_VAR(LensType    );
+    PROC_VAR(StereoConfig);
     #undef PROC_VAR
   }
 }
@@ -331,13 +429,12 @@ void WriteToYAML(const std::vector<TStereoInfo> &stereo_info, const std::string 
     #define PROC_VAR(x)  fs<<#x<<itr->x;
     fs<<"{";
     PROC_VAR(Name        );
-    PROC_VAR(Name        );
     PROC_VAR(CamL        );
     PROC_VAR(CamR        );
     PROC_VAR(Width       );
     PROC_VAR(Height      );
     PROC_VAR(StereoParam );
-    PROC_VAR(LensType    );
+    PROC_VAR(StereoConfig);
     fs<<"}";
     #undef PROC_VAR
   }
@@ -354,15 +451,14 @@ void ReadFromYAML(std::vector<TStereoInfo> &stereo_info, const std::string &file
   for(cv::FileNodeIterator itr(data.begin()),itr_end(data.end()); itr!=itr_end; ++itr)
   {
     TStereoInfo cf;
-    #define PROC_VAR(x)  (*itr)[#x]>>cf.x;
-    PROC_VAR(Name        );
+    #define PROC_VAR(x)  if(!(*itr)[#x].empty())  (*itr)[#x]>>cf.x;
     PROC_VAR(Name        );
     PROC_VAR(CamL        );
     PROC_VAR(CamR        );
     PROC_VAR(Width       );
     PROC_VAR(Height      );
     PROC_VAR(StereoParam );
-    PROC_VAR(LensType    );
+    PROC_VAR(StereoConfig);
     #undef PROC_VAR
     stereo_info.push_back(cf);
   }
@@ -370,6 +466,24 @@ void ReadFromYAML(std::vector<TStereoInfo> &stereo_info, const std::string &file
 }
 //-------------------------------------------------------------------------------------------
 
+
+//-------------------------------------------------------------------------------------------
+// struct TCameraRectifier
+//-------------------------------------------------------------------------------------------
+void TCameraRectifier::Setup(const cv::Mat &K, const cv::Mat &D, const cv::Mat &R, const cv::Size &size_in, const double &alpha, const cv::Size &size_out)
+{
+  cv::Mat P= cv::getOptimalNewCameraMatrix(K, D, size_in, alpha, size_out);
+  cv::initUndistortRectifyMap(K, D, R, P, size_out, CV_16SC2, map1_, map2_);
+}
+//-------------------------------------------------------------------------------------------
+
+void TCameraRectifier::Rectify(cv::Mat &frame)
+{
+  cv::Mat framer;
+  cv::remap(frame, framer, map1_, map2_, cv::INTER_LINEAR);
+  frame= framer;
+}
+//-------------------------------------------------------------------------------------------
 
 //-------------------------------------------------------------------------------------------
 }  // end of trick
