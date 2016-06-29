@@ -40,6 +40,8 @@ message("OpenCV_INCLUDE_DIRS: ${OpenCV_INCLUDE_DIRS}")
 #rosbuild_add_executable(example examples/example.cpp)
 #target_link_libraries(example ${PROJECT_NAME})
 
+include_directories(3rdparty)
+
 rosbuild_add_executable(color_detector_node
       src/color_detector_node.cpp
       src/color_detector.cpp
@@ -53,6 +55,10 @@ rosbuild_add_executable(usb_stereo_node
       src/color_detector.cpp
       src/flow_finder.cpp
       src/usb_stereo.cpp
+      src/edge_fit.cpp
+      src/optimizer.cpp
+      3rdparty/cma_es/cmaes.c
+      3rdparty/cma_es/boundary_transformation.c
       src/vision_util.cpp
       src/pcl_util.cpp)
 target_link_libraries(usb_stereo_node ${OpenCV_LIBRARIES})

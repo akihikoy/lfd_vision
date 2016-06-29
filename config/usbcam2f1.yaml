@@ -67,7 +67,7 @@ BlobTracker:
     # SBDParams_minInertiaRatio : 0.01
     DistNeighbor: 20.0
     DistMin: 0.0
-    DistMax: 10.0
+    DistMax: 20.0
     DSMin: 0.0
     DSMax: 10.0
     DSEmp: 4.0
@@ -75,8 +75,8 @@ BlobTracker:
     NCalibPoints: 20
   -
     DistNeighbor: 20.0
-    DistMin: 0.0
-    DistMax: 10.0
+    DistMin: 3.0
+    DistMax: 20.0
     DSMin: 0.0
     DSMax: 10.0
     DSEmp: 4.0

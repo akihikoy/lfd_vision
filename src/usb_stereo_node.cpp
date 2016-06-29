@@ -11,6 +11,7 @@
 #include "lfd_vision/color_detector.h"
 #include "lfd_vision/flow_finder.h"
 #include "lfd_vision/usb_stereo.h"
+#include "lfd_vision/edge_fit.h"
 #include "lfd_vision/geom_util.h"
 #include "lfd_vision/vision_util.h"
 #include "lfd_vision/pcl_util.h"
@@ -19,6 +20,7 @@
 #include "lfd_vision/ColDetViz.h"
 #include "lfd_vision/ColDetVizPrimitive.h"
 #include "lfd_vision/ROI_3DProj.h"
+#include "lfd_vision/FitEdge.h"
 //-------------------------------------------------------------------------------------------
 #include <opencv2/highgui/highgui.hpp>
 #include <ros/ros.h>
@@ -91,13 +93,14 @@ TFlowFinder FlowFinder[2];
 TStereo Stereo;
 TStereo Rectifier;
 // TStereo StereoF;
+TEdgeFit EdgeFit;
 
 int NumColDetectors(1);
 TEasyVideoOut VideoOut[2], VideoOutF[2];
 int VizMode[]= {2,2};  // 0: camera only, 1: camera + detected, 2: 0.5*camera + detected, 3: 0.25*camera + detected, 4: detected only
 
 int SendRawFlow(0);  // 1: Send raw flow sensing data as sensor_msg
-std::string ImgWin("1100111");  // 1:show, 0:hide; order=color1,color2,stereo1,stereo2,disparity,flow1,flow2
+std::string ImgWin("110011111");  // 1:show, 0:hide; order=color1,color2,stereo1,stereo2,disparity,flow1,flow2,edge1,edge2
 
 std::vector<lfd_vision::ColDetVizPrimitive> VizObjs[2];  // External visualization requests.
 
@@ -391,7 +394,7 @@ void ExecStereo()
       // Stereo.Proc(FlowFinder[0].FlowMask(),FlowFinder[1].FlowMask());
       cv::normalize(Stereo.Disparity(), disparity, 0, 255, CV_MINMAX, CV_8U);
 
-      // 1:show, 0:hide; order=color1,color2,stereo1,stereo2,disparity,flow1,flow2
+      // 1:show, 0:hide; order=color1,color2,stereo1,stereo2,disparity,flow1,flow2,edge1,edge2
       // if(ImgWin[2]=='1')  cv::imshow("stereo_frame_l", Stereo.FrameL());
       // if(ImgWin[3]=='1')  cv::imshow("stereo_frame_r", Stereo.FrameR());
       // if(ImgWin[4]=='1')  cv::imshow("stereo_disparity", disparity);
@@ -659,7 +662,7 @@ void ExecFlowStereo()
 
 // std::cerr<<" f "<<1000.0*(GetCurrentTime()-t_start);
       // cv::normalize(disparity, disparity, 0, 255, CV_MINMAX, CV_8U);
-      // 1:show, 0:hide; order=color1,color2,stereo1,stereo2,disparity,flow1,flow2
+      // 1:show, 0:hide; order=color1,color2,stereo1,stereo2,disparity,flow1,flow2,edge1,edge2
       // if(ImgWin[5]=='1')  cv::imshow("stereof_frame_l", disp_img[0]);
       // if(ImgWin[6]=='1')  cv::imshow("stereof_frame_r", disp_img[1]);
       // // cv::imshow("stereof_disparity", disparity);
@@ -716,7 +719,7 @@ void ExecColDet()
 {
   cv::Size img_size[2]={cv::Size(CamInfo[0].Width,CamInfo[0].Height),
                         cv::Size(CamInfo[1].Width,CamInfo[1].Height)};
-  cv::Mat frame[2], disp_img[2], mask[2];
+  cv::Mat frame_unrct[2], frame[2], disp_img[2], mask[2];
   int show_fps(0);
   long t_cap[2]={0,0};
   while(!Shutdown)
@@ -729,20 +732,23 @@ void ExecColDet()
         continue;
       }
 
-      // FIXME:TODO: The masks are drawn on rectified image plane.
-      // So we should rectify the captured frames with stereo camera parameters.
-      ProjectROIToMask(ROIColDet, img_size[0], img_size[1], Rectifier.CameraParams(), mask[0], mask[1]);
-      frame[0].setTo(0);
-      frame[1].setTo(0);
-
       {
         boost::mutex::scoped_lock lock(MutCamCapture);
         for(int i_cam(0);i_cam<2;++i_cam)
         {
-          Frame[i_cam].copyTo(frame[i_cam], mask[i_cam]);
+          Frame[i_cam].copyTo(frame_unrct[i_cam]);
           t_cap[i_cam]= CapTime[i_cam];
         }
       }
+      // The masks are drawn on rectified image plane.
+      // So we should rectify the captured frames with stereo camera parameters.
+      ProjectROIToMask(ROIColDet, img_size[0], img_size[1], Rectifier.CameraParams(), mask[0], mask[1]);
+      Rectifier.RectifyL(frame_unrct[0]);
+      Rectifier.RectifyR(frame_unrct[1]);
+      frame[0].setTo(0);
+      frame[1].setTo(0);
+      frame_unrct[0].copyTo(frame[0], mask[0]);
+      frame_unrct[1].copyTo(frame[1], mask[1]);
 
 
       for(int cam_idx(0); cam_idx<2; ++cam_idx)
@@ -847,7 +853,7 @@ void ExecColDet()
       VideoOut[1].Step(disp_img[1]);
       VideoOut[1].VizRec(disp_img[1]);
 
-      // 1:show, 0:hide; order=color1,color2,stereo1,stereo2,disparity,flow1,flow2
+      // 1:show, 0:hide; order=color1,color2,stereo1,stereo2,disparity,flow1,flow2,edge1,edge2
       // if(ImgWin[0]=='1')  cv::imshow("color_detector1", disp_img[0]);
       // if(ImgWin[1]=='1')  cv::imshow("color_detector2", disp_img[1]);
       if(ImgWin[0]=='1') {
@@ -871,6 +877,73 @@ void ExecColDet()
     {
       usleep(200*1000);
     }
+  }
+}
+//-------------------------------------------------------------------------------------------
+
+bool ExecFitEdge(lfd_vision::FitEdge::Request &req, lfd_vision::FitEdge::Response &res)
+{
+  TEdgeFitParams &params(EdgeFit.Params());
+  std::copy(req.XMin.begin(), req.XMin.end(), params.XMin);
+  std::copy(req.XMax.begin(), req.XMax.end(), params.XMax);
+  std::copy(req.Sig0.begin(), req.Sig0.end(), params.Sig0);
+
+  params.LPoints3d.create(req.LPoints3d.size()/3,3,CV_32F);
+  std::copy(req.LPoints3d.begin(), req.LPoints3d.end(), params.LPoints3d.begin<float>());
+
+  double pose[7];
+  std::copy(req.pose0.begin(), req.pose0.end(), pose);
+
+  cv::Mat frame[2], disp[2];
+  {
+    boost::mutex::scoped_lock lock(MutCamCapture);
+    for(int i_cam(0);i_cam<2;++i_cam)
+      Frame[i_cam].copyTo(frame[i_cam]);
+  }
+  Rectifier.RectifyL(frame[0]);
+  Rectifier.RectifyR(frame[1]);
+
+  EdgeFit.Run(frame[0], frame[1], pose, pose);
+  EdgeFit.Viz(disp[0], disp[1], pose);
+
+  res.pose.resize(7);
+  std::copy(pose, pose+7, res.pose.begin());
+
+  // 1:show, 0:hide; order=color1,color2,stereo1,stereo2,disparity,flow1,flow2,edge1,edge2
+  if(ImgWin[7]=='1') {
+    boost::mutex::scoped_lock lock(*IMShowStuff["edge_fit_l"].Mutex);
+    disp[0].copyTo(IMShowStuff["edge_fit_l"].Frame);
+  }
+  if(ImgWin[8]=='1') {
+    boost::mutex::scoped_lock lock(*IMShowStuff["edge_fit_r"].Mutex);
+    disp[1].copyTo(IMShowStuff["edge_fit_r"].Frame);
+  }
+  return true;
+}
+//-------------------------------------------------------------------------------------------
+
+void FitEdgeDummy(void)
+{
+  cv::Mat frame[2], disp[2];
+  {
+    boost::mutex::scoped_lock lock(MutCamCapture);
+    for(int i_cam(0);i_cam<2;++i_cam)
+      Frame[i_cam].copyTo(frame[i_cam]);
+  }
+  Rectifier.RectifyL(frame[0]);
+  Rectifier.RectifyR(frame[1]);
+
+  EdgeFit.DetectEdges2(frame[0], frame[1]);
+  EdgeFit.Viz(disp[0], disp[1], /*pose=*/NULL);
+
+  // 1:show, 0:hide; order=color1,color2,stereo1,stereo2,disparity,flow1,flow2,edge1,edge2
+  if(ImgWin[7]=='1') {
+    boost::mutex::scoped_lock lock(*IMShowStuff["edge_fit_l"].Mutex);
+    disp[0].copyTo(IMShowStuff["edge_fit_l"].Frame);
+  }
+  if(ImgWin[8]=='1') {
+    boost::mutex::scoped_lock lock(*IMShowStuff["edge_fit_r"].Mutex);
+    disp[1].copyTo(IMShowStuff["edge_fit_r"].Frame);
   }
 }
 //-------------------------------------------------------------------------------------------
@@ -1000,6 +1073,10 @@ int main(int argc, char**argv)
   TFlowStereo2 &stereo_f(StereoFInfo[0]);
   stereo_f.Init();
 
+  EdgeFit.Params().P1= Rectifier.CameraParams().P1;
+  EdgeFit.Params().P2= Rectifier.CameraParams().P2;
+
+
   SensorPub[0]= node.advertise<lfd_vision::ColDetSensor>("sensor1", 1);
   SensorPub[1]= node.advertise<lfd_vision::ColDetSensor>("sensor2", 1);
   CloudPub= node.advertise<sensor_msgs::PointCloud2>("point_cloud", 1);
@@ -1012,12 +1089,14 @@ int main(int argc, char**argv)
   ros::ServiceServer srv_reset= node.advertiseService("reset", &ResetAmount);
   ros::ServiceServer srv_pause= node.advertiseService("pause", &Pause);
   ros::ServiceServer srv_resume= node.advertiseService("resume", &Resume);
+  ros::ServiceServer srv_fit_edge= node.advertiseService("fit_edge", &ExecFitEdge);
 
   for(int j(0);j<2;++j)
     ColDetector[j].SetCameraWindow(Frame[j]);
 
-  // 1:show, 0:hide; order=color1,color2,stereo1,stereo2,disparity,flow1,flow2
+  // 1:show, 0:hide; order=color1,color2,stereo1,stereo2,disparity,flow1,flow2,edge1,edge2
   int camera_indexes[]= {0,1};
+  if(ImgWin.length()<9)  ImgWin.resize(9,'0');
   if(ImgWin[0]=='1')  cv::namedWindow("color_detector1",1);
   if(ImgWin[0]=='1')  cv::setMouseCallback("color_detector1", OnMouse, &camera_indexes[0]);
   if(ImgWin[0]=='1')  IMShowStuff["color_detector1"].Mutex= boost::shared_ptr<boost::mutex>(new boost::mutex);
@@ -1041,6 +1120,13 @@ int main(int argc, char**argv)
   if(ImgWin[6]=='1')  cv::namedWindow("stereof_frame_r",1);
   if(ImgWin[6]=='1')  cv::setMouseCallback("stereof_frame_r", OnMouseSimple);
   if(ImgWin[6]=='1')  IMShowStuff["stereof_frame_r"].Mutex= boost::shared_ptr<boost::mutex>(new boost::mutex);
+
+  if(ImgWin[7]=='1')  cv::namedWindow("edge_fit_l",1);
+  if(ImgWin[7]=='1')  cv::setMouseCallback("edge_fit_l", OnMouseSimple);
+  if(ImgWin[7]=='1')  IMShowStuff["edge_fit_l"].Mutex= boost::shared_ptr<boost::mutex>(new boost::mutex);
+  if(ImgWin[8]=='1')  cv::namedWindow("edge_fit_r",1);
+  if(ImgWin[8]=='1')  cv::setMouseCallback("edge_fit_r", OnMouseSimple);
+  if(ImgWin[8]=='1')  IMShowStuff["edge_fit_r"].Mutex= boost::shared_ptr<boost::mutex>(new boost::mutex);
   // cv::namedWindow("stereof_disparity",1);
   // cv::setMouseCallback("stereof_disparity", OnMouseSimple);
 
@@ -1056,6 +1142,8 @@ int main(int argc, char**argv)
     cap[i_cam] >> Frame[i_cam];
     CapTime[i_cam]= GetCurrentTimeL();
   }
+
+  FitEdgeDummy();
 
   boost::thread th_col_det(&ExecColDet);
   boost::thread th_flow_find0(boost::bind(&ExecFlowFind,0));
