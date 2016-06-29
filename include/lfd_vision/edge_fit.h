@@ -69,7 +69,7 @@ public:
   /* Execute fitting. pose0 is used as a reference pose.
     The resulting pose is stored into pose.
     pose can be the same as pose0. */
-  void Run(const cv::Mat &frame1, const cv::Mat &frame2, const double pose0[7], double pose[7]);
+  void Run(const cv::Mat &frame1, const cv::Mat &frame2, const double pose0[7], double pose[7], double *quality=NULL);
 
   // Detect edges (automatically called in Run).
   void DetectEdges2(const cv::Mat &frame1, const cv::Mat &frame2);

@@ -14,8 +14,9 @@ if __name__=='__main__':
   fit_edge= rospy.ServiceProxy('/usb_stereo/fit_edge', lfd_vision.srv.FitEdge, persistent=False)
 
   N= 20
-  rad= 0.041
-  height= 0.06
+  #rad= 0.041; height= 0.06
+  #rad=0.05; height= 0.14
+  rad=0.016; height= 0.10
   dth= 2.0*math.pi/float(N)
   req= lfd_vision.srv.FitEdgeRequest()
   req.XMin= [-0.1,-0.1,-0.1, -0.2,-0.2,-0.2]

@@ -257,6 +257,7 @@ void ProjectROIToMask(const lfd_vision::ROI_3DProj &roi,
 {
   mask1.create(size1, CV_8U);
   mask2.create(size2, CV_8U);
+  // std::cerr<<"Setting ROI "<<roi.type<<std::endl;
   if(roi.type==roi.NONE)
   {
     mask1.setTo(255);
@@ -345,8 +346,20 @@ public:
 
 void ROICallback(const lfd_vision::ROI_3DProjPtr &msg)
 {
-  if(msg->target=="col_det")        ROIColDet= *msg;
-  else if(msg->target=="stereo_f")  ROIStereoF= *msg;
+  if(msg->target=="col_det")
+  {
+    ROIColDet= *msg;
+    // std::cerr<<"col_det: Setting ROI\n"<<ROIColDet<<std::endl;
+  }
+  else if(msg->target=="stereo_f")
+  {
+    ROIStereoF= *msg;
+    // std::cerr<<"stereo_f: Setting ROI\n"<<ROIStereoF<<std::endl;
+  }
+  else
+  {
+    std::cerr<<"Failed to set ROI:\n"<<*msg<<std::endl;
+  }
 }
 //-------------------------------------------------------------------------------------------
 
@@ -891,7 +904,7 @@ bool ExecFitEdge(lfd_vision::FitEdge::Request &req, lfd_vision::FitEdge::Respons
   params.LPoints3d.create(req.LPoints3d.size()/3,3,CV_32F);
   std::copy(req.LPoints3d.begin(), req.LPoints3d.end(), params.LPoints3d.begin<float>());
 
-  double pose[7];
+  double pose[7], quality(0.0);
   std::copy(req.pose0.begin(), req.pose0.end(), pose);
 
   cv::Mat frame[2], disp[2];
@@ -903,11 +916,12 @@ bool ExecFitEdge(lfd_vision::FitEdge::Request &req, lfd_vision::FitEdge::Respons
   Rectifier.RectifyL(frame[0]);
   Rectifier.RectifyR(frame[1]);
 
-  EdgeFit.Run(frame[0], frame[1], pose, pose);
+  EdgeFit.Run(frame[0], frame[1], pose, pose, &quality);
   EdgeFit.Viz(disp[0], disp[1], pose);
 
   res.pose.resize(7);
   std::copy(pose, pose+7, res.pose.begin());
+  res.quality= quality;
 
   // 1:show, 0:hide; order=color1,color2,stereo1,stereo2,disparity,flow1,flow2,edge1,edge2
   if(ImgWin[7]=='1') {

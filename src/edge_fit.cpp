@@ -302,7 +302,7 @@ void TEdgeFit::DetectEdges2(const cv::Mat &frame1, const cv::Mat &frame2)
 /* Execute fitting. pose0 is used as a reference pose.
   The resulting pose is stored into pose.
   pose can be the same as pose0. */
-void TEdgeFit::Run(const cv::Mat &frame1, const cv::Mat &frame2, const double pose0[7], double pose[7])
+void TEdgeFit::Run(const cv::Mat &frame1, const cv::Mat &frame2, const double pose0[7], double pose[7], double *quality)
 {
   DetectEdges2(frame1, frame2);
 
@@ -320,6 +320,12 @@ void TEdgeFit::Run(const cv::Mat &frame1, const cv::Mat &frame2, const double po
   // std::cout<<"; "<<FObjEdgePoints2(fparams,xres,is_feasible);
   // std::cout<<std::endl;
   ParamToPose(pose0,xres,pose);
+  if(quality!=NULL)
+  {
+    bool is_feasible;
+    *quality= -FObjEdgePoints2(fparams,xres,is_feasible);
+    if(!is_feasible)  *quality= 0.0;
+  }
 }
 //-------------------------------------------------------------------------------------------
 
