@@ -75,6 +75,16 @@ inline bool FileExists(const std::string &filename)
 }
 //-------------------------------------------------------------------------------------------
 
+struct TFPSEstimator
+{
+  double Alpha;
+  double FPS;
+  double TimePrev;
+  TFPSEstimator(const double &init_fps=10.0, const double &alpha=0.05);
+  void Step();
+};
+//-------------------------------------------------------------------------------------------
+
 // Get median position of nonzero pixels
 void GetMedian(const cv::Mat &src, int &x_med, int &y_med);
 //-------------------------------------------------------------------------------------------
@@ -93,6 +103,9 @@ bool FindLargestContour(const cv::Mat &bin_src,
 
 // Rotate 90, 180, 270 degrees
 void Rotate90N(const cv::Mat &src, cv::Mat &dst, int N);
+//-------------------------------------------------------------------------------------------
+
+cv::Mat ClipPolygon(const cv::Mat &polygon_subject, const cv::Mat &polygon_clip);
 //-------------------------------------------------------------------------------------------
 
 // Project points 3D onto a rectified image.
@@ -137,7 +150,7 @@ bool OpenVideoOut(cv::VideoWriter &vout, const char *file_name, int fps, const c
 class TEasyVideoOut
 {
 public:
-  TEasyVideoOut(const double init_fps=10.0);
+  TEasyVideoOut(const double &init_fps=10.0);
 
   // Automatically switch Rec/Stop.
   void Switch()
@@ -161,7 +174,7 @@ public:
   void VizRec(cv::Mat &frame, int pos=0, int rad=5, int margin=3) const;
 
   bool IsRecording() const {return writer_.isOpened();}
-  const double& FPS() const {return fps_;}
+  const double& FPS() const {return fps_est_.FPS;}
 
   void SetfilePrefix(const std::string &v)  {file_prefix_= v;}
   void SetfileSuffix(const std::string &v)  {file_suffix_= v;}
@@ -170,8 +183,7 @@ private:
   std::string file_prefix_, file_suffix_;
   cv::VideoWriter writer_;
   cv::Size img_size_;
-  double fps_;
-  double time_prev_, fps_alpha_;
+  TFPSEstimator fps_est_;
 };
 //-------------------------------------------------------------------------------------------
 

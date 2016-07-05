@@ -16,7 +16,7 @@
     <param name="th_good_normal_ratio" value="0.3" />
     <param name="th_bad_normal_ratio" value="0.7" />
 
-    <param name="resize_ratio" value="1.0" />
+    <param name="resize_ratio" value="0.6" />
 
     <param name="cam_width" value="640" />
     <param name="cam_height" value="480" />

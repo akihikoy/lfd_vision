@@ -76,6 +76,33 @@ namespace trick
 using namespace std;
 // using namespace boost;
 
+//-------------------------------------------------------------------------------------------
+// struct TFPSEstimator
+//-------------------------------------------------------------------------------------------
+TFPSEstimator::TFPSEstimator(const double &init_fps, const double &alpha)
+  :
+    FPS (init_fps),
+    Alpha (alpha),
+    TimePrev (-1.0)
+{
+}
+void TFPSEstimator::Step()
+{
+  if(TimePrev<0.0)
+  {
+    TimePrev= GetCurrentTime();
+  }
+  else
+  {
+    double new_fps= 1.0/(GetCurrentTime()-TimePrev);
+    if(new_fps>FPS/20.0 && new_fps<FPS*20.0)  // Removing outliers (e.g. pause/resume)
+      FPS= Alpha*new_fps + (1.0-Alpha)*FPS;
+    TimePrev= GetCurrentTime();
+  }
+}
+//-------------------------------------------------------------------------------------------
+
+
 // Get median position of nonzero pixels
 void GetMedian(const cv::Mat &src, int &x_med, int &y_med)
 {
@@ -159,9 +186,146 @@ void Rotate90N(const cv::Mat &src, cv::Mat &dst, int N)
 }
 //-------------------------------------------------------------------------------------------
 
+namespace ns_polygon_clip
+{
+#define TP cv::Point_<t_value>
+#define ROW Row<t_value>
+#define ADD Add<t_value>
+
+template<typename t_value>
+inline TP Row(const cv::Mat &points2d, int r)
+{
+  if(r<0)  r= points2d.rows+r;
+  return TP(points2d.at<t_value>(r,0), points2d.at<t_value>(r,1));
+}
+
+template<typename t_value>
+inline void Add(cv::Mat &points2d, const TP &p)
+{
+  cv::Mat v(p);
+  v= v.t();
+  points2d.push_back(v);
+}
+
+template<typename t_value>
+inline int IsLeftOf(const TP &edge_1, const TP &edge_2, const TP &test)
+{
+  TP tmp1(edge_2.x - edge_1.x, edge_2.y - edge_1.y);
+  TP tmp2(test.x - edge_2.x, test.y - edge_2.y);
+  t_value x = (tmp1.x * tmp2.y) - (tmp1.y * tmp2.x);
+  if(x < 0)  return 0;
+  else if(x > 0)  return 1;
+  else  return -1;  // Colinear points
+}
+
+template<typename t_value>
+int IsClockwise(const cv::Mat &polygon)
+{
+  if(polygon.rows<3)  return -1;
+  TP p0= ROW(polygon,0);
+  TP p1= ROW(polygon,1);
+  int isLeft(-1);
+  for(int r(0),r_end(polygon.rows); r<r_end; ++r)
+  {
+    isLeft= IsLeftOf<t_value>(p0, p1, ROW(polygon,r));
+    if(isLeft>=0)  // some of the points may be colinear.  That's ok as long as the overall is a polygon
+      return isLeft==0 ? 1 : 0;
+  }
+  return -1;  // All the points in the polygon are colinear
+}
+
+template<typename t_value>
+inline bool IsInside(const TP &cp1, const TP &cp2, const TP &p)
+{
+  return (cp2.x-cp1.x)*(p.y-cp1.y) > (cp2.y-cp1.y)*(p.x-cp1.x);
+}
+
+template<typename t_value>
+inline TP ComputeIntersection(const TP &cp1, const TP &cp2, const TP &s, const TP &e)
+{
+  TP dc(cp1.x - cp2.x, cp1.y - cp2.y);
+  TP dp(s.x - e.x, s.y - e.y);
+  t_value n1= cp1.x * cp2.y - cp1.y * cp2.x;
+  t_value n2= s.x * e.y - s.y * e.x;
+  t_value n3= 1.0 / (dc.x * dp.y - dc.y * dp.x);
+  return TP((n1*dp.x - n2*dc.x) * n3, (n1*dp.y - n2*dc.y) * n3);
+}
+
+template<typename t_value>
+cv::Mat ClipPolygon_(const cv::Mat &polygon_subject_in, const cv::Mat &polygon_clip_in)
+{
+  cv::Mat polygon_empty(0,2,cv::DataType<t_value>::type);
+  cv::Mat polygon_subject, polygon_clip;
+  switch(IsClockwise<t_value>(polygon_subject_in))
+  {
+  case -1:
+    std::cerr<<"polygon_subject: All the points are colinear"<<std::endl;
+    return polygon_empty;
+  case  0:  polygon_subject_in.copyTo(polygon_subject);  break;
+  case +1:  cv::flip(polygon_subject_in, polygon_subject, 0);  break;
+  }
+  switch(IsClockwise<t_value>(polygon_clip_in))
+  {
+  case -1:
+    std::cerr<<"polygon_clip: All the points are colinear"<<std::endl;
+    return polygon_empty;
+  case  0:  polygon_clip_in.copyTo(polygon_clip);  break;
+  case +1:  cv::flip(polygon_clip_in, polygon_clip, 0);  break;
+  }
+
+  cv::Mat output_list= polygon_subject;
+  TP cp1= ROW(polygon_clip,-1);
+
+  for(int i_pc(0),i_pc_end(polygon_clip.rows); i_pc<i_pc_end; ++i_pc)
+  {
+    TP cp2= ROW(polygon_clip,i_pc);
+    cv::Mat input_list= output_list;
+    output_list= cv::Mat(0,2,cv::DataType<t_value>::type);
+    if(input_list.rows==0)  return polygon_empty;
+    TP s= ROW(input_list,-1);
+
+    for(int i_in(0),i_in_end(input_list.rows); i_in<i_in_end; ++i_in)
+    {
+      TP e= ROW(input_list,i_in);
+      if(IsInside<t_value>(cp1,cp2,e))
+      {
+        if(!IsInside<t_value>(cp1,cp2,s))
+          ADD(output_list, ComputeIntersection<t_value>(cp1, cp2, s, e));
+        ADD(output_list, e);
+      }
+      else if(IsInside<t_value>(cp1,cp2,s))
+        ADD(output_list, ComputeIntersection<t_value>(cp1, cp2, s, e));
+      s= e;
+    }
+    cp1= cp2;
+  }
+  return output_list;
+}
+#undef TP
+#undef ROW
+#undef ADD
+}  // ns_polygon_clip
+cv::Mat ClipPolygon(const cv::Mat &polygon_subject, const cv::Mat &polygon_clip)
+{
+  using namespace ns_polygon_clip;
+  assert(polygon_subject.type()==polygon_clip.type());
+  assert(polygon_subject.cols==2);
+  assert(polygon_clip.cols==2);
+  switch(polygon_subject.type())
+  {
+  case CV_32F:  return ClipPolygon_<float>(polygon_subject, polygon_clip);
+  case CV_64F:  return ClipPolygon_<double>(polygon_subject, polygon_clip);
+  case CV_16S:  return ClipPolygon_<short>(polygon_subject, polygon_clip);
+  case CV_32S:  return ClipPolygon_<int>(polygon_subject, polygon_clip);
+  }
+  throw;
+}
+//-------------------------------------------------------------------------------------------
+
 // Project points 3D onto a rectified image.
 void ProjectPointsToRectifiedImg(const cv::Mat &points3d, const cv::Mat &P, cv::Mat &points2d)
 {
+  assert(points3d.type()==CV_32F);
   cv::Mat P2;
   P.convertTo(P2,points3d.type());
   // cv::Mat points3dh, points2dh;
@@ -170,8 +334,44 @@ void ProjectPointsToRectifiedImg(const cv::Mat &points3d, const cv::Mat &P, cv::
   cv::Mat points2dh= points3d*P2(cv::Range(0,3),cv::Range(0,3)).t();
   cv::Mat p3= P2.col(3).t();
   for(int r(0),rows(points2dh.rows);r<rows;++r)
+  {
     points2dh.row(r)+= p3;
+    if(points2dh.at<float>(r,2)<0.0)  points2dh.at<float>(r,2)= 0.001;
+    // if(points2dh.at<float>(r,2)<0.0)
+    // {
+      // points2dh.at<float>(r,2)= -points2dh.at<float>(r,2);
+      // points2dh.at<float>(r,0)*= -1.0;
+      // points2dh.at<float>(r,1)*= -1.0;
+    // }
+  }
+  // float scale(0.0);
+  // for(int r(0),rows(points2dh.rows);r<rows;++r)
+  // {
+    // points2dh.row(r)+= p3;
+    // if(points2dh.at<float>(r,2)>0.0)
+      // scale+= points2dh.at<float>(r,2);
+    // else
+    // {
+      // scale+= 1.0;
+      // points2dh.at<float>(r,0)*= -1.0;
+      // points2dh.at<float>(r,1)*= -1.0;
+    // }
+  // }
+  // scale/= (float)points2dh.rows;
+  // for(int r(0),rows(points2dh.rows);r<rows;++r)
+    // points2dh.at<float>(r,2)= scale;
+  //*DBG*/std::cerr<<"..points2dh="<<points2dh<<std::endl;
   cv::convertPointsFromHomogeneous(points2dh, points2d);
+  points2d= points2d.reshape(1);
+  //*DBG*/std::cerr<<"..points2d="<<points2d<<std::endl;
+  // cv::MatIterator_<float> itr= points2d.begin<float>();
+  // cv::MatIterator_<float> itr_end= points2d.end<float>();
+  // for(;itr!=itr_end;++itr)
+  // {
+    // if(*itr<-10000.0f)  *itr= -10000.0f;
+    // else if(*itr>10000.0f)  *itr= 10000.0f;
+  // }
+  //*DBG*/std::cerr<<"..points2d="<<points2d<<std::endl;
 }
 //-------------------------------------------------------------------------------------------
 
@@ -192,14 +392,12 @@ bool OpenVideoOut(cv::VideoWriter &vout, const char *file_name, int fps, const c
 }
 //-------------------------------------------------------------------------------------------
 
-TEasyVideoOut::TEasyVideoOut(const double init_fps)
+TEasyVideoOut::TEasyVideoOut(const double &init_fps)
   :
     file_prefix_ ("/tmp/video"),
     file_suffix_ (".avi"),
     img_size_ (0,0),
-    fps_ (init_fps),
-    time_prev_ (-1.0),
-    fps_alpha_ (0.05)
+    fps_est_ (init_fps, /*alpha=*/0.05)
 {
 }
 //-------------------------------------------------------------------------------------------
@@ -218,7 +416,7 @@ void TEasyVideoOut::Rec()
       file_name= ss.str();
       ++i;
     } while(FileExists(file_name));
-    OpenVideoOut(writer_, file_name.c_str(), fps_, img_size_);
+    OpenVideoOut(writer_, file_name.c_str(), fps_est_.FPS, img_size_);
   }
 }
 //-------------------------------------------------------------------------------------------
@@ -240,17 +438,7 @@ void TEasyVideoOut::Step(const cv::Mat &frame)
   img_size_= cv::Size(frame.cols, frame.rows);
 
   // update fps
-  if(time_prev_<0.0)
-  {
-    time_prev_= GetCurrentTime();
-  }
-  else
-  {
-    double new_fps= 1.0/(GetCurrentTime()-time_prev_);
-    if(new_fps>fps_/20.0 && new_fps<fps_*20.0)  // Removing outliers (e.g. pause/resume)
-      fps_= fps_alpha_*new_fps + (1.0-fps_alpha_)*fps_;
-    time_prev_= GetCurrentTime();
-  }
+  fps_est_.Step();
 
   if(writer_.isOpened())
   {

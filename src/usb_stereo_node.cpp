@@ -42,6 +42,7 @@ struct TFlowStereo2
 {
   int We;
   int Wd;
+  int Wd0;
   int XFilter, YFilter;
   int XStep, YStep;
   int ThMatch;
@@ -50,7 +51,7 @@ struct TFlowStereo2
   cv::Mat Kernel;
 
   // Temporary containers:
-  cv::Mat frame1, frame2, mask1, mask2;
+  cv::Mat frame1, frame2, mask1, mask2, fmask1, fmask2, frame01, frame02;
   cv::Mat seg1, seg2, tmp;
   std::vector<int> matched;
   std::vector<cv::Point2f> points1,points2;
@@ -61,6 +62,7 @@ struct TFlowStereo2
     {
       We= 2;
       Wd= 3;
+      Wd0= 2;
       XFilter= 1;
       YFilter= 32;
       XStep= 1;
@@ -101,6 +103,7 @@ int VizMode[]= {2,2};  // 0: camera only, 1: camera + detected, 2: 0.5*camera + 
 
 int SendRawFlow(0);  // 1: Send raw flow sensing data as sensor_msg
 std::string ImgWin("110011111");  // 1:show, 0:hide; order=color1,color2,stereo1,stereo2,disparity,flow1,flow2,edge1,edge2
+double DispScale(1.0);  // Scaling factor to display.
 
 std::vector<lfd_vision::ColDetVizPrimitive> VizObjs[2];  // External visualization requests.
 
@@ -114,6 +117,12 @@ struct TIMShowStuff
   cv::Mat Frame;
 };
 std::map<std::string, TIMShowStuff> IMShowStuff;
+#define IMSHOW(x_img,x_name)  \
+  do{  \
+  boost::mutex::scoped_lock lock(*IMShowStuff[x_name].Mutex);  \
+  if(DispScale==1.0)  x_img.copyTo(IMShowStuff[x_name].Frame);  \
+  else  cv::resize(x_img, IMShowStuff[x_name].Frame, cv::Size(0,0), DispScale,DispScale);  \
+  } while(0)
 
 lfd_vision::ROI_3DProj ROIColDet, ROIStereoF;
 }
@@ -265,18 +274,36 @@ void ProjectROIToMask(const lfd_vision::ROI_3DProj &roi,
   }
   else if(roi.type==roi.POLYGON)
   {
-    cv::Mat points3d(roi.param.size()/3,3,CV_32F), points2d1, points2d2;
+    cv::Mat points3d(roi.param.size()/3,3,CV_32F);
+    // float pt[3];
+    // cv::Mat points3d(0,3,CV_32F), ptm(1,3,CV_32F,pt);
+    cv::Mat points2d1, points2d2/*, hull1, hull2*/;
     for(int i(0),i_end(roi.param.size()/3); i<i_end; ++i)
     {
       points3d.at<float>(i,0)= roi.param[3*i];
       points3d.at<float>(i,1)= roi.param[3*i+1];
       points3d.at<float>(i,2)= roi.param[3*i+2];
+      // if(roi.param[3*i+2]>-1.0)
+      // {
+        // pt[0]= roi.param[3*i];
+        // pt[1]= roi.param[3*i+1];
+        // pt[2]= roi.param[3*i+2];
+        // points3d.push_back(ptm);
+      // }
     }
     ProjectPointsToRectifiedImg(points3d, cam_params.P1, points2d1);
     ProjectPointsToRectifiedImg(points3d, cam_params.P2, points2d2);
+    cv::Mat clip= (cv::Mat_<short>(4,2)<<0,0, 0,10000, 10000,10000, 10000,0);
+    clip.convertTo(clip, points2d1.type());
+    points2d1= ClipPolygon(points2d1, clip);
+    points2d2= ClipPolygon(points2d2, clip);
+    //*DBG*/std::cerr<<"points2d1="<<points2d1<<std::endl;
     points2d1.convertTo(points2d1, CV_32S);
     points2d2.convertTo(points2d2, CV_32S);
+    //*DBG*/std::cerr<<"points2d1="<<points2d1<<std::endl;
 
+    // cv::convexHull(points2d1, hull1);
+    // cv::convexHull(points2d2, hull2);
     mask1.setTo(0);
     mask2.setTo(0);
     std::vector<cv::Mat> ppt1(1),ppt2(1);
@@ -313,6 +340,10 @@ void ProjectROIToMask(const lfd_vision::ROI_3DProj &roi,
       points3d.row(1+i)+= center;
     ProjectPointsToRectifiedImg(points3d, cam_params.P1, points2d1);
     ProjectPointsToRectifiedImg(points3d, cam_params.P2, points2d2);
+    cv::Mat clip= (cv::Mat_<short>(4,2)<<0,0, 0,10000, 10000,10000, 10000,0);
+    clip.convertTo(clip, points2d1.type());
+    points2d1= ClipPolygon(points2d1, clip);
+    points2d2= ClipPolygon(points2d2, clip);
     points2d1.convertTo(points2d1, CV_32S);
     points2d2.convertTo(points2d2, CV_32S);
 
@@ -411,18 +442,9 @@ void ExecStereo()
       // if(ImgWin[2]=='1')  cv::imshow("stereo_frame_l", Stereo.FrameL());
       // if(ImgWin[3]=='1')  cv::imshow("stereo_frame_r", Stereo.FrameR());
       // if(ImgWin[4]=='1')  cv::imshow("stereo_disparity", disparity);
-      if(ImgWin[2]=='1') {
-        boost::mutex::scoped_lock lock(*IMShowStuff["stereo_frame_l"].Mutex);
-        Stereo.FrameL().copyTo(IMShowStuff["stereo_frame_l"].Frame);
-      }
-      if(ImgWin[3]=='1') {
-        boost::mutex::scoped_lock lock(*IMShowStuff["stereo_frame_r"].Mutex);
-        Stereo.FrameR().copyTo(IMShowStuff["stereo_frame_r"].Frame);
-      }
-      if(ImgWin[4]=='1') {
-        boost::mutex::scoped_lock lock(*IMShowStuff["stereo_disparity"].Mutex);
-        disparity.copyTo(IMShowStuff["stereo_disparity"].Frame);
-      }
+      if(ImgWin[2]=='1') {IMSHOW(Stereo.FrameL(),"stereo_frame_l");}
+      if(ImgWin[3]=='1') {IMSHOW(Stereo.FrameR(),"stereo_frame_r");}
+      if(ImgWin[4]=='1') {IMSHOW(disparity,"stereo_disparity");}
 
       // Publish as point cloud.
       Stereo.ReprojectTo3D();
@@ -494,12 +516,33 @@ void TFlowStereo2::operator()(cv::Mat flow_mask1, cv::Mat flow_mask2)
   frame1*= 200;
   frame2*= 200;
 
+  // // Remove noise, make remaining pixels bigger:
+  // cv::erode(frame1,frame1,cv::Mat(),cv::Point(-1,-1), We);
+  // cv::dilate(frame1,frame1,cv::Mat(),cv::Point(-1,-1), Wd);
+  // cv::erode(frame2,frame2,cv::Mat(),cv::Point(-1,-1), We);
+  // cv::dilate(frame2,frame2,cv::Mat(),cv::Point(-1,-1), Wd);
+  // // Vertical filter to make detecting flow easier:
+  // cv::filter2D(frame1, frame1, /*ddepth=*/-1, Kernel);
+  // cv::filter2D(frame2, frame2, /*ddepth=*/-1, Kernel);
+
   // Remove noise, make remaining pixels bigger:
-  cv::erode(frame1,frame1,cv::Mat(),cv::Point(-1,-1), We);
-  cv::dilate(frame1,frame1,cv::Mat(),cv::Point(-1,-1), Wd);
-  cv::erode(frame2,frame2,cv::Mat(),cv::Point(-1,-1), We);
-  cv::dilate(frame2,frame2,cv::Mat(),cv::Point(-1,-1), Wd);
+  cv::dilate(frame1,fmask1,cv::Mat(),cv::Point(-1,-1), Wd0);
+  cv::dilate(frame2,fmask2,cv::Mat(),cv::Point(-1,-1), Wd0);
+  cv::erode(fmask1,fmask1,cv::Mat(),cv::Point(-1,-1), We);
+  cv::dilate(fmask1,fmask1,cv::Mat(),cv::Point(-1,-1), Wd);
+  cv::erode(fmask2,fmask2,cv::Mat(),cv::Point(-1,-1), We);
+  cv::dilate(fmask2,fmask2,cv::Mat(),cv::Point(-1,-1), Wd);
   // Vertical filter to make detecting flow easier:
+  cv::filter2D(fmask1, fmask1, /*ddepth=*/-1, Kernel);
+  cv::filter2D(fmask2, fmask2, /*ddepth=*/-1, Kernel);
+  frame01.setTo(0);
+  frame02.setTo(0);
+  frame1.copyTo(frame01, fmask1);
+  frame2.copyTo(frame02, fmask2);
+  // frame1= frame01;
+  // frame2= frame02;
+  frame01.copyTo(frame1);
+  frame02.copyTo(frame2);
   cv::filter2D(frame1, frame1, /*ddepth=*/-1, Kernel);
   cv::filter2D(frame2, frame2, /*ddepth=*/-1, Kernel);
 
@@ -527,10 +570,12 @@ void TFlowStereo2::operator()(cv::Mat flow_mask1, cv::Mat flow_mask2)
 
   points1.clear();
   points2.clear();
-  cv::cvtColor(frame1, frame1c, CV_GRAY2BGR);
-  cv::cvtColor(frame2, frame2c, CV_GRAY2BGR);
-  frame1c/=2;
-  frame2c/=2;
+  // cv::cvtColor(frame1, frame1c, CV_GRAY2BGR);
+  // cv::cvtColor(frame2, frame2c, CV_GRAY2BGR);
+  cv::Mat frame1cs[]= {0.0*frame1, 0.7*frame1, 0.7*frame1};
+  cv::merge(frame1cs, 3, frame1c);
+  cv::Mat frame2cs[]= {0.0*frame2, 0.7*frame2, 0.7*frame2};
+  cv::merge(frame2cs, 3, frame2c);
   for(int y(0),y_end(matched.size()); y<y_end; y+=YStep)
   {
     int dx= matched[y];
@@ -574,6 +619,8 @@ void ExecFlowFind(int i_cam)
 {
   cv::Mat frame, flow_mask;
   long t_cap=0;
+  TFPSEstimator fps_est;
+  int show_fps(0);
   while(!Shutdown)
   {
     if(Running)
@@ -610,6 +657,13 @@ void ExecFlowFind(int i_cam)
       }
 // if(i_cam==0)std::cerr<<"DBG: d "<<1000.0*(GetCurrentTime()-t_start);
 
+      fps_est.Step();
+      if(show_fps==0)
+      {
+        std::cerr<<"FPS(flow): "<<fps_est.FPS<<std::endl;
+        show_fps=fps_est.FPS*4;
+      }
+      --show_fps;
     }  // Running
     else
     {
@@ -662,8 +716,8 @@ void ExecFlowStereo()
       // stereo_f.frame2c.copyTo(disp_img[1]);
       // FlowFinder[0].DrawFlow(disp_img[0], CV_RGB(0,255,255), /*len=*/1.0, /*thickness=*/1);
       // FlowFinder[1].DrawFlow(disp_img[1], CV_RGB(0,255,255), /*len=*/1.0, /*thickness=*/1);
-      disp_img[0]= ColorMask(frame[0], CV_RGB(0,128,128));
-      disp_img[1]= ColorMask(frame[1], CV_RGB(0,128,128));
+      disp_img[0]= ColorMask(frame[0], CV_RGB(0,80,80));
+      disp_img[1]= ColorMask(frame[1], CV_RGB(0,80,80));
       disp_img[0]+= stereo_f.frame1c;
       disp_img[1]+= stereo_f.frame2c;
 
@@ -679,19 +733,13 @@ void ExecFlowStereo()
       // if(ImgWin[5]=='1')  cv::imshow("stereof_frame_l", disp_img[0]);
       // if(ImgWin[6]=='1')  cv::imshow("stereof_frame_r", disp_img[1]);
       // // cv::imshow("stereof_disparity", disparity);
-      if(ImgWin[5]=='1') {
-        boost::mutex::scoped_lock lock(*IMShowStuff["stereof_frame_l"].Mutex);
-        disp_img[0].copyTo(IMShowStuff["stereof_frame_l"].Frame);
-      }
-      if(ImgWin[6]=='1') {
-        boost::mutex::scoped_lock lock(*IMShowStuff["stereof_frame_r"].Mutex);
-        disp_img[1].copyTo(IMShowStuff["stereof_frame_r"].Frame);
-      }
+      if(ImgWin[5]=='1') {IMSHOW(disp_img[0],"stereof_frame_l");}
+      if(ImgWin[6]=='1') {IMSHOW(disp_img[1],"stereof_frame_r");}
 
 // std::cerr<<" g "<<1000.0*(GetCurrentTime()-t_start)<<std::endl;
       if(show_fps==0)
       {
-        std::cerr<<"FPS(flow): "<<VideoOutF[0].FPS()<<", "<<VideoOutF[1].FPS()<<std::endl;
+        std::cerr<<"FPS(flow-stereo): "<<VideoOutF[0].FPS()<<", "<<VideoOutF[1].FPS()<<std::endl;
         show_fps=VideoOutF[0].FPS()*4;
       }
       --show_fps;
@@ -716,6 +764,7 @@ void ReadFromYAML(std::vector<TFlowStereo2> &stereof_info, const std::string &fi
     #define PROC_VAR(x)  (*itr)[#x]>>cf.x;
     PROC_VAR(We      );
     PROC_VAR(Wd      );
+    PROC_VAR(Wd0     );
     PROC_VAR(XFilter );
     PROC_VAR(YFilter );
     PROC_VAR(XStep   );
@@ -733,6 +782,8 @@ void ExecColDet()
   cv::Size img_size[2]={cv::Size(CamInfo[0].Width,CamInfo[0].Height),
                         cv::Size(CamInfo[1].Width,CamInfo[1].Height)};
   cv::Mat frame_unrct[2], frame[2], disp_img[2], mask[2];
+  for(int j(0);j<2;++j)
+    ColDetector[j].SetCameraWindow(frame_unrct[j]);
   int show_fps(0);
   long t_cap[2]={0,0};
   while(!Shutdown)
@@ -869,14 +920,8 @@ void ExecColDet()
       // 1:show, 0:hide; order=color1,color2,stereo1,stereo2,disparity,flow1,flow2,edge1,edge2
       // if(ImgWin[0]=='1')  cv::imshow("color_detector1", disp_img[0]);
       // if(ImgWin[1]=='1')  cv::imshow("color_detector2", disp_img[1]);
-      if(ImgWin[0]=='1') {
-        boost::mutex::scoped_lock lock(*IMShowStuff["color_detector1"].Mutex);
-        disp_img[0].copyTo(IMShowStuff["color_detector1"].Frame);
-      }
-      if(ImgWin[1]=='1') {
-        boost::mutex::scoped_lock lock(*IMShowStuff["color_detector2"].Mutex);
-        disp_img[1].copyTo(IMShowStuff["color_detector2"].Frame);
-      }
+      if(ImgWin[0]=='1') {IMSHOW(disp_img[0],"color_detector1");}
+      if(ImgWin[1]=='1') {IMSHOW(disp_img[1],"color_detector2");}
 
       if(show_fps==0)
       {
@@ -916,22 +961,18 @@ bool ExecFitEdge(lfd_vision::FitEdge::Request &req, lfd_vision::FitEdge::Respons
   Rectifier.RectifyL(frame[0]);
   Rectifier.RectifyR(frame[1]);
 
+  std::cerr<<"FitEdge request. init pose="<<cv::Mat(1,7,CV_64F,pose)<<std::endl;
   EdgeFit.Run(frame[0], frame[1], pose, pose, &quality);
   EdgeFit.Viz(disp[0], disp[1], pose);
+  std::cerr<<"FitEdge - Done. pose="<<cv::Mat(1,7,CV_64F,pose)<<", quality="<<quality<<std::endl;
 
   res.pose.resize(7);
   std::copy(pose, pose+7, res.pose.begin());
   res.quality= quality;
 
   // 1:show, 0:hide; order=color1,color2,stereo1,stereo2,disparity,flow1,flow2,edge1,edge2
-  if(ImgWin[7]=='1') {
-    boost::mutex::scoped_lock lock(*IMShowStuff["edge_fit_l"].Mutex);
-    disp[0].copyTo(IMShowStuff["edge_fit_l"].Frame);
-  }
-  if(ImgWin[8]=='1') {
-    boost::mutex::scoped_lock lock(*IMShowStuff["edge_fit_r"].Mutex);
-    disp[1].copyTo(IMShowStuff["edge_fit_r"].Frame);
-  }
+  if(ImgWin[7]=='1') {IMSHOW(disp[0],"edge_fit_l");}
+  if(ImgWin[8]=='1') {IMSHOW(disp[1],"edge_fit_r");}
   return true;
 }
 //-------------------------------------------------------------------------------------------
@@ -951,14 +992,8 @@ void FitEdgeDummy(void)
   EdgeFit.Viz(disp[0], disp[1], /*pose=*/NULL);
 
   // 1:show, 0:hide; order=color1,color2,stereo1,stereo2,disparity,flow1,flow2,edge1,edge2
-  if(ImgWin[7]=='1') {
-    boost::mutex::scoped_lock lock(*IMShowStuff["edge_fit_l"].Mutex);
-    disp[0].copyTo(IMShowStuff["edge_fit_l"].Frame);
-  }
-  if(ImgWin[8]=='1') {
-    boost::mutex::scoped_lock lock(*IMShowStuff["edge_fit_r"].Mutex);
-    disp[1].copyTo(IMShowStuff["edge_fit_r"].Frame);
-  }
+  if(ImgWin[7]=='1') {IMSHOW(disp[0],"edge_fit_l");}
+  if(ImgWin[8]=='1') {IMSHOW(disp[1],"edge_fit_r");}
 }
 //-------------------------------------------------------------------------------------------
 
@@ -993,6 +1028,7 @@ int main(int argc, char**argv)
   node.param("color_files_base1",ColorFilesBase[0],ColorFilesBase[0]);
   node.param("color_files_base2",ColorFilesBase[1],ColorFilesBase[1]);
   node.param("img_win",ImgWin,ImgWin);
+  node.param("disp_scale",DispScale,DispScale);
 
   node.param("ff_ofl_win",ff_ofl_win,ff_ofl_win);
   node.param("ff_ofl_spd_min",ff_ofl_spd_min,ff_ofl_spd_min);
@@ -1105,8 +1141,8 @@ int main(int argc, char**argv)
   ros::ServiceServer srv_resume= node.advertiseService("resume", &Resume);
   ros::ServiceServer srv_fit_edge= node.advertiseService("fit_edge", &ExecFitEdge);
 
-  for(int j(0);j<2;++j)
-    ColDetector[j].SetCameraWindow(Frame[j]);
+  // for(int j(0);j<2;++j)
+    // ColDetector[j].SetCameraWindow(Frame[j]);
 
   // 1:show, 0:hide; order=color1,color2,stereo1,stereo2,disparity,flow1,flow2,edge1,edge2
   int camera_indexes[]= {0,1};

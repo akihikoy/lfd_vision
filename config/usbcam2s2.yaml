@@ -40,8 +40,9 @@ StereoConfig:
 
 FlowStereoInfo:
   -
-    We: 2
-    Wd: 3
+    Wd0: 6
+    We: 8
+    Wd: 10
     XFilter: 1
     YFilter: 20
     XStep: 1

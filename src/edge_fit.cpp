@@ -27,14 +27,14 @@ using namespace std;
 TEdgeDetectParams::TEdgeDetectParams()
   :
     PreBlurSize(3),
-    PostBlurSize(31)
+    PostBlurSize(21)
 {
 }
 
 TEdgeEvalParams::TEdgeEvalParams()
   :
     MinEdgeBrightness(50.0),
-    MinMatchingRatio(0.8)
+    MinMatchingRatio(0.4)
 {
 }
 
@@ -210,7 +210,7 @@ double EvaluateEdgePoints(
   // std::cerr<<" * "<<num<<"/"<<points2d.rows<<endl;
   sum/= (double)points2d.rows;
   if((double)num/(double)points2d.rows<params.MinMatchingRatio)  is_feasible= false;
-  is_feasible= true;
+  else is_feasible= true;
   return sum;
 }
 //-------------------------------------------------------------------------------------------

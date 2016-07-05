@@ -74,6 +74,8 @@ void MinimizeF(
   // temporary value
   double *x_in_bounds= cmaes_NewDouble(dim); /* calloc another vector */
 
+  int counter(params.stopMaxFunEvals);
+  bool is_terminated(false);
   /* Iterate until stop criterion holds */
   while(!cmaes_TestForTermination(&evo))
   {
@@ -88,14 +90,23 @@ void MinimizeF(
         cmaes_boundary_transformation(&boundaries, pop[i], x_in_bounds, dim);
         double value; bool is_feasible;
         value= f(x_in_bounds, is_feasible);
+        --counter;
+        if(counter<=0)  {is_terminated= true;}
         if(is_feasible) {arFunvals[i]= value; break;}
+        if(is_terminated)  break;
         cmaes_ReSampleSingle(&evo, i);
       }
+      if(is_terminated)  break;
     }
+    if(is_terminated)  break;
     cmaes_UpdateDistribution(&evo, arFunvals);
     if(params.PrintLevel>=1)  cmaes_ReadSignals(&evo, "cmaes_signals.par");
   }
-  if(params.PrintLevel>=1)  printf("Stop:\n%s\n",  cmaes_TestForTermination(&evo)); /* print termination reason */
+  if(params.PrintLevel>=1)
+  {
+    if(!is_terminated)  printf("Stop:\n%s\n",  cmaes_TestForTermination(&evo)); /* print termination reason */
+    else  printf("Stop:\n%s\n",  "Number of function evaluations researched max");
+  }
   if(params.PrintLevel>=1)  cmaes_WriteToFile(&evo, "all", "/tmp/allcmaes.dat"); /* write final results */
   if(params.PrintLevel>=2)  cmaes_WriteToFile(&evo, "all", "/dev/stdout");
 
