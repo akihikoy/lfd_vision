@@ -11,6 +11,7 @@
     <param name="color_files_base2" value="$(find lfd_vision)/x2" />
     <param name="img_win" value="110011111" type="str" />
 <!--     <param name="img_win" value="110011100" type="str" /> -->
+    <param name="disp_fps" value="30.0" />
     <param name="disp_scale" value="0.6" />
 
     <param name="ff_ofl_win" value="3" />
@@ -20,7 +21,7 @@
     <param name="ff_amt_max" value="3000.0" />
     <param name="ff_spd_min" value="1.0" />
     <param name="ff_spd_max" value="-1.0" />
-    <param name="ff_mask_flen" value="5" />
+    <param name="ff_mask_flen" value="0" />
     <param name="send_raw_flow" value="0" />
   </node>
 </launch>

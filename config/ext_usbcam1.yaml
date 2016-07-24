@@ -37,3 +37,4 @@ FlowStereoInfo:
     XStep: 1
     YStep: 16
     ThMatch: 16
+    TFilter: 5

@@ -81,8 +81,8 @@ using namespace std;
 //-------------------------------------------------------------------------------------------
 TFPSEstimator::TFPSEstimator(const double &init_fps, const double &alpha)
   :
-    FPS (init_fps),
     Alpha (alpha),
+    FPS (init_fps),
     TimePrev (-1.0)
 {
 }
@@ -523,6 +523,8 @@ void Print(const std::vector<TCameraInfo> &cam_info)
     PROC_VAR(Height      );
     PROC_VAR(PixelFormat );
     PROC_VAR(NRotate90   );
+    PROC_VAR(CapWidth    );
+    PROC_VAR(CapHeight   );
     PROC_VAR(Name        );
     PROC_VAR(Rectification);
     PROC_VAR(Alpha        );
@@ -547,6 +549,8 @@ void WriteToYAML(const std::vector<TCameraInfo> &cam_info, const std::string &fi
     PROC_VAR(Height      );
     PROC_VAR(PixelFormat );
     PROC_VAR(NRotate90   );
+    PROC_VAR(CapWidth    );
+    PROC_VAR(CapHeight   );
     PROC_VAR(Name        );
     PROC_VAR(Rectification);
     PROC_VAR(Alpha        );
@@ -575,6 +579,8 @@ void ReadFromYAML(std::vector<TCameraInfo> &cam_info, const std::string &file_na
     PROC_VAR(Height      );
     PROC_VAR(PixelFormat );
     PROC_VAR(NRotate90   );
+    PROC_VAR(CapWidth    );
+    PROC_VAR(CapHeight   );
     PROC_VAR(Name        );
     PROC_VAR(Rectification);
     PROC_VAR(Alpha        );

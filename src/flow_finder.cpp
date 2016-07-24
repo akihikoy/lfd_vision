@@ -98,10 +98,14 @@ void TFlowFinder::UpdateProc1_FindFlow(cv::Mat &mask)
   CalcOpticalFlow(frame_, frame_old_);  // NOTE: Inverting the previous and current
   frame_old_= frame_.clone();
 
-  GetAngleSpdImg(img_angle_, img_spd_);
+  // GetAngleSpdImg(img_angle_, img_spd_);
+  GetSpdSqImg(img_spd_);
+  // NOTE: GetAngleSpdImg was DEPRECATED; we use GetSpdSqImg for compt speed.
+  // GetSpdSqImg gives square of speed (as we omitted sqrt).
 
 
-  cv::threshold(img_spd_, mask, /*thresh=*/optflow_spd_threshold_, /*maxval=*/1.0, cv::THRESH_BINARY);
+  // cv::threshold(img_spd_, mask, /*thresh=*/optflow_spd_threshold_, /*maxval=*/1.0, cv::THRESH_BINARY);
+  cv::threshold(img_spd_, mask, /*thresh=*/optflow_spd_threshold_*optflow_spd_threshold_, /*maxval=*/1.0, cv::THRESH_BINARY);
   mask.convertTo(mask,CV_8UC1);
   if(erode_dilate_>0)
   {
@@ -249,20 +253,36 @@ void TFlowFinder::CalcOpticalFlow(const cv::Mat &prev, const cv::Mat &curr)
 }
 //-------------------------------------------------------------------------------------------
 
-void TFlowFinder::GetAngleSpdImg(cv::Mat &img_angle, cv::Mat &img_spd)
+// void TFlowFinder::GetAngleSpdImg(cv::Mat &img_angle, cv::Mat &img_spd)
+// {
+  // img_spd.create(rows_, cols_, CV_32FC1);
+  // img_angle.create(rows_, cols_, CV_32FC1);
+
+  // typedef cv::MatIterator_<float> t_itr;
+  // t_itr ivx(velx_.begin<float>()), ivy(vely_.begin<float>());
+  // t_itr itr_d(img_spd.begin<float>()), itr_a(img_angle.begin<float>());
+  // t_itr itr_d_last(img_spd.end<float>());
+
+  // for(; itr_d!=itr_d_last; ++ivx,++ivy,++itr_d,++itr_a)
+  // {
+    // *itr_d= std::sqrt((*ivx)*(*ivx)+(*ivy)*(*ivy));
+    // *itr_a= std::atan2(*ivy,*ivx);
+  // }
+// }
+//------------------------------------------------------------------------------
+
+void TFlowFinder::GetSpdSqImg(cv::Mat &img_spd)
 {
   img_spd.create(rows_, cols_, CV_32FC1);
-  img_angle.create(rows_, cols_, CV_32FC1);
 
   typedef cv::MatIterator_<float> t_itr;
   t_itr ivx(velx_.begin<float>()), ivy(vely_.begin<float>());
-  t_itr itr_d(img_spd.begin<float>()), itr_a(img_angle.begin<float>());
+  t_itr itr_d(img_spd.begin<float>());
   t_itr itr_d_last(img_spd.end<float>());
 
-  for(; itr_d!=itr_d_last; ++ivx,++ivy,++itr_d,++itr_a)
+  for(; itr_d!=itr_d_last; ++ivx,++ivy,++itr_d)
   {
-    *itr_d= std::sqrt((*ivx)*(*ivx)+(*ivy)*(*ivy));
-    *itr_a= std::atan2(*ivy,*ivx);
+    *itr_d= (*ivx)*(*ivx)+(*ivy)*(*ivy);
   }
 }
 //------------------------------------------------------------------------------

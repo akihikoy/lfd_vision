@@ -194,15 +194,16 @@ void ReadFromYAML(std::vector<cv::KeyPoint> &keypoints, const std::string &file_
 struct TCameraInfo
 {
   int DevID;
-  int Width, Height;
+  int Width, Height;  // Image size
   std::string PixelFormat;
   int NRotate90;
+  int CapWidth, CapHeight;  // Capture size (if zero, Width/Height is used; if not zero, captured image is resized to (Width,Height))
   std::string Name;
   int Rectification;  // Whether rectify image or not
   double Alpha;     // Scaling factor
   cv::Mat K, D, R;  // Camera, distortion, and rectification matrices
   TCameraInfo()
-      : NRotate90(0), Rectification(0), Alpha(1.0) {}
+      : NRotate90(0), CapWidth(0), CapHeight(0), Rectification(0), Alpha(1.0) {}
 };
 //-------------------------------------------------------------------------------------------
 void Print(const std::vector<TCameraInfo> &cam_info);

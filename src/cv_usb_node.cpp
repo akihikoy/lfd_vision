@@ -9,6 +9,7 @@
 #include "lfd_vision/vision_util.h"
 //-------------------------------------------------------------------------------------------
 #include <opencv2/core/core.hpp>
+#include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include <iostream>
 #include <cstdio>
@@ -28,7 +29,7 @@ using namespace trick;
 // #define print(var) std::cout<<#var"= "<<(var)<<std::endl
 //-------------------------------------------------------------------------------------------
 
-bool OpenCameras(const std::vector<TCameraInfo> &cam_info, std::vector<cv::VideoCapture> &cap)
+bool OpenCameras(std::vector<TCameraInfo> &cam_info, std::vector<cv::VideoCapture> &cap)
 {
   for(int i_cam(0), i_cam_end(cam_info.size()); i_cam<i_cam_end; ++i_cam)
   {
@@ -41,8 +42,10 @@ bool OpenCameras(const std::vector<TCameraInfo> &cam_info, std::vector<cv::Video
       return false;
     }
     if(fourcc.size()>0)  cap[i_cam].set(CV_CAP_PROP_FOURCC,CV_FOURCC(fourcc[0],fourcc[1],fourcc[2],fourcc[3]));
-    cap[i_cam].set(CV_CAP_PROP_FRAME_WIDTH, cam_info[i_cam].Width);
-    cap[i_cam].set(CV_CAP_PROP_FRAME_HEIGHT, cam_info[i_cam].Height);
+    if(cam_info[i_cam].CapWidth==0)  cam_info[i_cam].CapWidth= cam_info[i_cam].Width;
+    if(cam_info[i_cam].CapHeight==0)  cam_info[i_cam].CapHeight= cam_info[i_cam].Height;
+    cap[i_cam].set(CV_CAP_PROP_FRAME_WIDTH, cam_info[i_cam].CapWidth);
+    cap[i_cam].set(CV_CAP_PROP_FRAME_HEIGHT, cam_info[i_cam].CapHeight);
     cv::namedWindow(cam_info[i_cam].Name,1);
   }
   std::cerr<<"Opened camera(s)"<<std::endl;
@@ -111,6 +114,9 @@ int main(int argc, char**argv)
   int show_fps(0);
   for(;ros::ok();)
   {
+    /*FIXME: Capture should be a thread per camera to handle bigger FPS (e.g. 60).
+    FIXME: Display FPS should be smaller e.g. 30 (use ROS rate adjuster). */
+
     // Capture from cameras:
     bool failure(false);
     for(int i_cam(0), i_cam_end(cam_info.size()); i_cam<i_cam_end; ++i_cam)
@@ -123,7 +129,11 @@ int main(int argc, char**argv)
 
     // Image processing:
     for(int i_cam(0), i_cam_end(cam_info.size()); i_cam<i_cam_end; ++i_cam)
+    {
+      if(cam_info[i_cam].CapWidth!=cam_info[i_cam].Width || cam_info[i_cam].CapHeight!=cam_info[i_cam].Height)
+        cv::resize(frame[i_cam],frame[i_cam],cv::Size(cam_info[i_cam].Width,cam_info[i_cam].Height));
       Rotate90N(frame[i_cam],frame[i_cam],cam_info[i_cam].NRotate90);
+    }
 
     // Publish images:
     for(int i_cam(0), i_cam_end(cam_info.size()); i_cam<i_cam_end; ++i_cam)
@@ -144,7 +154,7 @@ int main(int argc, char**argv)
     }
     --show_fps;
 
-    int c(cv::waitKey(10));
+    int c(cv::waitKey(1));
     if(c=='\x1b'||c=='q') break;
     else if(c=='W')
     {

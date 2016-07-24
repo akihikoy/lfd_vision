@@ -1,37 +1,42 @@
 %YAML:1.0
+# Fast capturing mode of usbcam2s2
 CameraInfo:
   -
-    Name: usbcam2s2_l
+    Name: usbcam2s2f_l
     DevID: 1
     Width: 640
     Height: 480
+    CapWidth: 800
+    CapHeight: 600
     PixelFormat: MJPG
     NRotate90: 0
   -
-    Name: usbcam2s2_r
+    Name: usbcam2s2f_r
     DevID: 2
     Width: 640
     Height: 480
+    CapWidth: 800
+    CapHeight: 600
     PixelFormat: MJPG
     NRotate90: 0
 
 StereoInfo:
   -
-    Name: usbcam2s2
+    Name: usbcam2s2f
     CamL: 0
     CamR: 1
 #     Width: 320
 #     Height: 240
     Width: 400
     Height: 300
-    StereoParam: config/usbcam2s2_stereo.yaml
-    StereoConfig: config/usbcam2s2.yaml
+    StereoParam: config/usbcam2s2f_stereo.yaml
+    StereoConfig: config/usbcam2s2f.yaml
 
 StereoConfig:
 #   LensType: fisheye
   LensType: basic
   minDisparity: 0
-  numberOfDisparities: 64
+  numberOfDisparities: 112
   SADWindowSize: 7
   P1: 216  #8*3*w_size*w_size
   P2: 864  #32*3*w_size*w_size

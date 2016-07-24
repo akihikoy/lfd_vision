@@ -46,6 +46,7 @@ struct TFlowStereo2
   int XFilter, YFilter;
   int XStep, YStep;
   int ThMatch;
+  int TFilter;  // Temporal filter
 
   // Filter kernel:
   cv::Mat Kernel;
@@ -68,6 +69,7 @@ struct TFlowStereo2
       XStep= 1;
       YStep= 16;
       ThMatch= 16;
+      TFilter= 5;
     }
   void Init();
   void operator()(cv::Mat flow_mask1, cv::Mat flow_mask2);  // implementation is below
@@ -109,8 +111,10 @@ std::vector<lfd_vision::ColDetVizPrimitive> VizObjs[2];  // External visualizati
 
 ros::Publisher CloudPub, FlowCloudPub, SensorPub[2];
 cv::Mat Frame[2], FlowMask[2];
+int FMQueueIdx[2];
+std::vector<cv::Mat> FlowMaskQueue[2];  // Queue of FlowMask for filtering.
 std::vector<long> CapTime, FlowFindTime;  // Using two elements only (0,1)
-boost::mutex MutCamCapture, MutFlowFind;
+boost::mutex MutCamCapture[2], MutFlowFind[2];
 struct TIMShowStuff
 {
   boost::shared_ptr<boost::mutex> Mutex;
@@ -429,8 +433,11 @@ void ExecStereo()
     if(Running)
     {
       {
-        boost::mutex::scoped_lock lock(MutCamCapture);
-        for(int j(0);j<2;++j)  Frame[j].copyTo(frame[j]);
+        for(int j(0);j<2;++j)
+        {
+          boost::mutex::scoped_lock lock(MutCamCapture[j]);
+          Frame[j].copyTo(frame[j]);
+        }
       }
       Stereo.Proc(frame[0],frame[1]);
       // Stereo.StereoParams().GrayScale= false;
@@ -634,7 +641,7 @@ void ExecFlowFind(int i_cam)
 // double t_start=GetCurrentTime();
 // if(i_cam==0)std::cerr<<"DBG: a "<<1000.0*(GetCurrentTime()-t_start);
       {
-        boost::mutex::scoped_lock lock(MutCamCapture);
+        boost::mutex::scoped_lock lock(MutCamCapture[i_cam]);
         Frame[i_cam].copyTo(frame);
         t_cap= CapTime[i_cam];
       }
@@ -646,13 +653,17 @@ void ExecFlowFind(int i_cam)
       // Flow detection from image
       FlowFinder[i_cam].Update(frame);
       FlowFinder[i_cam].FlowMask().copyTo(flow_mask);
-      if(i_cam==0)       Rectifier.RectifyL(flow_mask);
-      else if(i_cam==1)  Rectifier.RectifyR(flow_mask);
+      // if(i_cam==0)       Rectifier.RectifyL(flow_mask);
+      // else if(i_cam==1)  Rectifier.RectifyR(flow_mask);
+      // NOTE: Rectification is moved to ExecFlowStereo
 
 // if(i_cam==0)std::cerr<<"DBG: c "<<1000.0*(GetCurrentTime()-t_start);
       {
-        boost::mutex::scoped_lock lock(MutFlowFind);
-        flow_mask.copyTo(FlowMask[i_cam]);
+        boost::mutex::scoped_lock lock(MutFlowFind[i_cam]);
+        // flow_mask.copyTo(FlowMask[i_cam]);
+        flow_mask.copyTo(FlowMaskQueue[i_cam][FMQueueIdx[i_cam]]);
+        ++FMQueueIdx[i_cam];
+        if(FMQueueIdx[i_cam]>=StereoFInfo[0].TFilter)  FMQueueIdx[i_cam]= 0;
         FlowFindTime[i_cam]= GetCurrentTimeL();
       }
 // if(i_cam==0)std::cerr<<"DBG: d "<<1000.0*(GetCurrentTime()-t_start);
@@ -660,7 +671,7 @@ void ExecFlowFind(int i_cam)
       fps_est.Step();
       if(show_fps==0)
       {
-        std::cerr<<"FPS(flow): "<<fps_est.FPS<<std::endl;
+        std::cerr<<"FPS(flow "<<i_cam<<"): "<<fps_est.FPS<<std::endl;
         show_fps=fps_est.FPS*4;
       }
       --show_fps;
@@ -693,21 +704,32 @@ void ExecFlowStereo()
 
 // double t_start=GetCurrentTime();
 // std::cerr<<"DBG: a "<<1000.0*(GetCurrentTime()-t_start);
+// std::cerr<<"DBG: FMQueueIdx[0]="<<FMQueueIdx[0]<<std::endl;;
+// std::cerr<<"DBG: FMQueueIdx[1]="<<FMQueueIdx[1]<<std::endl;;
+// std::cerr<<"DBG: TFilter="<<StereoFInfo[0].TFilter<<std::endl;;
+// std::cerr<<"DBG: FlowMaskQueue[0].size()="<<FlowMaskQueue[0].size()<<std::endl;;
+// std::cerr<<"DBG: FlowMaskQueue[1].size()="<<FlowMaskQueue[1].size()<<std::endl;;
       {
-        boost::mutex::scoped_lock lock(MutFlowFind);
         for(int i_cam(0);i_cam<2;++i_cam)
         {
-          FlowMask[i_cam].copyTo(frame[i_cam]);
+          boost::mutex::scoped_lock lock(MutFlowFind[i_cam]);
+          FlowMaskQueue[i_cam][0].copyTo(FlowMask[i_cam]);
+          for(int i(1); i<StereoFInfo[0].TFilter; ++i)
+            cv::bitwise_or(FlowMask[i_cam], FlowMaskQueue[i_cam][i], FlowMask[i_cam]);
           t_ff[i_cam]= FlowFindTime[i_cam];
+          FlowMask[i_cam].copyTo(frame[i_cam]);
         }
       }
+      Rectifier.RectifyL(frame[0]);
+      Rectifier.RectifyR(frame[1]);
 
 // std::cerr<<" c "<<1000.0*(GetCurrentTime()-t_start);
       if(do_stereo_f==0)
       {
         // stereo_f(FlowFinder[0].FlowMask(), FlowFinder[1].FlowMask());
         stereo_f(frame[0], frame[1]);
-        do_stereo_f= FlowFinder[0].FlowMaskFilterLen()/2;
+        // do_stereo_f= FlowFinder[0].FlowMaskFilterLen()/2;
+        do_stereo_f= StereoFInfo[0].TFilter/2;
       }
       --do_stereo_f;
 
@@ -770,6 +792,7 @@ void ReadFromYAML(std::vector<TFlowStereo2> &stereof_info, const std::string &fi
     PROC_VAR(XStep   );
     PROC_VAR(YStep   );
     PROC_VAR(ThMatch );
+    PROC_VAR(TFilter );
     #undef PROC_VAR
     stereof_info.push_back(cf);
   }
@@ -797,9 +820,9 @@ void ExecColDet()
       }
 
       {
-        boost::mutex::scoped_lock lock(MutCamCapture);
         for(int i_cam(0);i_cam<2;++i_cam)
         {
+          boost::mutex::scoped_lock lock(MutCamCapture[i_cam]);
           Frame[i_cam].copyTo(frame_unrct[i_cam]);
           t_cap[i_cam]= CapTime[i_cam];
         }
@@ -939,9 +962,54 @@ void ExecColDet()
 }
 //-------------------------------------------------------------------------------------------
 
+void ExecCapture(cv::VideoCapture &cap, int cam_idx)
+{
+  cv::Mat frame;
+  long cap_time(0);
+  TFPSEstimator fps_est;
+  int show_fps(0);
+  while(!Shutdown)
+  {
+    if(Running)
+    {
+      // Capture from cameras:
+      cap >> frame; // get a new frame from camera
+      if(CamInfo[cam_idx].CapWidth!=CamInfo[cam_idx].Width || CamInfo[cam_idx].CapHeight!=CamInfo[cam_idx].Height)
+        cv::resize(frame,frame,cv::Size(CamInfo[cam_idx].Width,CamInfo[cam_idx].Height));
+      Rotate90N(frame,frame,CamInfo[cam_idx].NRotate90);
+      cap_time= GetCurrentTimeL();
+      // Copy frames to global buffer:
+      {
+        boost::mutex::scoped_lock lock(MutCamCapture[cam_idx]);
+        frame.copyTo(Frame[cam_idx]);
+        CapTime[cam_idx]= cap_time;
+      }
+
+      fps_est.Step();
+      if(show_fps==0)
+      {
+        std::cerr<<"FPS(capture "<<cam_idx<<"): "<<fps_est.FPS<<std::endl;
+        show_fps=fps_est.FPS*4;
+      }
+      --show_fps;
+
+    }  // Running
+    else
+    {
+      usleep(200*1000);
+    }
+  }
+}
+
 bool ExecFitEdge(lfd_vision::FitEdge::Request &req, lfd_vision::FitEdge::Response &res)
 {
   TEdgeFitParams &params(EdgeFit.Params());
+  params.EdgeDetect.PreBlurSize  =   req.ED_PreBlurSize    ;
+  params.EdgeDetect.PostBlurSize =   req.ED_PostBlurSize   ;
+
+  params.EdgeEval.MinEdgeBrightness =   req.EE_MinEdgeBrightness  ;
+  params.EdgeEval.MinMatchingRatio  =   req.EE_MinMatchingRatio   ;
+
   std::copy(req.XMin.begin(), req.XMin.end(), params.XMin);
   std::copy(req.XMax.begin(), req.XMax.end(), params.XMax);
   std::copy(req.Sig0.begin(), req.Sig0.end(), params.Sig0);
@@ -954,9 +1022,11 @@ bool ExecFitEdge(lfd_vision::FitEdge::Request &req, lfd_vision::FitEdge::Respons
 
   cv::Mat frame[2], disp[2];
   {
-    boost::mutex::scoped_lock lock(MutCamCapture);
     for(int i_cam(0);i_cam<2;++i_cam)
+    {
+      boost::mutex::scoped_lock lock(MutCamCapture[i_cam]);
       Frame[i_cam].copyTo(frame[i_cam]);
+    }
   }
   Rectifier.RectifyL(frame[0]);
   Rectifier.RectifyR(frame[1]);
@@ -981,9 +1051,11 @@ void FitEdgeDummy(void)
 {
   cv::Mat frame[2], disp[2];
   {
-    boost::mutex::scoped_lock lock(MutCamCapture);
     for(int i_cam(0);i_cam<2;++i_cam)
+    {
+      boost::mutex::scoped_lock lock(MutCamCapture[i_cam]);
       Frame[i_cam].copyTo(frame[i_cam]);
+    }
   }
   Rectifier.RectifyL(frame[0]);
   Rectifier.RectifyR(frame[1]);
@@ -1006,13 +1078,17 @@ int main(int argc, char**argv)
   std::string stereo_config("config/ext_usbcam1.yaml");
   std::string stereof_config("config/ext_usbcam1.yaml");
   double block_area_min(10.0);
+  double disp_fps(30.0);
 
   int    ff_ofl_win(3);  // FlowFinder.OptFlowWinSize
   double ff_ofl_spd_min(2.0);  // FlowFinder.OptFlowSpdThreshold
   int    ff_er_dl(1);  // FlowFinder.ErodeDilate
   double ff_amt_min(1.0), ff_amt_max(3000.0);  // FlowFinder.AmountRange
   double ff_spd_min(1.0), ff_spd_max(-1.0);  // FlowFinder.SpeedRange
-  int    ff_mask_flen(5);  // FlowFinder.FlowMaskFilterLen
+  int    ff_mask_flen(/*5*/0);  // FlowFinder.FlowMaskFilterLen
+  /* NOTE: We introduced TFlowStereo2.TFilter instead of
+  FlowFinder.FlowMaskFilterLen to speed up.
+  So, ff_mask_flen should be zero. */
 
   std::string vout_base("/tmp/vout"), voutf_base("/tmp/vout");
 
@@ -1028,6 +1104,7 @@ int main(int argc, char**argv)
   node.param("color_files_base1",ColorFilesBase[0],ColorFilesBase[0]);
   node.param("color_files_base2",ColorFilesBase[1],ColorFilesBase[1]);
   node.param("img_win",ImgWin,ImgWin);
+  node.param("disp_fps",disp_fps,disp_fps);
   node.param("disp_scale",DispScale,DispScale);
 
   node.param("ff_ofl_win",ff_ofl_win,ff_ofl_win);
@@ -1062,8 +1139,10 @@ int main(int argc, char**argv)
       return -1;
     }
     if(fourcc.size()>0)  cap[i_cam].set(CV_CAP_PROP_FOURCC,CV_FOURCC(fourcc[0],fourcc[1],fourcc[2],fourcc[3]));
-    cap[i_cam].set(CV_CAP_PROP_FRAME_WIDTH, CamInfo[i_cam].Width);
-    cap[i_cam].set(CV_CAP_PROP_FRAME_HEIGHT, CamInfo[i_cam].Height);
+    if(CamInfo[i_cam].CapWidth==0)  CamInfo[i_cam].CapWidth= CamInfo[i_cam].Width;
+    if(CamInfo[i_cam].CapHeight==0)  CamInfo[i_cam].CapHeight= CamInfo[i_cam].Height;
+    cap[i_cam].set(CV_CAP_PROP_FRAME_WIDTH, CamInfo[i_cam].CapWidth);
+    cap[i_cam].set(CV_CAP_PROP_FRAME_HEIGHT, CamInfo[i_cam].CapHeight);
     // MutCamCapture.push_back(boost::shared_ptr<boost::mutex>(new boost::mutex));
   }
   std::cerr<<"Opened camera(s)"<<std::endl;
@@ -1122,6 +1201,13 @@ int main(int argc, char**argv)
   // StereoF.Init();
   TFlowStereo2 &stereo_f(StereoFInfo[0]);
   stereo_f.Init();
+  for(int j(0); j<2; ++j)
+  {
+    FMQueueIdx[j]= 0;
+    FlowMaskQueue[j].resize(StereoFInfo[0].TFilter);
+    for(int i(0); i<StereoFInfo[0].TFilter; ++i)
+      FlowMaskQueue[j][i]= cv::Mat::zeros(cv::Size(CamInfo[j].Width,CamInfo[j].Height), CV_8UC1);
+  }
 
   EdgeFit.Params().P1= Rectifier.CameraParams().P1;
   EdgeFit.Params().P2= Rectifier.CameraParams().P2;
@@ -1190,38 +1276,47 @@ int main(int argc, char**argv)
   for(int i_cam(0); i_cam<2; ++i_cam)
   {
     cap[i_cam] >> Frame[i_cam];
+    if(CamInfo[i_cam].CapWidth!=CamInfo[i_cam].Width || CamInfo[i_cam].CapHeight!=CamInfo[i_cam].Height)
+      cv::resize(Frame[i_cam],Frame[i_cam],cv::Size(CamInfo[i_cam].Width,CamInfo[i_cam].Height));
+    Rotate90N(Frame[i_cam],Frame[i_cam],CamInfo[i_cam].NRotate90);
     CapTime[i_cam]= GetCurrentTimeL();
   }
 
   FitEdgeDummy();
 
+  boost::thread th_capture0(boost::bind(&ExecCapture,cap[0],0));
+  boost::thread th_capture1(boost::bind(&ExecCapture,cap[1],1));
   boost::thread th_col_det(&ExecColDet);
   boost::thread th_flow_find0(boost::bind(&ExecFlowFind,0));
   boost::thread th_flow_find1(boost::bind(&ExecFlowFind,1));
   boost::thread th_stereo(&ExecStereo);
   boost::thread th_stereo_f(&ExecFlowStereo);
 
-  // ros::Rate loop_rate(5);  // 5 Hz
+  ros::Rate disp_rate(disp_fps);  // 30 Hz
+  TFPSEstimator fps_est;
+  int show_fps(0);
   for(int f(0);ros::ok();++f)
   {
     if(Running)
     {
-      // Capture from cameras:
-      for(int j(0);j<2;++j)
-      {
-        cap[j] >> frame[j]; // get a new frame from camera
-        Rotate90N(frame[j],frame[j],CamInfo[j].NRotate90);
-        cap_time[j]= GetCurrentTimeL();
-      }
-      // Copy frames to global buffer:
-      {
-        boost::mutex::scoped_lock lock(MutCamCapture);
-        for(int j(0);j<2;++j)
-        {
-          frame[j].copyTo(Frame[j]);
-          CapTime[j]= cap_time[j];
-        }
-      }
+      // // Capture from cameras:
+      // for(int j(0);j<2;++j)
+      // {
+        // cap[j] >> frame[j]; // get a new frame from camera
+        // if(CamInfo[j].CapWidth!=CamInfo[j].Width || CamInfo[j].CapHeight!=CamInfo[j].Height)
+          // cv::resize(frame[j],frame[j],cv::Size(CamInfo[j].Width,CamInfo[j].Height));
+        // Rotate90N(frame[j],frame[j],CamInfo[j].NRotate90);
+        // cap_time[j]= GetCurrentTimeL();
+      // }
+      // // Copy frames to global buffer:
+      // {
+        // for(int j(0);j<2;++j)
+        // {
+          // boost::mutex::scoped_lock lock(MutCamCapture[j]);
+          // frame[j].copyTo(Frame[j]);
+          // CapTime[j]= cap_time[j];
+        // }
+      // }
 
       // Show windows
       for(std::map<std::string, TIMShowStuff>::iterator itr(IMShowStuff.begin()),itr_end(IMShowStuff.end()); itr!=itr_end; ++itr)
@@ -1230,6 +1325,14 @@ int main(int argc, char**argv)
         if(itr->second.Frame.total()>0)
           cv::imshow(itr->first, itr->second.Frame);
       }
+
+      fps_est.Step();
+      if(show_fps==0)
+      {
+        std::cerr<<"FPS(main): "<<fps_est.FPS<<std::endl;
+        show_fps=fps_est.FPS*4;
+      }
+      --show_fps;
 
     }  // Running
     else
@@ -1240,8 +1343,11 @@ int main(int argc, char**argv)
     if(!HandleKeyEvent())  break;
 
     ros::spinOnce();
+    disp_rate.sleep();
   }
   Shutdown= true;
+  th_capture0.join();
+  th_capture1.join();
   th_col_det.join();
   th_flow_find0.join();
   th_flow_find1.join();

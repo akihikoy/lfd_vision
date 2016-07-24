@@ -41,7 +41,8 @@ public:
   void DrawFlow(cv::Mat &frame, const cv::Scalar &color, const double &len=1.0, int thickness=3);
 
   void CalcOpticalFlow(const cv::Mat &prev, const cv::Mat &curr);
-  void GetAngleSpdImg(cv::Mat &img_angle, cv::Mat &img_spd);
+  // void GetAngleSpdImg(cv::Mat &img_angle, cv::Mat &img_spd);
+  void GetSpdSqImg(cv::Mat &img_spd);
 
   // region of interest
   // set ROI?
@@ -84,7 +85,7 @@ private:
   // Tmp variables:
   cv::Mat frame_, frame_old_;
   cv::Mat velx_, vely_;
-  cv::Mat img_spd_, img_angle_;
+  cv::Mat img_spd_/*, img_angle_*/;
   cv::Mat flow_mask_;  // Filtered flow-mask
   cv::Mat raw_flow_mask_;  // Non-filtered flow-mask
 

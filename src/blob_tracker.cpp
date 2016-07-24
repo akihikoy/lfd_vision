@@ -23,13 +23,19 @@ void DrawPointMoves(cv::Mat &img, const std::vector<TPointMove> &move,
     const float &dp_emp  // Emphasize (scale) ratio of DP
   )
 {
+  // for(std::vector<TPointMove>::const_iterator m(move.begin()),m_end(move.end()); m!=m_end; ++m)
+  // {
+    // // cv::circle(img, m->Po, m->So, col1);
+    // // cv::circle(img, m->Po, m->So+ds_emp*m->DS, col2, ds_emp*m->DS);
+    // cv::circle(img, m->Po, m->So, col1, ds_emp*m->DS);
+    // cv::line(img, m->Po, m->Po+dp_emp*m->DP, col2, 3);
+  // }
   for(std::vector<TPointMove>::const_iterator m(move.begin()),m_end(move.end()); m!=m_end; ++m)
-  {
-    // cv::circle(img, m->Po, m->So, col1);
-    // cv::circle(img, m->Po, m->So+ds_emp*m->DS, col2, ds_emp*m->DS);
     cv::circle(img, m->Po, m->So, col1, ds_emp*m->DS);
+  for(std::vector<TPointMove>::const_iterator m(move.begin()),m_end(move.end()); m!=m_end; ++m)
+    cv::circle(img, m->Po+dp_emp*m->DP, m->So+ds_emp*m->DS, col2);
+  for(std::vector<TPointMove>::const_iterator m(move.begin()),m_end(move.end()); m!=m_end; ++m)
     cv::line(img, m->Po, m->Po+dp_emp*m->DP, col2, 3);
-  }
 }
 //-------------------------------------------------------------------------------------------
 

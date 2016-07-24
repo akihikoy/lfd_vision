@@ -1,5 +1,11 @@
 # TEdgeDetectParams EdgeDetect
-#  TEdgeEvalParams EdgeEval
+float64 ED_PreBlurSize  #default: 3
+float64 ED_PostBlurSize  #default: 21
+
+# TEdgeEvalParams EdgeEval
+float64 EE_MinEdgeBrightness  #default: 50.0
+float64 EE_MinMatchingRatio  #default: 0.4
+
 # TCMAESParams CMAES
 
 # Lower bound of optimized parameters [6]
