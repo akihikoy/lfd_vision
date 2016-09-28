@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 2.4.6)
 # # find_package(PkgConfig)
 # # pkg_check_modules(OPENCV opencv)
 # include($ENV{HOME}/.local/share/OpenCV/OpenCVConfig.cmake)
+# link_directories($ENV{HOME}/.local/lib)
 # include_directories(${OpenCV_INCLUDE_DIRS})
 include($ENV{ROS_ROOT}/core/rosbuild/rosbuild.cmake)
 
@@ -15,6 +16,21 @@ include($ENV{ROS_ROOT}/core/rosbuild/rosbuild.cmake)
 #set(ROS_BUILD_TYPE RelWithDebInfo)
 
 rosbuild_init()
+
+# ++++OPENCV TRICK++++
+# NOTE: Install latest OpenCV 2.4.13 on ~/.local from source which includes cv::fisheye
+# don't use opencv as found by any prior running of find_package
+unset(OpenCV_CONFIG_PATH CACHE)
+unset(OpenCV_DIR CACHE)
+set(TMP_PREFIX_PATH ${CMAKE_PREFIX_PATH})
+set(CMAKE_PREFIX_PATH "$ENV{HOME}/.local")
+find_package(OpenCV 2.4.13 REQUIRED)
+# restore CMAKE_PREFIX_PATH and other cached variables
+# so nothing other package finds this opencv
+set(CMAKE_PREFIX_PATH ${TMP_PREFIX_PATH})
+unset(OpenCV_CONFIG_PATH CACHE)
+unset(OpenCV_DIR CACHE)
+# ----OPENCV TRICK----
 
 #set the default path for built executables to the "bin" directory
 set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin)
@@ -31,6 +47,7 @@ rosbuild_gensrv()
 # # include(OpenCVModules)
 # # find_package(OpenCV 2.4.13 EXACT REQUIRED)
 message("OpenCV_INCLUDE_DIRS: ${OpenCV_INCLUDE_DIRS}")
+message("OpenCV_LIBRARIES: ${OpenCV_LIBRARIES}")
 
 #common commands for building c++ executables and libraries
 #rosbuild_add_library(${PROJECT_NAME} src/example.cpp)
@@ -66,7 +83,10 @@ target_link_libraries(usb_stereo_node ${OpenCV_LIBRARIES})
 rosbuild_add_executable(cv_usb_node
       src/cv_usb_node.cpp
       src/vision_util.cpp)
-target_link_libraries(cv_usb_node ${OpenCV_LIBRARIES})
+target_link_libraries(cv_usb_node ${OpenCV_LIBRARIES} libcv_bridge.so)
+# NOTE: libcv_bridge.so is a quick hack. In manifest.xml cv_bridge is omitted.
+# Otherwise it causes linking opencv 2.4.8 and 2.4.13 simultaneously
+# which caused other compile issue.
 
 rosbuild_add_executable(visual_skin_node
       src/visual_skin_node.cpp
@@ -95,9 +115,9 @@ endif(EXISTS /usr/include/libm100)
 rosbuild_add_executable(cyl_detector_node
       src/cyl_detector.cpp
       src/cyl_detector_node.cpp)
-if(EXISTS $ENV{HOME}/install/boost1.49/include)
-  include_directories($ENV{HOME}/install/boost1.49/include)
-endif(EXISTS $ENV{HOME}/install/boost1.49/include)
+# if(EXISTS $ENV{HOME}/install/boost1.49/include)
+#   include_directories($ENV{HOME}/install/boost1.49/include)
+# endif(EXISTS $ENV{HOME}/install/boost1.49/include)
 target_link_libraries(cyl_detector_node ${OpenCV_LIBRARIES} vtkCommon vtkFiltering vtkRendering vtkGraphics)
 
 if(EXISTS /usr/include/libm100)
